@@ -2,6 +2,8 @@
 
 Plataforma para tiendas de barrio, ferreterías, papelerías y otros comercios pequeños. Une inventario, pedidos, ventas, conversaciones y proveedores con un agente Grok que consulta datos reales, propone acciones y pide aprobación cuando corresponde.
 
+**Tablero de desarrollo:** [PulsoTienda](https://github.com/users/JulianCVM/projects/9). Las 53 tareas están en la columna `Todo` y se pueden asignar y mover a `In Progress` o `Done` durante el desarrollo.
+
 ## Plan de desarrollo
 
 El [backlog de 53 tareas](https://github.com/JulianCVM/AsisTendero/issues) está organizado por ocho hitos de trabajo. Cada issue tiene identificador PT, prioridad, área, etapa, hito previsto, dependencias y criterio de aceptación.
