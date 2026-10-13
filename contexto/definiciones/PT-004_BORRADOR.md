@@ -1,12 +1,14 @@
 # PT-004 — Fuente de verdad del inventario y reglas de movimientos
 
-**Estado:** propuesta para revisión conjunta; no implementada ni cerrada. **Versión:** 0.2, 13 de octubre de 2026 (America/Bogota). **Issue:** [PT-004](https://github.com/JulianCVM/AsisTendero/issues/4). **Dependencia:** PT-001, todavía en definición. **Criterio de aceptación de la issue:** política escrita para stock físico, reservado y disponible; ventas presenciales, entregas, recepciones y ajustes.
+**Estado:** propuesta para revisión conjunta; no implementada ni cerrada. **Versión:** 0.3, 13 de octubre de 2026 (America/Bogota). **Issue:** [PT-004](https://github.com/JulianCVM/AsisTendero/issues/4). **Dependencia:** PT-001, todavía en definición. **Criterio de aceptación de la issue:** política escrita para stock físico, reservado y disponible; ventas presenciales, entregas, recepciones y ajustes.
 
 ## 1. Decisión de principio
 
 **[ACORDADO por los usuarios, 13-10-2026]** Los tenderos conocen y controlan físicamente lo que hay en el local. Con su ayuda se busca **censar y mantener todo el inventario vendible**, para que AsisTendero pueda ofrecer por chat todos los productos que el negocio realmente vende, no solo una selección arbitraria. El personal del local registra o confirma los hechos físicos: conteos, ventas de mostrador, recepción de mercancía, preparación, entregas, pérdidas y devoluciones.
 
 **[ACORDADO por los usuarios, 13-10-2026]** En el piloto, **cada venta de mostrador se registra al cobrar mediante una venta rápida en PulsoTienda**. Ese registro actualiza inmediatamente el inventario que consulta AsisTendero. Un fiado presencial autorizado se registra como venta/entrega y cuenta por cobrar, sin marcarlo como pago recibido.
+
+**[ACORDADO por los usuarios, 13-10-2026]** Distintas sedes de un negocio pueden ofrecer surtidos diferentes y trasladarse stock. Un SKU del catálogo del negocio no se ofrece automáticamente en todas las sedes; cada sede debe habilitarlo y contar con precio y disponibilidad aplicables.
 
 **[PROPUESTO]** La fuente operativa para responder al cliente es el **registro de inventario de PulsoTienda por negocio y sede**, alimentado por esos hechos humanos y por las reservas que el backend crea de forma controlada. El tendero es la autoridad sobre la realidad física; el sistema conserva el saldo, procedencia, fecha y diferencias. AsisTendero consulta y propone mediante herramientas autorizadas; **no inventa existencias, no altera cantidades por conversación y no accede libremente a la base de datos**. Si una cifra digital no coincide con la estantería, se corrige con un movimiento auditable, sin sobrescribir silenciosamente el historial.
 
@@ -89,7 +91,7 @@ Cuando un cliente presencial desea la última unidad y ya está reservada para o
 
 **Vencimiento y merma:** el control de lote/fecha se activa por producto cuando aplica. Un lote vencido o dañado se bloquea para venta y para AsisTendero. La merma física se descuenta cuando realmente se descarta. El agente alerta y prepara medidas comerciales permitidas para productos próximos a vencer, pero no decide por sí mismo vender un producto vencido, alterar fechas o escribir un ajuste. Si una devolución no está apta para reventa, permanece bloqueada o se descarta tras registro.
 
-**Traslados entre sedes:** si el piloto tiene más de una, son dos movimientos ligados (salida de origen, entrada al recibir en destino), con mercancía en tránsito no ofrecible en ninguna sede. No se crea disponibilidad en destino solo por emitir el traslado. Una sola sede puede ser el piloto sin perder esta regla del modelo multinegocio.
+**Traslados entre sedes [ACORDADO como capacidad]:** son movimientos ligados de salida de origen y entrada **al recibir físicamente** en destino; la mercancía en tránsito no se ofrece en ninguna sede. Solo puede salir stock disponible, no el reservado a clientes. No se crea disponibilidad en destino por solicitar, aprobar o despachar el traslado. Si esa sede todavía no ofrece el SKU, lo recibido queda bloqueado para nuevas ventas hasta que el tendero habilite el producto y confirme su precio. Cantidades despachadas, recibidas y faltantes quedan diferenciadas. Una sola sede puede ser el piloto sin perder esta regla del modelo multinegocio; quién aprueba el traslado sigue pendiente.
 
 ## 7. Responsabilidades del tendero, AsisTendero y backend
 
@@ -148,7 +150,7 @@ Los cambios deben ser **idempotentes**: repetir un webhook, un clic o una tarea 
 | Alta | ¿Cuándo se aparta físicamente un pedido pagado o reservado y quién comprueba la última unidad? | La preparación PT-003 confirma apartado; si hay diferencia, incidencia antes del aviso de listo. |
 | Media | ¿Cada cuánto se cuentan artículos de alta rotación, alto valor y baja confianza? | Conteo cíclico según riesgo y recursos del local; revisar métricas de diferencias. |
 | Media | ¿Qué ocurre al operar sin red o cuando la caja no se puede sincronizar? | Marcar disponibilidad como no confiable y priorizar comprobación humana; definir procedimiento por piloto. |
-| Media | ¿Qué política rige traslados, devoluciones, combos y artículos a granel? | Definir los casos presentes en el primer comercio, sin quitarles soporte del modelo. |
+| Media | ¿Quién autoriza traslados y qué política rige devoluciones, combos y artículos a granel? | Traslados entre sedes ya forman parte del modelo; definir permisos/umbrales y casos presentes en el primer comercio. |
 
 **Revisión de aceptación:** la pareja valida la fórmula de saldos, cada fila de movimientos, la operación real del tendero y las respuestas pendientes del piloto. Esta propuesta no afirma que el inventario esté contado ni que el sistema ya lo controle. La implementación posterior se reparte entre PT-019, PT-020, PT-021, PT-022, PT-025 y PT-042.
 
