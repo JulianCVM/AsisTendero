@@ -1,6 +1,6 @@
 # PT-004 — Fuente de verdad del inventario y reglas de movimientos
 
-**Estado:** propuesta para revisión conjunta; no implementada ni cerrada. **Versión:** 0.3, 13 de octubre de 2026 (America/Bogota). **Issue:** [PT-004](https://github.com/JulianCVM/AsisTendero/issues/4). **Dependencia:** PT-001, todavía en definición. **Criterio de aceptación de la issue:** política escrita para stock físico, reservado y disponible; ventas presenciales, entregas, recepciones y ajustes.
+**Estado:** propuesta para revisión conjunta; no implementada ni cerrada. **Versión:** 0.4, 13 de octubre de 2026 (America/Bogota). **Issue:** [PT-004](https://github.com/JulianCVM/AsisTendero/issues/4). **Dependencia:** PT-001, todavía en definición. **Criterio de aceptación de la issue:** política escrita para stock físico, reservado y disponible; ventas presenciales, entregas, recepciones y ajustes.
 
 ## 1. Decisión de principio
 
@@ -10,13 +10,15 @@
 
 **[ACORDADO por los usuarios, 13-10-2026]** Distintas sedes de un negocio pueden ofrecer surtidos diferentes y trasladarse stock. Un SKU del catálogo del negocio no se ofrece automáticamente en todas las sedes; cada sede debe habilitarlo y contar con precio y disponibilidad aplicables.
 
+**[ACORDADO por los usuarios, 13-10-2026]** Cada variante/presentación tiene un precio base común del negocio. El dueño puede ajustar ese precio en una sede concreta; AsisTendero usa el precio efectivo de la sede seleccionada, con historial, sin confundir una presentación distinta con un simple cambio de precio.
+
 **[PROPUESTO]** La fuente operativa para responder al cliente es el **registro de inventario de PulsoTienda por negocio y sede**, alimentado por esos hechos humanos y por las reservas que el backend crea de forma controlada. El tendero es la autoridad sobre la realidad física; el sistema conserva el saldo, procedencia, fecha y diferencias. AsisTendero consulta y propone mediante herramientas autorizadas; **no inventa existencias, no altera cantidades por conversación y no accede libremente a la base de datos**. Si una cifra digital no coincide con la estantería, se corrige con un movimiento auditable, sin sobrescribir silenciosamente el historial.
 
 La aspiración de «conteo total» es un **objetivo de cobertura y disciplina operativa**, no un hecho demostrado hoy. Una tienda que no registre ventas presenciales a tiempo no puede prometer disponibilidad exacta por WhatsApp: el sistema debe mostrar ese límite y pedir comprobación al personal donde corresponda.
 
 ## 2. Qué se censa y cuándo un artículo es vendible por chat
 
-La unidad de inventario es una **variante vendible concreta** en una sede: por ejemplo, «codo PVC 1/2 pulgada, marca X, unidad» y «codo PVC 3/4 pulgada» son registros distintos. Se guardan identificador/SKU interno, nombre y alias locales, categoría, marca y atributos necesarios, unidad de venta, precio vigente, estado, sede, ubicación y cantidad inicial verificada. Foto y código de barras son útiles cuando existan; **la foto no reemplaza al SKU ni al conteo**. Para tienda de barrio se podrán activar lote/vencimiento por producto; para ferretería, medida, presentación y unidad son esenciales. El precio es un dato comercial distinto del saldo.
+La unidad de inventario es una **variante vendible concreta** en una sede: por ejemplo, «codo PVC 1/2 pulgada, marca X, unidad» y «codo PVC 3/4 pulgada» son registros distintos. Se guardan identificador/SKU interno, nombre y alias locales, categoría, marca y atributos necesarios, unidad de venta, precio base y ajuste local cuando exista, estado, sede, ubicación y cantidad inicial verificada. Foto y código de barras son útiles cuando existan; **la foto no reemplaza al SKU ni al conteo**. Para tienda de barrio se podrán activar lote/vencimiento por producto; para ferretería, medida, presentación y unidad son esenciales. El precio efectivo es un dato comercial distinto del saldo.
 
 | Estado de catálogo propuesto | Significado para AsisTendero |
 |---|---|
