@@ -11,7 +11,7 @@ consulta por terminal → validar entrada → Grok (xAI) → respuesta por termi
                          └──────────── LangGraph ────────────┘
 ```
 
-Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001, PT-006, PT-009 ni PT-031. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. El flujo no usa datos de un comercio real. El [plan general](PLANIFICACION.md) conserva el backlog del producto.
+Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001, PT-006, PT-009 ni PT-031. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. El flujo no usa datos de un comercio real.
 
 ## Ejecutar en Windows (PowerShell)
 
