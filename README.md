@@ -1,33 +1,65 @@
-# AsisTendero
+# AsisTendero · primer flujo de Semana 1
 
-Plataforma para tiendas de barrio, ferreterías, papelerías y otros comercios pequeños. Une inventario, pedidos, ventas, conversaciones y proveedores con un agente Grok que consulta datos reales, propone acciones y pide aprobación cuando corresponde.
+AsisTendero es el agente de **PulsoTienda**, una propuesta para ayudar a ferreterías y tiendas de barrio colombianas a atender consultas y coordinar ventas sin perder el control humano de inventario, pagos y decisiones de crédito. El primer piloto previsto es una ferretería de una sede; el comercio y sus datos aún no están definidos.
 
-**Tablero de desarrollo:** [PulsoTienda](https://github.com/users/JulianCVM/projects/9). Las 53 tareas están en la columna `Todo` y se pueden asignar y mover a `In Progress` o `Done` durante el desarrollo.
+## Qué hace esta versión
 
-## Plan de desarrollo
+Recibe una consulta escrita de un cliente de ferretería, la pasa por un grafo de LangGraph, llama **realmente** a Grok mediante la pasarela del reto y muestra la respuesta. Por ejemplo: «Necesito un tubo PVC para agua». El agente puede pedir el diámetro y otros datos que falten. No consulta todavía un catálogo ni confirma disponibilidad, precio, reservas o pagos.
 
-El [backlog de 53 tareas](https://github.com/JulianCVM/AsisTendero/issues) está organizado por ocho hitos de trabajo. Cada issue tiene identificador PT, prioridad, área, etapa, hito previsto, dependencias y criterio de aceptación.
+```text
+consulta por terminal → validar entrada → Grok (xAI) → respuesta por terminal
+                         └──────────── LangGraph ────────────┘
+```
 
-| Hito | Enfoque | Tareas |
-| --- | --- | --- |
-| M0 | Alcance, reglas, recorridos y contratos | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM0) |
-| M1 | Base de la plataforma, cuentas y permisos | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM1) |
-| M2 | Catálogo, precios e inventario | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM2) |
-| M3 | Pedidos, ventas, chat y panel operativo | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM3) |
-| M4 | Agente Grok, herramientas, memoria y aprobaciones | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM4) |
-| M5 | Proveedores, reposición y fiados | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM5) |
-| M6 | WhatsApp, Wompi y modalidad fiscal | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM6) |
-| M7 | Aislamiento, evaluación y piloto | [Ver tareas](https://github.com/JulianCVM/AsisTendero/issues?q=is%3Aissue+is%3Aopen+label%3Amilestone%3AM7) |
+Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001, PT-006, PT-009 ni PT-031. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. El flujo no usa datos de un comercio real.
 
-Las etiquetas `priority:p0`, `priority:p1` y `priority:p2` marcan la prioridad. Las etiquetas `area:*` y `stage:*` facilitan vistas por dominio y fase. `type:*` distingue decisiones, funciones, integraciones y tareas de calidad.
+## Ejecutar en Windows (PowerShell)
 
-## Regla de implementación
+Se necesita Python 3.11 o superior y la clave `pk_...` entregada por el reto, con acceso al modelo elegido. Desde esta carpeta:
 
-Las decisiones sobre negocio, pagos, inventario y proveedores deben quedar en operaciones verificables, con historial y permisos. El agente puede leer, explicar y proponer; las acciones sensibles pasan por las herramientas y aprobaciones definidas en los issues.
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+Copy-Item .env.example .env
+```
 
-## Inicio recomendado
+Edita `.env` y coloca tu propia `GROK_API_KEY`. La URL predeterminada es `https://api.reto.pltk.mx/v1`. El modelo por defecto es `grok-4.7`; cambia `GROK_MODEL` si tu clave tiene acceso a otro modelo. La pasarela del reto se presenta como compatible con la API de xAI; la compatibilidad efectiva de esta clave y el modelo aún debe comprobarse con una llamada real. **No subas `.env` ni la clave al repositorio.** Si tienes Python 3.11, 3.12 o 3.13, cambia `-3.14` por tu versión disponible.
 
-1. Completar las decisiones de M0 con el comercio piloto.
-2. Montar el núcleo multi negocio de M1 y el inventario de M2.
-3. Demostrar un pedido completo en un chat de prueba antes de activar WhatsApp y Wompi.
-4. Evaluar el agente con los casos del M7 y registrar evidencia.
+Si tu instalación de Python falla al ejecutar `ensurepip` durante la creación del entorno, usa `py -3.14 -m venv --without-pip .venv` y después `py -3.14 -m pip --python .venv install -e ".[dev]"`.
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero "Necesito un tubo PVC para agua"
+```
+
+La salida exacta varía porque la genera Grok. Debería responder en español y pedir una aclaración útil, sin inventar stock ni precio. Si falta la clave, el comando falla con una indicación clara. La llamada real consume el cupo o créditos asignados a la clave del reto.
+
+## Ejecutar con Docker
+
+```powershell
+docker build -t asistendero-semana1 .
+docker run --rm --env-file .env asistendero-semana1 "Necesito un tubo PVC para agua"
+```
+
+Docker usa la misma clave local del archivo ignorado por Git. Este contenedor ejecuta solo el flujo de terminal, sin base de datos ni servicios adicionales.
+
+## Verificación y evidencia
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m asistendero "Busco tornillos para madera"
+```
+
+La prueba automatizada usa un modelo simulado para comprobar el recorrido del grafo sin gasto. La [evidencia de Semana 1](EVIDENCIA_SEMANA1.md) registra una llamada real a Grok con entrada, respuesta y código de salida, sin mostrar la clave. El código y este README están publicados en [JulianCVM/AsisTendero](https://github.com/JulianCVM/AsisTendero).
+
+## Estructura
+
+- `src/asistendero/graph.py`: estados, nodos y transiciones de LangGraph.
+- `src/asistendero/grok.py`: instrucciones del agente y llamada a xAI.
+- `src/asistendero/cli.py`: entrada y salida por terminal.
+- `tests/test_graph.py`: comprobación local del recorrido sin API.
+
+## Fuentes de diseño
+
+- [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api)
+- [xAI Chat Completions](https://docs.x.ai/developers/model-capabilities/legacy/chat-completions)
+- [PT-006: contratos de herramientas](https://github.com/JulianCVM/AsisTendero/issues/6) y [PT-009: base del proyecto](https://github.com/JulianCVM/AsisTendero/issues/9). Sus alcances completos son posteriores a este flujo mínimo.
