@@ -49,7 +49,7 @@ Docker usa la misma clave local del archivo ignorado por Git. Este contenedor ej
 .\.venv\Scripts\python.exe -m asistendero "Busco tornillos para madera"
 ```
 
-La prueba automatizada usa un modelo simulado para comprobar el recorrido del grafo sin gasto. **No demuestra conexión a Grok.** El código y este README están publicados en [JulianCVM/AsisTendero](https://github.com/JulianCVM/AsisTendero). Para acreditar la llamada real de Semana 1, ejecuta el segundo comando con una clave válida y guarda una captura o transcripción de la entrada y la respuesta sin mostrar la clave. Aún no se ha registrado esa respuesta real.
+La prueba automatizada usa un modelo simulado para comprobar el recorrido del grafo sin gasto. La [evidencia de Semana 1](EVIDENCIA_SEMANA1.md) registra una llamada real a Grok con entrada, respuesta y código de salida, sin mostrar la clave. El código y este README están publicados en [JulianCVM/AsisTendero](https://github.com/JulianCVM/AsisTendero).
 
 ## Estructura
 
