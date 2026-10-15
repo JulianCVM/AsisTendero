@@ -1,0 +1,24 @@
+[
+  {
+    "id": "pvc_especifico",
+    "query": "Busco tubo PVC de 1/2 para agua",
+    "expected_status": "found",
+    "expected_sku": "PVC-050"
+  },
+  {
+    "id": "pvc_ambiguo",
+    "query": "Busco tubo PVC para agua",
+    "expected_status": "clarify"
+  },
+  {
+    "id": "agotado",
+    "query": "Necesito tornillo para madera 1/4 x 2 pulgadas",
+    "expected_status": "found",
+    "expected_sku": "TOR-025-2"
+  },
+  {
+    "id": "fuera_catalogo",
+    "query": "Busco un taladro de 20 V",
+    "expected_status": "not_found"
+  }
+]

@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .tmp/
+.local/
+.local/
 *.egg-info/
 .env
 .env.*
