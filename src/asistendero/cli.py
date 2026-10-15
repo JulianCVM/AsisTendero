@@ -5,8 +5,9 @@ import sys
 
 from dotenv import load_dotenv
 
+from asistendero.catalog import MockCatalog
 from asistendero.graph import build_graph
-from asistendero.grok import responder_con_grok
+from asistendero.grok import decide_with_grok
 
 
 def main() -> int:
@@ -22,8 +23,8 @@ def main() -> int:
         consulta = input("Consulta del cliente: ")
 
     try:
-        result = build_graph(responder_con_grok).invoke({"consulta": consulta})
-    except (ValueError, RuntimeError) as exc:
+        result = build_graph(MockCatalog(), decide_with_grok).invoke({"consulta": consulta})
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
