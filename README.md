@@ -11,7 +11,7 @@ consulta por terminal → validar entrada → Grok (xAI) → respuesta por termi
                          └──────────── LangGraph ────────────┘
 ```
 
-Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001, PT-006, PT-009 ni PT-031. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. El flujo no usa datos de un comercio real.
+Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001, PT-006, PT-009 ni PT-031. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. El flujo no usa datos de un comercio real. El [plan general](PLANIFICACION.md) conserva el backlog del producto.
 
 ## Ejecutar en Windows (PowerShell)
 
@@ -49,7 +49,7 @@ Docker usa la misma clave local del archivo ignorado por Git. Este contenedor ej
 .\.venv\Scripts\python.exe -m asistendero "Busco tornillos para madera"
 ```
 
-La prueba automatizada usa un modelo simulado para comprobar el recorrido del grafo sin gasto. **No demuestra conexión a Grok.** Para acreditar la Semana 1, ejecuta el segundo comando con una clave válida, guarda una captura o transcripción de la entrada y la respuesta (sin mostrar la clave), y publica el código en un repositorio público. Una respuesta real y un `README` público aún deben verificarse por el equipo; este documento no afirma que ya se hayan obtenido.
+La prueba automatizada usa un modelo simulado para comprobar el recorrido del grafo sin gasto. **No demuestra conexión a Grok.** El código y este README están publicados en [JulianCVM/AsisTendero](https://github.com/JulianCVM/AsisTendero). Para acreditar la llamada real de Semana 1, ejecuta el segundo comando con una clave válida y guarda una captura o transcripción de la entrada y la respuesta sin mostrar la clave. Aún no se ha registrado esa respuesta real.
 
 ## Estructura
 
