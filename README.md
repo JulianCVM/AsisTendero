@@ -4,7 +4,7 @@ AsisTendero es el agente de **PulsoTienda**, una propuesta para ayudar a ferrete
 
 ## Qué hace esta versión
 
-Recibe una consulta escrita de un cliente de ferretería, la pasa por un grafo de LangGraph, llama **realmente** a Grok mediante la API de xAI y muestra la respuesta. Por ejemplo: «Necesito un tubo PVC para agua». El agente puede pedir el diámetro y otros datos que falten. No consulta todavía un catálogo ni confirma disponibilidad, precio, reservas o pagos.
+Recibe una consulta escrita de un cliente de ferretería, la pasa por un grafo de LangGraph, llama **realmente** a Grok mediante la pasarela del reto y muestra la respuesta. Por ejemplo: «Necesito un tubo PVC para agua». El agente puede pedir el diámetro y otros datos que falten. No consulta todavía un catálogo ni confirma disponibilidad, precio, reservas o pagos.
 
 ```text
 consulta por terminal → validar entrada → Grok (xAI) → respuesta por terminal
@@ -15,7 +15,7 @@ Esta es una implementación parcial para el corte de Semana 1. No cierra PT-001,
 
 ## Ejecutar en Windows (PowerShell)
 
-Se necesita Python 3.11 o superior y una clave de API de xAI con acceso al modelo elegido. Desde esta carpeta:
+Se necesita Python 3.11 o superior y la clave `pk_...` entregada por el reto, con acceso al modelo elegido. Desde esta carpeta:
 
 ```powershell
 py -3.14 -m venv .venv
@@ -23,7 +23,7 @@ py -3.14 -m venv .venv
 Copy-Item .env.example .env
 ```
 
-Edita `.env` y coloca tu propia `XAI_API_KEY`. El modelo por defecto es `grok-4.7`; cambia `XAI_MODEL` si tu clave tiene acceso a otro modelo. La URL predeterminada es la API oficial de xAI. Si el reto entrega una pasarela compatible con la API de OpenAI, configura `XAI_BASE_URL` y el modelo según sus instrucciones; esa compatibilidad está pendiente de verificar. **No subas `.env` ni la clave al repositorio.** Si tienes Python 3.11, 3.12 o 3.13, cambia `-3.14` por tu versión disponible.
+Edita `.env` y coloca tu propia `GROK_API_KEY`. La URL predeterminada es `https://api.reto.pltk.mx/v1`. El modelo por defecto es `grok-4.7`; cambia `GROK_MODEL` si tu clave tiene acceso a otro modelo. La pasarela del reto se presenta como compatible con la API de xAI; la compatibilidad efectiva de esta clave y el modelo aún debe comprobarse con una llamada real. **No subas `.env` ni la clave al repositorio.** Si tienes Python 3.11, 3.12 o 3.13, cambia `-3.14` por tu versión disponible.
 
 Si tu instalación de Python falla al ejecutar `ensurepip` durante la creación del entorno, usa `py -3.14 -m venv --without-pip .venv` y después `py -3.14 -m pip --python .venv install -e ".[dev]"`.
 
@@ -31,7 +31,7 @@ Si tu instalación de Python falla al ejecutar `ensurepip` durante la creación 
 .\.venv\Scripts\python.exe -m asistendero "Necesito un tubo PVC para agua"
 ```
 
-La salida exacta varía porque la genera Grok. Debería responder en español y pedir una aclaración útil, sin inventar stock ni precio. Si falta la clave, el comando falla con una indicación clara. La llamada real consume créditos de la cuenta xAI.
+La salida exacta varía porque la genera Grok. Debería responder en español y pedir una aclaración útil, sin inventar stock ni precio. Si falta la clave, el comando falla con una indicación clara. La llamada real consume el cupo o créditos asignados a la clave del reto.
 
 ## Ejecutar con Docker
 
