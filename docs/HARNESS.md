@@ -42,3 +42,5 @@ La clave del reto lista `grok-4.20-0309-non-reasoning`. Se usa como valor predet
 ## Próximo límite arquitectónico
 
 El contrato de `MockCatalog` permite sustituir SQLite por herramientas autorizadas de negocio: derivar negocio/sede de sesión verificada, devolver datos fechados y versionados, validar permisos, y mantener lectura separada de futuras mutaciones. El cambio requiere PT-001/PT-002 y las reglas de PT-003/PT-005; no se conecta Supabase ni se implementa una reserva por anticipación.
+
+El diseño propuesto para [varios productos, memoria acotada y pruebas contra instrucciones indebidas](CONVERSACION_Y_SEGURIDAD.md) separa lo que ya funciona de los contratos que aún deben definirse con la pareja.

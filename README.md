@@ -13,6 +13,8 @@ consulta → validar → buscar en SQLite → Grok elige SKU o null → verifica
 
 Esta rama es un experimento de harness derivado de `dev/julian`; [el diseño y método de evaluación](docs/HARNESS.md) explican sus límites. La [evidencia del primer flujo de Semana 1](EVIDENCIA_SEMANA1.md) queda preservada. No cierra PT-001, PT-006, PT-009, PT-031 ni PT-032. WhatsApp, Wompi, Supabase, herramientas de negocio y panel siguen pendientes. No se usan datos de un comercio real.
 
+El [diseño de conversación y seguridad](docs/CONVERSACION_Y_SEGURIDAD.md) describe cómo se propone tratar varios productos, «agrega uno más», memoria acotada e instrucciones indebidas. **Todavía no hay carrito, memoria entre mensajes ni pedidos.**
+
 ## Ejecutar en Windows (PowerShell)
 
 Se necesita Python 3.11 o superior y la clave `pk_...` entregada por el reto, con acceso al modelo elegido. Desde esta carpeta:

@@ -22,8 +22,10 @@ class AgentState(TypedDict):
 
 def _is_distinguished(query: str, selected: Product, candidates: list[Product]) -> bool:
     peers = [item for item in candidates if item.name == selected.name and item.sku != selected.sku]
-    if not peers or selected.sku.casefold() in query.casefold():
+    if not peers:
         return True
+    # Un SKU citado en el mensaje puede ser parte de una instrucción indebida;
+    # por sí solo no demuestra que el cliente haya pedido esa variante.
     unique_variant = tokens(selected.variant) - set().union(*(tokens(item.variant) for item in peers))
     return bool(tokens(query) & unique_variant)
 
