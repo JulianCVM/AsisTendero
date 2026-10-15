@@ -36,6 +36,16 @@ Si tu instalación de Python falla al ejecutar `ensurepip` durante la creación 
 
 La salida mostrará el precio y stock **simulados** del SKU `PVC-050`. Grok decide qué variante corresponde; el código toma precio y stock de SQLite y rechaza un SKU inventado. Si falta la clave o la base mock, el comando falla con una indicación clara. La llamada real consume cupo o créditos del reto.
 
+## Visor local de pruebas
+
+Con el entorno y la base mock creados, abre el visor en tu navegador:
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.visual
+```
+
+Visita `http://127.0.0.1:8765/`. El visor muestra en tiempo real qué nodo de LangGraph se ejecuta, la consulta normalizada, los términos y candidatos recuperados, los parámetros y mensajes enviados a Grok, el SKU devuelto, los tokens informados y la respuesta final. Puedes expandir cada evento y descargar manualmente la traza JSON. La clave configurada en `.env` se omite. El servidor solo escucha en `127.0.0.1`; Ctrl+C lo detiene. **Cada ejecución con candidatos puede consumir cupo de Grok.** [Detalles y límites del visor](docs/HARNESS.md#visor-local-de-pruebas).
+
 ## Ejecutar con Docker
 
 ```powershell

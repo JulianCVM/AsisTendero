@@ -18,6 +18,12 @@ El modelo **interpreta la consulta**. No recibe SQL, ni precio, ni stock; tampoc
 
 La base SQLite está en `.local/mock_catalog.sqlite3` y no se publica. `seed.py` crea seis variantes ficticias y no sobrescribe una base existente. `MockCatalog` abre conexiones `mode=ro`, filtra por negocio y sede de demostración definidos en servidor, y solo expone métodos de lectura. Esto es **fuente de verdad de la demo**, no inventario del piloto ni una implementación de permisos multinegocio.
 
+## Visor local de pruebas
+
+`python -m asistendero.visual` sirve una interfaz en `http://127.0.0.1:8765/`. Usa `graph.stream(..., stream_mode="updates")` sobre el mismo grafo del CLI y transmite eventos a medida que terminan los nodos. Muestra entrada, estado de validación, términos y filas candidatas, carga enviada a Grok, respuesta cruda y decisión interpretada, tokens y salida final. La clave de `.env` no se incluye en los eventos; el endpoint configurado se muestra sin credenciales ni query string. No hay registro persistente automático: la descarga de JSON es manual y puede contener el texto de la consulta y los productos ficticios.
+
+El visor no agrega otra llamada a Grok: envuelve la función de selección para registrar antes y después de la llamada que el grafo ya iba a realizar. En consultas sin candidatos muestra la ruta que omite el modelo. La duración por nodo y el tiempo total son mediciones locales, no una garantía de latencia. Esta es una herramienta **solo para pruebas locales**, no una interfaz del comercio ni un canal de atención. Su traza muestra el comportamiento real del código y también sus límites, incluidos los casos de varios productos que todavía no soporta.
+
 ## Reglas iniciales de respuesta
 
 1. Responder solo al producto consultado. La salida `found` contiene variante, SKU, precio y stock simulados con unidad; `clarify` solicita medida o presentación; `not_found` reconoce que la base no contiene el producto.
