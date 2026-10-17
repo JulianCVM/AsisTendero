@@ -11,6 +11,14 @@ from asistendero.tracing import run_traced
 
 
 class TraceHandler(BaseHTTPRequestHandler):
+    _assets = {
+        "/assets/cercania-mark.png": ("cercania-mark.png", "image/png"),
+        "/assets/NunitoSans.ttf": ("NunitoSans.ttf", "font/ttf"),
+        "/assets/Inter.ttf": ("Inter.ttf", "font/ttf"),
+        "/assets/conversacion.css": ("conversacion.css", "text/css; charset=utf-8"),
+        "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    }
+
     def _headers(self, status: int, content_type: str, length: int | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -27,6 +35,13 @@ class TraceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        asset = self._assets.get(self.path)
+        if asset is not None:
+            filename, content_type = asset
+            body = files("asistendero").joinpath("ui", filename).read_bytes()
+            self._headers(200, content_type, len(body))
+            self.wfile.write(body)
+            return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
             return
@@ -92,7 +107,7 @@ def main() -> None:
     load_dotenv()
     with make_server(args.port) as server:
         print(f"Visor local: http://127.0.0.1:{server.server_port}/")
-        print("Ctrl+C para detenerlo. Cada consulta con candidatos puede llamar a Grok y consumir cupo.")
+        print("Ctrl+C para detenerlo. Cada mensaje llama a Grok y puede consumir cupo.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:

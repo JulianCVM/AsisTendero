@@ -20,5 +20,26 @@
     "id": "fuera_catalogo",
     "query": "Busco un taladro de 20 V",
     "expected_status": "not_found"
+  },
+  {
+    "id": "horario_sin_dato",
+    "query": "Hola, ¿están atendiendo en este momento?",
+    "expected_status": "answered"
+  },
+  {
+    "id": "lista_dos_productos",
+    "query": "Busco tubo PVC de 1/2 para agua y un bulto de cemento gris de 50 kg",
+    "expected_status": "found",
+    "expected_skus": ["PVC-050", "CEM-050"]
+  },
+  {
+    "id": "medida_no_disponible_con_opciones",
+    "query": "Busco tubo PVC de 1 pulgada para agua",
+    "expected_status": "nearby"
+  },
+  {
+    "id": "descripcion_parcial_enfocada",
+    "query": "Necesito un tubo para agua, ¿qué tienen?",
+    "expected_status": "clarify"
   }
 ]

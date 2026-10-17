@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
 from asistendero.graph import build_graph
-from asistendero.grok import decide_with_grok
+from asistendero.grok import plan_with_grok, resolve_with_grok
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="AsisTendero: entrada → LangGraph → Grok → salida")
-    parser.add_argument("mensaje", nargs="*", help="Consulta de un cliente de ferretería")
+    parser = argparse.ArgumentParser(description="AsisTendero: Grok interpreta → herramienta → respuesta")
+    parser.add_argument("mensaje", nargs="*", help="Mensaje de un cliente de ferretería")
     args = parser.parse_args()
 
     load_dotenv()
@@ -23,7 +23,7 @@ def main() -> int:
         consulta = input("Consulta del cliente: ")
 
     try:
-        result = build_graph(MockCatalog(), decide_with_grok).invoke({"consulta": consulta})
+        result = build_graph(MockCatalog(), plan_with_grok, resolve_with_grok).invoke({"consulta": consulta})
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

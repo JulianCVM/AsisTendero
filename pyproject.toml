@@ -24,7 +24,7 @@ asistendero-visual = "asistendero.visual:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-asistendero = ["ui/*.html"]
+asistendero = ["ui/*.html", "ui/*.css", "ui/*.js", "ui/*.png", "ui/*.ttf", "ui/*-OFL.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
