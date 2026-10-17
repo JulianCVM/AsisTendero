@@ -3,202 +3,119 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AsisTendero · visor del harness</title>
-  <style>
-    :root { color-scheme: dark; font-family: Inter, Segoe UI, system-ui, sans-serif; background: #0b1220; color: #eef4ff; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 85% 0%, #1b3652 0, transparent 38%), #0b1220; }
-    main { max-width: 1440px; margin: auto; padding: 32px 24px 64px; }
-    .top { display: flex; justify-content: space-between; align-items: start; gap: 24px; margin-bottom: 28px; }
-    .eyebrow { color: #63dcc0; text-transform: uppercase; letter-spacing: .16em; font-size: .75rem; font-weight: 800; }
-    h1 { margin: 8px 0; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; letter-spacing: -.04em; }
-    p { color: #adbad0; line-height: 1.5; }
-    .top p { max-width: 780px; margin-bottom: 0; }
-    .badge { white-space: nowrap; border: 1px solid #31506b; border-radius: 999px; padding: 9px 14px; color: #a9d5f4; background: #122237; font-size: .84rem; }
-    .panel { background: #101d2e; border: 1px solid #294056; border-radius: 18px; box-shadow: 0 18px 45px #02080f55; }
-    .composer { padding: 22px; margin-bottom: 20px; }
-    label { display: block; font-weight: 700; margin-bottom: 10px; }
-    textarea { width: 100%; min-height: 90px; resize: vertical; border: 1px solid #38536a; border-radius: 12px; padding: 14px 16px; font: inherit; color: #f1f6ff; background: #091422; outline: none; }
-    textarea:focus { border-color: #56d5b9; box-shadow: 0 0 0 3px #56d5b922; }
-    .actions, .examples, .section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .actions { justify-content: space-between; margin-top: 14px; }
-    button { font: inherit; cursor: pointer; border-radius: 10px; padding: 10px 15px; font-weight: 700; }
-    button:disabled { cursor: not-allowed; opacity: .5; }
-    .primary { border: 0; color: #061918; background: #63dcc0; }
-    .primary:hover:enabled { background: #94f1d9; }
-    .secondary, .examples button { border: 1px solid #365168; color: #d4e5f6; background: #17283a; }
-    .examples button { padding: 7px 10px; font-size: .8rem; font-weight: 500; }
-    .grid { display: grid; grid-template-columns: minmax(330px, .85fr) minmax(460px, 1.15fr); gap: 20px; }
-    .flow, .events { padding: 22px; min-width: 0; }
-    h2 { margin: 0; font-size: 1.15rem; }
-    .section-head { justify-content: space-between; margin-bottom: 18px; }
-    .muted { color: #8ea4bd; font-size: .84rem; }
-    .steps { display: grid; gap: 11px; }
-    .step { position: relative; border: 1px solid #30485e; border-radius: 13px; padding: 14px 16px 14px 52px; background: #112134; }
-    .step::before { content: ''; position: absolute; left: 20px; top: 17px; width: 14px; height: 14px; border-radius: 50%; background: #526b83; box-shadow: 0 0 0 4px #23384d; }
-    .step + .step::after { content: ''; position: absolute; left: 26px; top: -12px; height: 11px; border-left: 2px solid #42627b; }
-    .step.running { border-color: #f7c86e; background: #30291d; }
-    .step.running::before { background: #f7c86e; box-shadow: 0 0 0 5px #f7c86e33; animation: pulse 1s infinite alternate; }
-    .step.complete { border-color: #3a9d8d; background: #102d31; }
-    .step.complete::before { background: #63dcc0; box-shadow: 0 0 0 4px #1e6159; }
-    .step.skipped { opacity: .58; }
-    @keyframes pulse { to { box-shadow: 0 0 0 9px #f7c86e0b; } }
-    .step strong { display: block; font-size: .94rem; }
-    .step small { display: block; margin-top: 3px; color: #9fb0c3; }
-    .answer { margin-top: 20px; border-radius: 13px; padding: 17px; background: #0b1727; border: 1px solid #29465b; }
-    .answer strong { color: #63dcc0; }
-    .answer p { margin: 8px 0 0; color: #eef4ff; white-space: pre-wrap; }
-    .metrics { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
-    .metric { border-radius: 7px; padding: 6px 9px; background: #1d3447; color: #bad4e9; font-size: .78rem; }
-    .event-list { display: grid; gap: 9px; max-height: 680px; overflow: auto; padding-right: 4px; }
-    details { border: 1px solid #2e475e; border-radius: 11px; background: #0b1828; }
-    details[open] { border-color: #538d9b; }
-    summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
-    summary::-webkit-details-marker { display: none; }
-    .index { display: inline-grid; place-items: center; min-width: 27px; height: 27px; border-radius: 7px; color: #101d2e; background: #82acc7; font-size: .75rem; font-weight: 800; }
-    .event-title { flex: 1; font-weight: 700; font-size: .9rem; }
-    .event-time { color: #89a3bb; font-size: .75rem; }
-    pre { margin: 0; padding: 0 14px 14px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #c6dbe9; font: .8rem/1.45 Consolas, ui-monospace, monospace; }
-    .note { margin-top: 16px; font-size: .83rem; }
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .top { display: block; } .badge { display: inline-block; margin-top: 14px; } }
-  </style>
+  <meta name="theme-color" content="#FBF6EA">
+  <title>Pruebas de conversación | AsisTendero</title>
+  <link rel="stylesheet" href="/assets/conversacion.css">
+  <script src="/assets/app.js" defer></script>
 </head>
 <body>
-<main>
-  <div class="top">
-    <div><span class="eyebrow">PulsoTienda / laboratorio local</span><h1>Visor del harness</h1><p>Observa la ruta de LangGraph, los candidatos de SQLite, la solicitud enviada a Grok y la validación final. Cada ejecución con candidatos puede consumir cupo del reto.</p></div>
-    <span class="badge">Solo en 127.0.0.1 · datos simulados</span>
-  </div>
-  <form id="form" class="panel composer">
-    <label for="query">Consulta de prueba</label>
-    <textarea id="query" maxlength="2000" spellcheck="true" placeholder="Ej.: Busco tubo PVC de 1/2 para agua" required></textarea>
-    <div class="actions"><div class="examples"><span class="muted">Probar:</span><button type="button" data-example="Busco tubo PVC de 1/2 para agua">Variante concreta</button><button type="button" data-example="Busco tubo PVC para agua">Ambigüedad</button><button type="button" data-example="Necesito un taladro de 20 V">Sin candidato</button></div><div class="examples"><button id="download" type="button" class="secondary" disabled>Descargar traza JSON</button><button id="run" type="submit" class="primary">Ejecutar consulta</button></div></div>
-  </form>
-  <div class="grid">
-    <section class="panel flow" aria-label="Grafo de ejecución">
-      <div class="section-head"><h2>Ruta del grafo</h2><span id="status" class="muted">Esperando consulta</span></div>
-      <div class="steps">
-        <div id="step-validate" class="step"><strong>01 · Validar entrada</strong><small>Longitud y texto de la consulta</small></div>
-        <div id="step-retrieve" class="step"><strong>02 · Buscar catálogo</strong><small>SQLite local · hasta cinco candidatos</small></div>
-        <div id="step-decide" class="step"><strong>03 · Grok selecciona SKU</strong><small>Se omite si no hay candidatos</small></div>
-        <div id="step-render" class="step"><strong>04 · Verificar y responder</strong><small>Precio y stock desde SQLite</small></div>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><img src="/assets/cercania-mark.png" alt="" width="46" height="46"></div>
+      <div><div class="brand-name">AsisTendero</div><div class="brand-subtitle">Centro de pruebas</div></div>
+    </div>
+    <div class="env-tag" title="Entorno local · datos simulados"><span class="env-dot" aria-hidden="true"></span> Entorno local · datos simulados</div>
+  </header>
+
+  <main class="shell">
+    <div class="intro">
+      <div>
+        <span class="eyebrow">SIMULADOR DE ATENCIÓN</span>
+        <h1>Probemos una conversación</h1>
+        <p>Escribe como cliente y mira cómo AsisTendero llega a su respuesta.</p>
       </div>
-      <div class="answer"><strong>Respuesta</strong><p id="answer">La salida aparecerá aquí al terminar.</p><div id="metrics" class="metrics"></div></div>
-      <p class="note">La clave API de .env no se envía al navegador. La traza vive en esta pestaña y solo se guarda si pulsas «Descargar». Evita escribir secretos en la consulta.</p>
+      <span class="context-note">Las consultas con Grok pueden consumir cupo del reto.</span>
+    </div>
+
+    <div class="workspace-grid">
+      <section class="surface chat-card" aria-label="Conversación de prueba">
+        <div class="chat-head">
+          <div class="chat-head-main"><span class="chat-avatar" aria-hidden="true">AT</span><div><h2>Cliente de la ferretería</h2><p>Una consulta por ejecución</p></div></div>
+          <span class="chat-head-tag">Canal de prueba · texto</span>
+        </div>
+        <div class="chat-thread">
+          <div id="customer-message" class="chat-row customer" hidden>
+            <span class="chat-icon" aria-hidden="true">C</span>
+            <div><span class="speaker">Cliente</span><div class="bubble" id="customer-text"></div></div>
+          </div>
+          <div class="chat-row agent">
+            <span class="chat-icon" aria-hidden="true">AT</span>
+            <div>
+              <span class="speaker">AsisTendero</span>
+              <div id="response-box" class="bubble agent-bubble is-empty">
+                <p id="answer" aria-live="polite">Escribe un mensaje de prueba para ver cómo responde el agente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-composer">
+          <form id="form">
+            <div class="composer-heading"><label for="query">¿Qué quieres consultar?</label><span id="char-count" class="input-meta">0 / 2000</span></div>
+            <textarea id="query" maxlength="2000" spellcheck="true" placeholder="Ej.: Busco tubo PVC de 1/2 y cemento gris de 50 kg" required></textarea>
+            <p class="examples-head">Prueba un escenario</p>
+            <div class="examples">
+              <button type="button" class="example" data-example="¿Están atendiendo en este momento?">Horario</button>
+              <button type="button" class="example" data-example="Busco tubo PVC de 1/2 y cemento gris de 50 kg">Dos productos</button>
+              <button type="button" class="example" data-example="Busco tubo PVC para agua">Medida faltante</button>
+              <button type="button" class="example" data-example="Necesito un taladro de 20 V">Sin coincidencia</button>
+            </div>
+            <div class="form-bottom">
+              <p class="cost-note">Grok interpreta el mensaje y solicita una búsqueda solo si necesita datos del catálogo.</p>
+              <button id="run" type="submit" class="primary">Ejecutar prueba ↗</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <aside class="insight-column" aria-label="Explicación de la ejecución">
+        <section class="surface panel-pad" aria-labelledby="flow-title">
+          <div class="panel-head"><div><span class="section-label">DETRÁS DE LA RESPUESTA</span><h2 id="flow-title">Así lo resolvió</h2><p>Los pasos se actualizan durante la prueba.</p></div><span id="status" class="status-pill" role="status" aria-live="polite">Sin ejecutar</span></div>
+          <ol class="steps">
+            <li id="step-validate" class="step"><span class="step-number">01</span><span><strong>Recibe el mensaje</strong><small>Valida entrada y longitud</small></span><span class="step-state">Pendiente</span></li>
+            <li id="step-interpret" class="step"><span class="step-number">02</span><span><strong>Entiende la solicitud</strong><small>Grok decide responder o consultar</small></span><span class="step-state">Pendiente</span></li>
+            <li id="step-retrieve" class="step"><span class="step-number">03</span><span><strong>Consulta el catálogo</strong><small>SQLite ficticio, si hace falta</small></span><span class="step-state">Pendiente</span></li>
+            <li id="step-respond" class="step"><span class="step-number">04</span><span><strong>Verifica y responde</strong><small>Datos comprobados antes de mostrar</small></span><span class="step-state">Pendiente</span></li>
+          </ol>
+          <p class="flow-note">Este prototipo no crea pedidos, reservas ni pagos. No escribas claves ni datos privados en el mensaje de prueba.</p>
+        </section>
+
+        <section class="surface panel-pad" aria-labelledby="cost-title">
+          <div class="panel-head"><div><span class="section-label">RESUMEN DE PRUEBA</span><h2 id="cost-title">Uso y costo</h2></div></div>
+          <div class="cost-panel" aria-label="Costo de esta ejecución">
+            <div class="cost-heading"><span>Costo de esta ejecución · USD</span><strong id="cost-amount" aria-live="polite">—</strong></div>
+            <p id="cost-basis" class="cost-basis">Aparecerá al recibir el uso de Grok.</p>
+            <div id="cost-lines" class="cost-lines"></div>
+            <p class="cost-explain">Referencia en USD. La pasarela del reto puede descontar créditos de otra forma. <a href="https://docs.x.ai/developers/pricing" target="_blank" rel="noopener noreferrer">Tarifas públicas xAI</a></p>
+          </div>
+          <dl class="summary-metrics">
+            <div class="summary-metric"><dt>Ruta</dt><dd id="metric-route">—</dd></div>
+            <div class="summary-metric"><dt>Grok</dt><dd id="metric-calls">—</dd></div>
+            <div class="summary-metric"><dt>Tokens</dt><dd id="metric-tokens">—</dd></div>
+            <div class="summary-metric"><dt>Duración</dt><dd id="metric-duration">—</dd></div>
+          </dl>
+          <div class="result-footer"><button id="copy-answer" type="button" class="secondary" disabled>Copiar respuesta</button></div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="surface panel-pad trace-panel" aria-labelledby="events-title">
+      <div class="events-head">
+        <div class="panel-head"><div><span class="section-label">INSPECCIÓN TÉCNICA</span><h2 id="events-title">Traza de ejecución</h2><p id="counter">0 eventos · expande uno para ver sus parámetros.</p></div></div>
+        <div class="events-actions">
+          <button id="expand-events" type="button" class="secondary" disabled>Expandir visibles</button>
+          <button id="download" type="button" class="secondary" disabled>Descargar JSON</button>
+        </div>
+      </div>
+      <div class="filters" role="group" aria-label="Filtrar eventos">
+        <button type="button" class="filter" data-filter="all" aria-pressed="true">Todos</button>
+        <button type="button" class="filter" data-filter="model" aria-pressed="false">Grok</button>
+        <button type="button" class="filter" data-filter="tool" aria-pressed="false">Catálogo</button>
+        <button type="button" class="filter" data-filter="system" aria-pressed="false">Sistema</button>
+      </div>
+      <div id="event-list" class="event-list">
+        <div id="empty-events" class="empty-events">La traza aparecerá aquí. Prueba «Horario» para ver una respuesta sin búsqueda o «Dos productos» para seguir las consultas al catálogo.</div>
+      </div>
     </section>
-    <section class="panel events" aria-label="Eventos de ejecución">
-      <div class="section-head"><h2>Eventos y parámetros</h2><span id="counter" class="muted">0 eventos</span></div>
-      <div id="event-list" class="event-list" aria-live="polite"><p class="muted">Los eventos aparecerán aquí conforme avancen los nodos.</p></div>
-    </section>
-  </div>
-</main>
-<script>
-(() => {
-  const form = document.querySelector('#form');
-  const query = document.querySelector('#query');
-  const run = document.querySelector('#run');
-  const download = document.querySelector('#download');
-  const status = document.querySelector('#status');
-  const answer = document.querySelector('#answer');
-  const metrics = document.querySelector('#metrics');
-  const list = document.querySelector('#event-list');
-  const counter = document.querySelector('#counter');
-  const nodeNames = ['validate', 'retrieve', 'decide', 'render'];
-  let events = [];
-
-  document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => {
-    query.value = button.dataset.example;
-    query.focus();
-  }));
-
-  function reset() {
-    events = [];
-    list.replaceChildren();
-    metrics.replaceChildren();
-    answer.textContent = 'Procesando consulta…';
-    counter.textContent = '0 eventos';
-    download.disabled = true;
-    nodeNames.forEach(name => document.querySelector(`#step-${name}`).className = 'step');
-  }
-
-  function addMetric(label, value) {
-    const chip = document.createElement('span');
-    chip.className = 'metric';
-    chip.textContent = `${label}: ${value}`;
-    metrics.append(chip);
-  }
-
-  function titleOf(event) {
-    if (event.type === 'node') return `${event.node} · ${event.status === 'running' ? 'iniciando' : 'completado'}`;
-    return ({input:'Consulta recibida', model_request:'Solicitud a Grok', model_response:'Respuesta de Grok', route:'Ruta condicional', final:'Resultado final', error:'Error'})[event.type] || event.type;
-  }
-
-  function show(event) {
-    events.push(event);
-    counter.textContent = `${events.length} eventos`;
-    if (event.type === 'node') {
-      document.querySelector(`#step-${event.node}`).className = `step ${event.status}`;
-      if (event.status === 'running') status.textContent = `Ejecutando · ${event.node}`;
-    }
-    if (event.type === 'route') document.querySelector('#step-decide').className = 'step skipped';
-    if (event.type === 'final') {
-      status.textContent = `Finalizado · ${event.details.estado}`;
-      answer.textContent = event.details.respuesta;
-      addMetric('Grok', event.details.model_called ? 'sí' : 'no');
-      addMetric('Duración', `${event.elapsed_ms} ms`);
-    }
-    if (event.type === 'model_response') {
-      addMetric('Tokens entrada', event.details.input_tokens ?? 'sin dato');
-      addMetric('Tokens salida', event.details.output_tokens ?? 'sin dato');
-    }
-    if (event.type === 'error') { status.textContent = 'Error'; answer.textContent = event.message; }
-    const row = document.createElement('details');
-    if (['model_request', 'model_response', 'final', 'error'].includes(event.type)) row.open = true;
-    const summary = document.createElement('summary');
-    const index = document.createElement('span'); index.className = 'index'; index.textContent = String(events.length).padStart(2, '0');
-    const label = document.createElement('span'); label.className = 'event-title'; label.textContent = titleOf(event);
-    const time = document.createElement('span'); time.className = 'event-time'; time.textContent = `${event.elapsed_ms ?? 0} ms`;
-    summary.append(index, label, time);
-    const details = document.createElement('pre'); details.textContent = JSON.stringify(event.details ?? event, null, 2);
-    row.append(summary, details);
-    list.append(row);
-    list.scrollTop = list.scrollHeight;
-    download.disabled = false;
-  }
-
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (!query.value.trim()) return;
-    reset(); run.disabled = true; status.textContent = 'Ejecutando…';
-    try {
-      const response = await fetch('/api/trace', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({consulta:query.value})});
-      if (!response.ok) { const data = await response.json(); throw new Error(data.error || `HTTP ${response.status}`); }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let pending = '';
-      while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
-        pending += decoder.decode(value, {stream:true});
-        const lines = pending.split('\n');
-        pending = lines.pop();
-        for (const line of lines) if (line.trim()) show(JSON.parse(line));
-      }
-      pending += decoder.decode();
-      if (pending.trim()) show(JSON.parse(pending));
-      if (!events.some(item => item.type === 'final' || item.type === 'error')) throw new Error('La traza terminó sin resultado.');
-    } catch (error) {
-      show({type:'error', message:error.message, elapsed_ms:0});
-    } finally { run.disabled = false; }
-  });
-
-  download.addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(events, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = `asistendero-traza-${Date.now()}.json`;
-    link.click(); URL.revokeObjectURL(url);
-  });
-})();
-</script>
+  </main>
 </body>
 </html>

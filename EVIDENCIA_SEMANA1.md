@@ -1,5 +1,7 @@
 # Evidencia del flujo de Semana 1
 
+> Esta es la primera evidencia del 15 de octubre. La verificación del flujo actual `agent-first-v2` está en [evaluation/VERIFICACION_AGENT_FIRST_V2.md](evaluation/VERIFICACION_AGENT_FIRST_V2.md).
+
 **Fecha:** 15 de octubre de 2026 (Colombia). **Estado:** flujo textual de extremo a extremo verificado con Grok; alcance limitado al prototipo de terminal.
 
 ## Ejecución real

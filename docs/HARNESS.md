@@ -1,52 +1,34 @@
 # Harness experimental de AsisTendero
 
-**Estado:** implementación de prueba en `codex/harness-tests`, derivada de `dev/julian`. No representa todavía la arquitectura final acordada con la pareja. Relacionado con [PT-006](https://github.com/JulianCVM/AsisTendero/issues/6), [PT-031](https://github.com/JulianCVM/AsisTendero/issues/31) y [PT-032](https://github.com/JulianCVM/AsisTendero/issues/32); ninguna issue queda cerrada por este experimento.
+**Estado:** prototipo local para el primer flujo demostrable. No representa la plataforma comercial completa ni cierra las issues PT-001, PT-006, PT-031 o PT-032. Usa `PROMPT_VERSION=structured-search-v1` y datos ficticios.
 
 ## Contrato del flujo
 
-```text
-entrada textual
-  → validar longitud y contenido
-  → leer hasta cinco candidatos del SQLite ficticio (solo lectura, sede fija)
-  → si hay candidatos: Grok selecciona un SKU o null en JSON
-  → verificar que el SKU exista en esos candidatos y que la variante esté especificada
-  → componer respuesta con nombre, precio y stock leídos de SQLite
-  → salida textual con aviso de datos simulados
-```
+1. `validate` limita la entrada textual a 2.000 caracteres.
+2. `interpret` envía **siempre** el mensaje completo a Grok. El modelo devuelve `respond` o `search_products`, con hasta cinco objetos `ProductQuery`: fragmento por artículo, tipo, uso, material, medida, presentación, color, marca y cantidad solo cuando el cliente los expresó.
+3. `retrieve` descarta filtros que no están respaldados por el mensaje y ejecuta la herramienta de lectura del servidor por artículo. `MockCatalog` devuelve hasta tres coincidencias exactas o, si no hay ninguna, hasta dos opciones cercanas de la misma categoría. Una opción cercana conserva su diferencia: no es una sustitución validada ni un SKU elegible. Grok no recibe credenciales ni SQL. La identidad de negocio y sede de demostración está fijada en el servidor.
+4. `respond` devuelve la respuesta directa para mensajes generales, o llama a Grok de nuevo con los hallazgos. El modelo propone SKU y una respuesta final. El código verifica que el SKU esté entre los candidatos, que la variante sea distinguible y que las cifras de una respuesta generada coincidan con SQLite. Si no puede verificar esa respuesta, compone una salida factual con la base. Para preguntas sobre atención u horario, comprueba además el texto original antes de entregar una respuesta, incluso si Grok clasificó el mensaje como saludo.
 
-El modelo **interpreta la consulta**. No recibe SQL, ni precio, ni stock; tampoco escribe en la base. La selección es una propuesta, nunca un hecho: el código la rechaza si inventa un SKU o el cliente no precisó la variante. Precio, stock y mensaje final salen del renderizador determinista y de la fila consultada. Si no hay candidatos, se responde sin llamada al modelo para no gastar cupo ni alucinar un producto.
+Esto permite probar «¿Están atendiendo?» sin forzar una búsqueda de producto y «Busco tubo PVC de 1/2 y cemento gris de 50 kg» con dos búsquedas. No hay horario cargado: no se afirma apertura o cierre. La lista de productos no es un carrito ni una cotización.
 
-La base SQLite está en `.local/mock_catalog.sqlite3` y no se publica. `seed.py` crea seis variantes ficticias y no sobrescribe una base existente. `MockCatalog` abre conexiones `mode=ro`, filtra por negocio y sede de demostración definidos en servidor, y solo expone métodos de lectura. Esto es **fuente de verdad de la demo**, no inventario del piloto ni una implementación de permisos multinegocio.
+## Datos y barreras
+
+La base `.local/mock_catalog.sqlite3` contiene seis variantes ficticias. `seed.py` no sobrescribe una base existente. `MockCatalog` abre SQLite con `mode=ro` y filtra por negocio y sede de demostración. Este filtro prueba la forma del acceso, pero no constituye autenticación o aislamiento multinegocio listo para producción.
+
+El plan del modelo se valida antes de ejecutar herramientas: solo se admite lectura de catálogo, hasta cinco productos, parámetros tipados y ninguna escritura. Precio, stock y SKU finales se comprueban del lado del servidor. Los campos no expresados no se convierten en filtros; la cantidad aún no se usa para reservar ni cotizar. Horarios reales, pedidos, reservas, pagos, fiados y cambios de inventario no están conectados.
 
 ## Visor local de pruebas
 
-`python -m asistendero.visual` sirve una interfaz en `http://127.0.0.1:8765/`. Usa `graph.stream(..., stream_mode="updates")` sobre el mismo grafo del CLI y transmite eventos a medida que terminan los nodos. Muestra entrada, estado de validación, términos y filas candidatas, carga enviada a Grok, respuesta cruda y decisión interpretada, tokens y salida final. La clave de `.env` no se incluye en los eventos; el endpoint configurado se muestra sin credenciales ni query string. No hay registro persistente automático: la descarga de JSON es manual y puede contener el texto de la consulta y los productos ficticios.
+`python -m asistendero.visual` sirve `http://127.0.0.1:8765/`. Transmite eventos del mismo grafo usado en terminal: interpretación, ruta, hallazgos, segunda llamada si aplica, verificación y respuesta. La clave API se omite de los eventos; las trazas pueden contener mensajes y datos de prueba y solo se guardan al descargarlas manualmente.
 
-El visor no agrega otra llamada a Grok: envuelve la función de selección para registrar antes y después de la llamada que el grafo ya iba a realizar. En consultas sin candidatos muestra la ruta que omite el modelo. La duración por nodo y el tiempo total son mediciones locales, no una garantía de latencia. Esta es una herramienta **solo para pruebas locales**, no una interfaz del comercio ni un canal de atención. Su traza muestra el comportamiento real del código y también sus límites, incluidos los casos de varios productos que todavía no soporta.
+El visor muestra el costo **por ejecución** y por llamada, en USD. Primero usa `usage.cost_in_usd_ticks` si la respuesta de la API lo incluye. Si la pasarela no lo informa, calcula una referencia con tokens de entrada, salida y caché (cuando está disponible) y las [tarifas públicas de xAI](https://docs.x.ai/developers/pricing) consultadas el 17 de octubre de 2026. En ese caso se rotula **estimado**. Si falta el uso o el modelo no tiene tarifa conocida, muestra «No disponible»; nunca interpreta un dato ausente como costo cero. La tarifa o el débito de créditos de `api.reto.pltk.mx` puede ser distinto y sigue por verificar.
 
-## Reglas iniciales de respuesta
+## Evaluación
 
-1. Responder solo al producto consultado. La salida `found` contiene variante, SKU, precio y stock simulados con unidad; `clarify` solicita medida o presentación; `not_found` reconoce que la base no contiene el producto.
-2. No inferir disponibilidad real, compatibilidad, descuentos, promesas de reserva, pago, entrega o acciones del tendero. Los datos de la demo se etiquetan como simulados en cada respuesta que contiene hechos.
-3. Ante variantes del mismo nombre, se exige una señal distintiva en la consulta. Ni siquiera una selección de Grok salta esa comprobación.
-4. La salida JSON de Grok se valida. Un valor fuera de los candidatos o inválido no llega al cliente como hecho.
-5. Una llamada al modelo como máximo por consulta con candidatos. El número de candidatos, longitud de entrada y tokens de salida están acotados. No hay memoria conversacional ni acciones externas en este corte.
+`python -m pytest -q --basetemp=.tmp/pytest` usa planificador y resolutor simulados, sin llamadas pagadas. Comprueba el orden Grok → herramienta, respuesta sobre horario no confirmado, listas de productos, ambigüedad, SKU inventado, hechos de SQLite y alcance del negocio de demostración.
 
-## Método de prueba y comparación
+`python -m asistendero.evaluate --live --limit 8` usa Grok real y registra versión del prompt, resultados, tokens y latencia en `.local/`. El corpus incluye medida no disponible y descripción parcial. Las mediciones anteriores en `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1` y `agent-first-v2` preceden al prompt actual. Tres llamadas de demostración con `structured-search-v1` comprobaron una lista exacta, una medida ausente y una descripción parcial; no constituyen una tasa de acierto general.
 
-- **Pruebas locales sin costo:** `python -m pytest -q` crea SQLite temporal y sustituye Grok por decisiones controladas. Comprueba fidelidad a datos, ambigüedad, SKU inventado, ausencia de coincidencia, aislamiento de negocio y entrada vacía. Son reglas de seguridad del flujo; no evalúan redacción real del modelo.
-- **Evaluación real, explícita y acotada:** `python -m asistendero.evaluate --live --limit 4` ejecuta casos sintéticos de `evaluation/cases.json`. Sin `--live` no llama a Grok. Guarda en `.local/` un reporte ignorado por Git con versión del prompt, modelo, hash de la base, respuestas, estado, latencia y tokens si la pasarela los informa.
-- **Revisión humana:** leer cada respuesta por precisión, brevedad y utilidad. La aprobación automática de estados no mide estilo ni confianza del cliente. Registrar falsos positivos, preguntas insuficientes y casos sin respuesta antes de cambiar el prompt o el modelo.
-- **Cambios controlados:** no incluir ejemplos de evaluación en el prompt ni modificarlo caso por caso. Para comparar versiones, mantener el mismo corpus y la misma base, cambiar una variable por vez (prompt, modelo o recuperación), conservar el reporte y explicar la diferencia. Una mejora debe conservar todas las reglas locales y no aumentar errores factuales.
+## Límite siguiente
 
-`PROMPT_VERSION=catalog-select-v1` identifica las instrucciones de selección. La salida de producción y las pruebas usan el mismo grafo; los dobles de prueba se inyectan solo como dependencia. Los reportes no incluyen la clave. No se atribuyen a Grok hechos que la base o las reglas del programa resolvieron.
-
-## Modelo y costo
-
-La clave del reto lista `grok-4.20-0309-non-reasoning`. Se usa como valor predeterminado para estas consultas de texto: xAI publica tarifas inferiores a las de `grok-4.7` para ese modelo ([ficha 4.20](https://docs.x.ai/developers/models/grok-4.20-0309-non-reasoning), [ficha 4.7](https://docs.x.ai/developers/models/grok-4.7)). **La pasarela del reto puede facturar o limitar de otro modo**; comparar tokens y costo real antes de afirmar ahorro. Mantener `GROK_MODEL` configurable permite repetir el mismo corpus con otro modelo sin cambiar reglas ni datos.
-
-## Próximo límite arquitectónico
-
-El contrato de `MockCatalog` permite sustituir SQLite por herramientas autorizadas de negocio: derivar negocio/sede de sesión verificada, devolver datos fechados y versionados, validar permisos, y mantener lectura separada de futuras mutaciones. El cambio requiere PT-001/PT-002 y las reglas de PT-003/PT-005; no se conecta Supabase ni se implementa una reserva por anticipación.
-
-El diseño propuesto para [varios productos, memoria acotada y pruebas contra instrucciones indebidas](CONVERSACION_Y_SEGURIDAD.md) separa lo que ya funciona de los contratos que aún deben definirse con la pareja.
+Para producto real, reemplazar `MockCatalog` por herramientas autorizadas de negocio con identidad, sede y permisos verificados; agregar memoria conversacional, carrito, cotización y acciones idempotentes después de cerrar los contratos correspondientes con la pareja. La secuencia de dos llamadas al modelo es una elección de este prototipo, no un requisito oficial del reto.

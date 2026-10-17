@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
 from asistendero.graph import build_graph
-from asistendero.grok import PROMPT_VERSION, decide_with_grok
+from asistendero.grok import PROMPT_VERSION, plan_with_grok, resolve_with_grok
 
 
 def main() -> int:
@@ -32,24 +32,29 @@ def main() -> int:
     if not 1 <= args.limit <= len(all_cases):
         parser.error(f"--limit debe estar entre 1 y {len(all_cases)}")
     cases = all_cases[:args.limit]
-    graph = build_graph(catalog, decide_with_grok)
+    graph = build_graph(catalog, plan_with_grok, resolve_with_grok)
     records = []
     for case in cases:
         started = perf_counter()
         result = graph.invoke({"consulta": case["query"]})
         elapsed_ms = round((perf_counter() - started) * 1000)
-        decision = result.get("decision")
-        selected_sku = decision.selected_sku if decision else None
+        plan = result.get("plan")
+        resolution = result.get("resolucion")
+        selected_skus = list(resolution.selected_skus) if resolution else []
         passed = result["estado"] == case["expected_status"]
         if case.get("expected_sku"):
-            passed = passed and selected_sku == case["expected_sku"]
+            passed = passed and case["expected_sku"] in selected_skus
+        if case.get("expected_skus"):
+            passed = passed and all(sku in selected_skus for sku in case["expected_skus"])
         records.append({
             "id": case["id"], "query": case["query"], "expected_status": case["expected_status"],
             "actual_status": result["estado"], "expected_sku": case.get("expected_sku"),
-            "selected_sku": selected_sku, "passed": passed, "response": result["respuesta"],
+            "expected_skus": case.get("expected_skus"),
+            "selected_skus": selected_skus, "passed": passed, "response": result["respuesta"],
             "model_called": result["model_called"],
-            "input_tokens": decision.input_tokens if decision else 0,
-            "output_tokens": decision.output_tokens if decision else 0,
+            "model_calls": result["model_calls"],
+            "input_tokens": sum(x.input_tokens or 0 for x in (plan, resolution) if x),
+            "output_tokens": sum(x.output_tokens or 0 for x in (plan, resolution) if x),
             "elapsed_ms": elapsed_ms,
         })
         print(f"{case['id']}: {'PASS' if passed else 'FAIL'} ({result['estado']})")
@@ -61,7 +66,7 @@ def main() -> int:
         "mock_db_sha256": hashlib.sha256(catalog.path.read_bytes()).hexdigest(),
         "passed": sum(record["passed"] for record in records),
         "total": len(records),
-        "model_calls": sum(record["model_called"] for record in records),
+        "model_calls": sum(record["model_calls"] for record in records),
         "input_tokens": sum(record["input_tokens"] or 0 for record in records),
         "output_tokens": sum(record["output_tokens"] or 0 for record in records),
         "cases": records,

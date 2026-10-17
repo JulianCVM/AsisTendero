@@ -1,10 +1,10 @@
 # Conversación, varios productos y resistencia a instrucciones indebidas
 
-**Estado:** propuesta para las siguientes iteraciones de `codex/harness-tests`; no es funcionalidad implementada. Debe revisarse con la pareja y con PT-001, PT-003, PT-006, PT-023 y PT-024 antes de tratarla como contrato del producto. El harness actual recibe una consulta independiente sobre un producto, no guarda carrito ni historial y no crea pedidos.
+**Estado:** propuesta para las siguientes iteraciones; no es contrato aprobado del producto. Debe revisarse con la pareja y con PT-001, PT-003, PT-006, PT-023 y PT-024. El harness actual recibe un mensaje independiente, puede separar hasta cinco artículos con atributos estructurados y conservar una cantidad indicada para contexto, pero no guarda carrito ni historial y no crea pedidos.
 
 ## Lo que ya protege el harness
 
-- LangGraph impone el recorrido `validar → recuperar → decidir → responder`. La base SQLite de demostración se lee con código de servidor; Grok no recibe SQL ni credenciales.
+- LangGraph impone el recorrido `validar → interpretar con Grok → buscar si lo solicita → resolver`. La base SQLite de demostración se lee con código de servidor; Grok no recibe SQL ni credenciales.
 - Grok propone un SKU entre candidatos acotados. El backend rechaza SKU inexistentes y variantes sin medida o presentación distintiva. Un SKU escrito en un mensaje no autoriza por sí solo a cambiar de variante.
 - Precio y existencias salen del registro SQLite, no del texto del cliente ni de la salida del modelo. No existen herramientas de escritura ni acciones externas.
 - El prompt ordena tratar instrucciones dentro de la consulta como datos y devolver `null` si intentan alterar la tarea. Esta instrucción **no es una garantía**: la comprobación decisiva debe permanecer en el código y ampliarse cuando existan operaciones con efectos.
@@ -12,12 +12,12 @@
 ## Flujo propuesto para varios productos
 
 1. Resolver la identidad de negocio, sede y conversación desde el canal autenticado. No tomar esos identificadores del mensaje ni del modelo.
-2. Interpretar la intención en una estructura limitada: `consultar`, `agregar`, `quitar`, `cambiar_cantidad` o `confirmar`, más una lista de menciones de producto con cantidad y medida cuando existan. Un texto como «dos tubos de 1/2 y tres tornillos de 2 pulgadas» produce dos menciones separadas. La extracción asistida por Grok requiere esquema validado y límites de líneas; todavía no está implementada.
+2. Ampliar la interpretación actual (`respond` o `search_products`) a acciones de carrito: `consultar`, `agregar`, `quitar`, `cambiar_cantidad` o `confirmar`. Un texto como «dos tubos de 1/2 y tres tornillos de 2 pulgadas» ya puede generar dos búsquedas y anotar cantidades, pero todavía no conserva líneas de compra ni modifica estado comercial.
 3. Buscar candidatos **por cada mención** mediante la herramienta de catálogo del servidor. El modelo puede ayudar a desambiguar, pero cada SKU y cantidad se valida contra el catálogo y las reglas del negocio. Una línea incierta queda pendiente y se pregunta por ella sin inventar precio ni sumar un total definitivo.
 4. Mantener un carrito estructurado por conversación y sede: `sku`, variante, cantidad, unidad y estado de resolución. «Agrega otro tubo de 1/2» modifica la línea identificada; «agrega uno más» solo se resuelve si hay un único referente claro. Si hay dos posibles, se pregunta cuál. Ningún mensaje ambiguo modifica una orden confirmada.
 5. Antes de cotizar o confirmar, consultar precio y disponibilidad vigentes para **todas** las líneas, generar una versión de cotización y mostrar el detalle. Cada cambio de líneas genera nueva versión; la confirmación explícita del cliente se refiere a esa versión. La futura herramienta de reserva revalidará precio, stock y permisos en la misma operación, con idempotencia. Pedido, reserva y pago tienen estados separados.
 
-Ejemplo previsto: «Quiero dos tubos PVC de 1/2 y un bulto de cemento» → dos líneas verificadas → detalle y total de una cotización. Si después dice «agrega un tubo más», se incrementa solo esa línea y se vuelve a cotizar; todavía no se reserva ni se cobra por ese mensaje. **Hoy este recorrido no funciona**: la versión actual busca candidatos para la frase completa y responde sobre un solo producto.
+Ejemplo previsto: «Quiero dos tubos PVC de 1/2 y un bulto de cemento» → dos líneas verificadas → detalle y total de una cotización. **Hoy solo funcionan las consultas separadas dentro del mismo mensaje**; no se calcula un total ni se crea carrito. Si después dice «agrega un tubo más», falta memoria para saber a cuál se refiere y no debe fingir que la compra cambió.
 
 ## Ventana de contexto propuesta
 

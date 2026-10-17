@@ -1,4 +1,4 @@
-"""Harness LangGraph: validar → leer fuente → interpretar → verificar → responder."""
+"""Flujo del entregable 1: Grok interpreta → herramienta de lectura → Grok resuelve."""
 
 from collections.abc import Callable
 import re
@@ -8,22 +8,28 @@ import unicodedata
 from langgraph.graph import END, START, StateGraph
 
 from asistendero.catalog import MockCatalog, Product, tokens
-from asistendero.grok import Decision, PROMPT_VERSION, VALID_INTENTS
+from asistendero.grok import Plan, Resolution, PROMPT_VERSION
+from asistendero.search import ProductQuery
+
+
+class Finding(TypedDict):
+    query: str
+    request: ProductQuery
+    candidates: list[Product]
+    nearby: list[Product]
 
 
 class AgentState(TypedDict):
     consulta: str
-    candidatos: NotRequired[list[Product]]
-    decision: NotRequired[Decision | None]
-    intencion: NotRequired[str]
+    plan: NotRequired[Plan]
+    hallazgos: NotRequired[list[Finding]]
+    resolucion: NotRequired[Resolution]
     respuesta: NotRequired[str]
     estado: NotRequired[str]
     fuente: NotRequired[str]
     prompt_version: NotRequired[str]
     model_called: NotRequired[bool]
-
-
-GENERIC_MEASURE_TOKENS = {"pulgada", "pulgadas", "1", "2", "1/2", "3/4", "1/4", "50", "kg", "x"}
+    model_calls: NotRequired[int]
 
 
 def _normalize_text(value: str) -> str:
@@ -31,189 +37,199 @@ def _normalize_text(value: str) -> str:
     return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
-def _detect_intent(query: str, decision: Decision | None = None) -> str:
-    text = _normalize_text(query)
-    if re.search(r"\b(compar\w*|diferencia\w*|versus|vs)\b|\bentre\b.+\by\b", text):
-        return "comparacion"
-    if re.search(
-        r"\b(recomiend\w*|recomendacion\w*|aconsej\w*|sugier\w*|cual me sirve|que me sirve|cual conviene)\b",
-        text,
-    ):
-        return "recomendacion"
-    if re.search(
-        r"\b(existencia\w*|stock|disponible\w*|disponibilidad|agotad\w*|cuantos quedan|cuantas quedan|cuantos hay|cuantas hay|hay disponible\w*|tienen disponible\w*)\b",
-        text,
-    ):
-        return "existencias"
-    if re.search(
-        r"\b(precio\w*|cuanto cuesta\w*|cuanto vale\w*|a como|valor|cotiza\w*|que cuesta\w*|que vale\w*)\b",
-        text,
-    ):
-        return "precio"
-    if decision and decision.intent in VALID_INTENTS:
-        return decision.intent
-    return "producto"
-
-
-def _relevant_candidates(query: str, candidates: list[Product]) -> list[Product]:
-    if len(candidates) <= 1:
-        return candidates
-    query_words = tokens(query)
-    specific_query_words = query_words - GENERIC_MEASURE_TOKENS
-    if not specific_query_words:
-        return candidates
-    filtered = [
-        item
-        for item in candidates
-        if specific_query_words & tokens(f"{item.name} {item.variant}")
-    ]
-    return filtered or candidates
-
-
-def _is_distinguished(query: str, selected: Product, candidates: list[Product]) -> bool:
-    ascii_query = _normalize_text(query)
-    explicit_measures = re.findall(r"\b(\d+(?:/\d+)?)\s*(?:pulgada\w*|kg|kilo\w*)\b", ascii_query)
+def _is_distinguished(original: str, item_query: str, selected: Product, candidates: list[Product]) -> bool:
+    """La variante debe estar respaldada por el mensaje original y por el item extraído."""
+    original_tokens = tokens(original)
+    item_tokens = tokens(item_query)
     variant_tokens = tokens(selected.variant)
+    explicit_measures = re.findall(
+        r"\b(\d+(?:/\d+)?)\s*(?:pulgada\w*|kg|kilo\w*)\b",
+        _normalize_text(item_query),
+    )
     if explicit_measures and not (set(explicit_measures) & variant_tokens):
         return False
-
     peers = [item for item in candidates if item.name == selected.name and item.sku != selected.sku]
     if not peers:
-        return True
-    # Un SKU citado en el mensaje puede ser parte de una instrucción indebida;
-    # por sí solo no demuestra que el cliente haya pedido esa variante.
+        # Para un producto único tampoco aceptamos una medida contradictoria.
+        return not explicit_measures or bool(set(explicit_measures) & variant_tokens)
     unique_variant = variant_tokens - set().union(*(tokens(item.variant) for item in peers))
-    return bool(tokens(query) & unique_variant)
+    return bool(unique_variant & original_tokens & item_tokens)
 
 
 def _format_cop(value: int) -> str:
     return f"${value:,}".replace(",", ".")
 
 
-def build_graph(catalog: MockCatalog, decider: Callable[[str, list[Product]], Decision]):
-    def validate(state: AgentState) -> dict:
-        query = state["consulta"].strip()
-        if not query:
-            raise ValueError("La consulta no puede estar vacía.")
-        if len(query) > 2000:
-            raise ValueError("La consulta supera el límite de 2000 caracteres.")
-        return {"consulta": query}
+def _join_options(options: list[str]) -> str:
+    if len(options) < 2:
+        return options[0] if options else ""
+    return ", ".join(options[:-1]) + " y " + options[-1]
 
-    def retrieve(state: AgentState) -> dict:
-        return {"candidatos": catalog.search(state["consulta"]), "fuente": "mock_sqlite"}
+
+def _available_options(products: list[Product], plural: dict[str, str]) -> str:
+    same_name = len({item.name for item in products}) == 1
+    return _join_options([
+        f"{'' if same_name else item.name + ' '}{item.variant} "
+        f"({str(item.stock) + ' ' + plural.get(item.unit, 'unidades') + ' disponibles' if item.stock else 'agotado'})"
+        for item in products
+    ])
+
+
+def _direct_response(original: str, plan: Plan) -> str:
+    # La clasificación del modelo puede confundir «¿están atendiendo?» con un saludo.
+    # Nunca afirmar apertura sin un horario verificado, aunque el intent sea erróneo.
+    if plan.intent == "horario" or re.search(
+        r"\b(atendiendo|atienden|atiende|abiert[oa]s?|cerrad[oa]s?|horario|abren|cierran)\b",
+        _normalize_text(original),
+    ):
+        return ("No tengo un horario verificado de esta ferretería de demostración. "
+                "Si me dices qué producto buscas, puedo revisar el catálogo de prueba contigo.")
+    reply = plan.reply.strip()
+    if not reply or len(reply) > 400 or re.search(r"\b(reservad|pagad|despachad|entregad)\w*\b", reply, re.I):
+        return "Puedo ayudarte a consultar productos del catálogo de demostración. ¿Qué necesitas?"
+    return reply
+
+
+def _product_response(original: str, findings: list[Finding], resolution: Resolution) -> tuple[str, str]:
+    lines = []
+    statuses = []
+    selected_products = []
+    plural = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones"}
+    for index, finding in enumerate(findings):
+        candidates = finding["candidates"]
+        nearby = finding["nearby"]
+        sku = resolution.selected_skus[index] if index < len(resolution.selected_skus) else None
+        selected = next((item for item in candidates if item.sku == sku), None)
+        if not candidates and nearby:
+            options = _available_options(nearby[:2], plural)
+            category = nearby[0].name if len({item.name for item in nearby}) == 1 else "esa categoría"
+            category = category[0].lower() + category[1:]
+            requested_material = finding["request"].material
+            material_differs = requested_material and all(
+                not tokens(requested_material) <= tokens(f"{item.name} {item.variant}")
+                for item in nearby
+            )
+            caveat = " Son de otro material; habría que confirmar si te sirven para ese uso." if material_differs else ""
+            lines.append(
+                f"No encontré {finding['query']} tal como lo pides. "
+                f"De {category} sí aparecen {options}.{caveat} ¿Alguna de esas opciones te interesa?"
+            )
+            statuses.append("nearby")
+        elif not candidates:
+            lines.append(f"No encontré {finding['query']} en el catálogo de prueba. Si tienes otra referencia o medida, la reviso.")
+            statuses.append("not_found")
+        elif selected and _is_distinguished(original, finding["query"], selected, candidates):
+            availability = f"{selected.stock} {plural.get(selected.unit, 'unidades')} disponibles" if selected.stock else "agotado"
+            lines.append(f"Encontré {selected.name} ({selected.variant}, SKU {selected.sku}): "
+                         f"{_format_cop(selected.price_cop)} COP por {selected.unit}; {availability}.")
+            statuses.append("found")
+            selected_products.append(selected)
+        else:
+            options = _available_options(candidates[:3], plural)
+            category = candidates[0].name if len({item.name for item in candidates}) == 1 else finding["query"]
+            lines.append(f"Para {category} veo {options}. ¿Qué medida o presentación necesitas?")
+            statuses.append("clarify")
+    status = "found" if all(s == "found" for s in statuses) else (
+        statuses[0] if len(statuses) == 1 else "partial"
+    )
+    answer = ("Con gusto, esto encontré:\n" if len(lines) > 1 else "")
+    answer += ("\n".join(f"• {line.removeprefix('Encontré ')}" for line in lines)
+               if len(lines) > 1 else lines[0])
+    answer += "\nSon datos de demostración."
+    candidate_answer = resolution.answer.strip()
+    # Usar la redacción de Grok solo si conserva todos los hechos comprobables.
+    if statuses and all(s == "found" for s in statuses) and candidate_answer and len(candidate_answer) <= 1200:
+        amounts = set(re.findall(r"\$[\d.,]+", candidate_answer))
+        allowed_amounts = {_format_cop(item.price_cop) for item in selected_products}
+        forbidden = re.search(r"\b(reservad|pagad|entregad|abiert|cerrad|descuent|compatib)\w*\b", candidate_answer, re.I)
+        grounded = (
+            not forbidden
+            and "simulad" in _normalize_text(candidate_answer)
+            and amounts == allowed_amounts
+            and set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", candidate_answer))
+                <= {item.sku for item in selected_products}
+            and all(
+                any(
+                    _normalize_text(item.name) in _normalize_text(line)
+                    and _normalize_text(item.variant) in _normalize_text(line)
+                    and f"{_format_cop(item.price_cop)} COP" in line
+                    and (
+                        item.stock == 0 and "agotad" in _normalize_text(line)
+                        or item.stock > 0 and re.search(
+                            rf"\b{item.stock}\s+{plural.get(item.unit, 'unidades')}\b",
+                            _normalize_text(line),
+                        )
+                    )
+                    for line in candidate_answer.splitlines()
+                )
+                for item in selected_products
+            )
+        )
+        if grounded:
+            answer = candidate_answer
+    return status, answer
+
+
+def build_graph(
+    catalog: MockCatalog,
+    planner: Callable[[str], Plan],
+    resolver: Callable[[str, list[Finding]], Resolution],
+):
+    def validate(state: AgentState) -> dict:
+        message = state["consulta"].strip()
+        if not message:
+            raise ValueError("La consulta no puede estar vacía.")
+        if len(message) > 2000:
+            raise ValueError("La consulta supera el límite de 2000 caracteres.")
+        return {"consulta": message}
+
+    def interpret(state: AgentState) -> dict:
+        plan = planner(state["consulta"])
+        return {"plan": plan, "model_called": True, "model_calls": 1}
 
     def route(state: AgentState) -> str:
-        return "decide" if state["candidatos"] else "render"
+        return "retrieve" if state["plan"].action == "search_products" else "respond"
 
-    def decide(state: AgentState) -> dict:
-        return {"decision": decider(state["consulta"], state["candidatos"]), "model_called": True}
+    def retrieve(state: AgentState) -> dict:
+        findings: list[Finding] = []
+        for item in state["plan"].items:
+            request = item.grounded(state["consulta"], tokens)
+            result = catalog.search(request)
+            findings.append({
+                "query": request.text, "request": request,
+                "candidates": list(result.matches), "nearby": list(result.nearby),
+            })
+        return {"hallazgos": findings, "fuente": "mock_sqlite"}
 
-    def render(state: AgentState) -> dict:
-        candidates = _relevant_candidates(state["consulta"], state["candidatos"])
-        decision = state.get("decision")
-        intent = _detect_intent(state["consulta"], decision)
-        common = {
-            "intencion": intent,
-            "prompt_version": PROMPT_VERSION,
-            "model_called": state.get("model_called", False),
+    def respond(state: AgentState) -> dict:
+        common = {"prompt_version": PROMPT_VERSION, "model_called": True}
+        plan = state["plan"]
+        if plan.action == "respond":
+            return {
+                **common,
+                "model_calls": 1,
+                "estado": "model_invalid" if not plan.valid_json else "answered",
+                "respuesta": _direct_response(state["consulta"], plan),
+            }
+        findings = state["hallazgos"]
+        resolution = resolver(state["consulta"], findings)
+        status, answer = _product_response(state["consulta"], findings, resolution)
+        return {
+            **common,
+            "model_calls": 2,
+            "resolucion": resolution,
+            "estado": status if resolution.valid_json else "model_invalid",
+            "respuesta": answer,
         }
-        if not candidates:
-            return {
-                **common,
-                "estado": "not_found",
-                "respuesta": (
-                    "¡Hola! No encuentro ese producto en el catálogo de demostración. "
-                    "¿Puedes indicar el tipo, medida o presentación que buscas?"
-                ),
-            }
-
-        plural = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones"}
-
-        if (
-            intent == "comparacion"
-            and len(candidates) >= 2
-            and (not decision or decision.valid_json)
-            and (not decision or decision.selected_sku is None or any(item.sku == decision.selected_sku for item in candidates))
-        ):
-            comparison_items = "; ".join(
-                f"{item.name} {item.variant} (SKU {item.sku}): {_format_cop(item.price_cop)} COP por {item.unit}, "
-                + (f"{item.stock} {plural.get(item.unit, 'unidades')} disponibles" if item.stock else "agotado")
-                for item in candidates[:3]
-            )
-            return {
-                **common,
-                "estado": "found",
-                "respuesta": (
-                    f"¡Con gusto! Así se comparan las opciones en el catálogo (Datos simulados): "
-                    f"{comparison_items}. ¿Cuál de estas opciones prefieres?"
-                ),
-            }
-
-        selected = next((item for item in candidates if decision and item.sku == decision.selected_sku), None)
-        if selected and _is_distinguished(state["consulta"], selected, candidates):
-            unit_plural = plural.get(selected.unit, "unidades")
-            price_text = f"{_format_cop(selected.price_cop)} COP por {selected.unit}"
-            stock_text = (
-                f"stock simulado: {selected.stock} {unit_plural}"
-                if selected.stock
-                else "agotado en el catálogo simulado"
-            )
-            if intent == "precio":
-                disponibilidad = (
-                    f"hay {selected.stock} {unit_plural} disponibles"
-                    if selected.stock
-                    else "actualmente está agotado"
-                )
-                respuesta = (
-                    f"¡Con gusto! El precio de {selected.name} ({selected.variant}, SKU {selected.sku}) "
-                    f"es {price_text} ({disponibilidad} — Datos simulados)."
-                )
-            elif intent == "existencias":
-                if selected.stock:
-                    respuesta = (
-                        f"¡Claro! Tenemos {selected.stock} {unit_plural} disponibles de "
-                        f"{selected.name} ({selected.variant}, SKU {selected.sku}), a {price_text} (Datos simulados)."
-                    )
-                else:
-                    respuesta = (
-                        f"En el momento {selected.name} ({selected.variant}, SKU {selected.sku}) está agotado "
-                        f"(0 {unit_plural} disponibles; precio de referencia {price_text} — Datos simulados)."
-                    )
-            elif intent == "recomendacion":
-                respuesta = (
-                    f"Según nuestro catálogo, te recomiendo {selected.name} ({selected.variant}, SKU {selected.sku}): "
-                    f"{price_text}; {stock_text} (Datos simulados)."
-                )
-            else:
-                respuesta = (
-                    f"¡Con gusto! {selected.name}, {selected.variant} (SKU {selected.sku}): "
-                    f"{price_text}; {stock_text}. "
-                    "Datos simulados; para una compra real se confirma en la ferretería."
-                )
-            return {**common, "estado": "found", "respuesta": respuesta}
-
-        options = "; ".join(f"{item.name} {item.variant}" for item in candidates[:3])
-        state_name = "model_invalid" if decision and not decision.valid_json else "clarify"
-        if intent == "recomendacion":
-            respuesta = (
-                f"Para recomendarte la opción adecuada dentro del catálogo tenemos: {options}. "
-                "¿Cuál medida o presentación necesitas?"
-            )
-        else:
-            respuesta = (
-                f"En el catálogo de demostración tenemos estas opciones: {options}. "
-                "¿Cuál medida o presentación necesitas?"
-            )
-        return {**common, "estado": state_name, "respuesta": respuesta}
 
     builder = StateGraph(AgentState)
     builder.add_node("validate", validate)
+    builder.add_node("interpret", interpret)
     builder.add_node("retrieve", retrieve)
-    builder.add_node("decide", decide)
-    builder.add_node("render", render)
+    builder.add_node("respond", respond)
     builder.add_edge(START, "validate")
-    builder.add_edge("validate", "retrieve")
-    builder.add_conditional_edges("retrieve", route, {"decide": "decide", "render": "render"})
-    builder.add_edge("decide", "render")
-    builder.add_edge("render", END)
+    builder.add_edge("validate", "interpret")
+    builder.add_conditional_edges("interpret", route, {"retrieve": "retrieve", "respond": "respond"})
+    builder.add_edge("retrieve", "respond")
+    builder.add_edge("respond", END)
     return builder.compile()

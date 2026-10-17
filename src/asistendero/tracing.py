@@ -1,4 +1,4 @@
-"""Observabilidad local del mismo grafo usado por CLI y evaluación."""
+"""Traza local del mismo grafo que ejecuta la terminal."""
 
 from collections.abc import Callable
 from dataclasses import asdict
@@ -7,17 +7,16 @@ import os
 from time import perf_counter
 from urllib.parse import urlsplit
 
-from asistendero.catalog import MockCatalog, Product, tokens
-from asistendero.graph import build_graph
+from asistendero.catalog import MockCatalog, tokens
+from asistendero.graph import Finding, build_graph
+from asistendero.pricing import call_cost, run_cost
 from asistendero.grok import (
-    DEFAULT_BASE_URL, DEFAULT_MODEL, MAX_OUTPUT_TOKENS, PROMPT_VERSION,
-    RESPONSE_FORMAT, TEMPERATURE, Decision, build_messages, decide_with_grok,
+    DEFAULT_BASE_URL, DEFAULT_MODEL, PLAN_PROMPT, RESOLVE_PROMPT,
+    PROMPT_VERSION, Plan, Resolution, plan_with_grok, resolve_with_grok,
 )
-from asistendero.seed import DEMO_BUSINESS_ID, DEMO_STORE_ID
 
 
 def _visible_endpoint() -> str:
-    """Nunca incluir credenciales, query string ni fragmento de una URL configurable."""
     parts = urlsplit(os.getenv("GROK_BASE_URL", DEFAULT_BASE_URL))
     if not parts.scheme or not parts.hostname:
         return "URL no válida"
@@ -29,13 +28,14 @@ def run_traced(
     query: str,
     emit: Callable[[dict], None],
     catalog: MockCatalog | None = None,
-    decider: Callable[[str, list[Product]], Decision] = decide_with_grok,
+    planner: Callable[[str], Plan] = plan_with_grok,
+    resolver: Callable[[str, list[Finding]], Resolution] = resolve_with_grok,
 ) -> dict:
-    """Ejecuta el grafo y emite eventos al completar cada nodo, sin llamadas extra al modelo."""
     catalog = catalog or MockCatalog()
     started = perf_counter()
     node_started = perf_counter()
     state: dict = {"consulta": query}
+    call_costs: list[dict | None] = []
 
     def push(event_type: str, **payload: object) -> None:
         emit({
@@ -45,62 +45,90 @@ def run_traced(
             **payload,
         })
 
-    def start_node(name: str, details: dict | None = None) -> None:
+    def start_node(name: str) -> None:
         nonlocal node_started
         node_started = perf_counter()
-        push("node", node=name, status="running", details=details or {})
+        push("node", node=name, status="running", details={})
 
-    def traced_decider(text: str, candidates: list[Product]) -> Decision:
+    def traced_planner(message: str) -> Plan:
         push("model_request", details={
-            "endpoint": _visible_endpoint(),
+            "phase": "interpret", "endpoint": _visible_endpoint(),
             "model": os.getenv("GROK_MODEL", DEFAULT_MODEL),
-            "temperature": TEMPERATURE,
-            "max_tokens": MAX_OUTPUT_TOKENS,
-            "response_format": RESPONSE_FORMAT,
-            "messages": build_messages(text, candidates),
+            "instructions": PLAN_PROMPT, "mensaje": message, "api_key": "[omitida]",
+        })
+        plan = planner(message)
+        cost = call_cost(plan.model, plan.input_tokens, plan.output_tokens,
+                         plan.cached_input_tokens, plan.reported_cost_usd_ticks)
+        call_costs.append(cost)
+        push("model_response", details={"phase": "interpret", **asdict(plan), "cost": cost})
+        return plan
+
+    def traced_resolver(message: str, findings: list[Finding]) -> Resolution:
+        push("model_request", details={
+            "phase": "resolve", "endpoint": _visible_endpoint(),
+            "model": os.getenv("GROK_MODEL", DEFAULT_MODEL),
+            "instructions": RESOLVE_PROMPT,
+            "mensaje": message,
+            "hallazgos": [
+                {
+                    "query": item["query"], "request": asdict(item["request"]),
+                    "candidates": [asdict(p) for p in item["candidates"]],
+                    "nearby": [asdict(p) for p in item["nearby"]],
+                }
+                for item in findings
+            ],
             "api_key": "[omitida]",
         })
-        decision = decider(text, candidates)
-        push("model_response", details=asdict(decision))
-        return decision
+        resolution = resolver(message, findings)
+        cost = call_cost(resolution.model, resolution.input_tokens, resolution.output_tokens,
+                         resolution.cached_input_tokens, resolution.reported_cost_usd_ticks)
+        call_costs.append(cost)
+        push("model_response", details={"phase": "resolve", **asdict(resolution), "cost": cost})
+        return resolution
 
     push("input", details={"consulta": query, "prompt_version": PROMPT_VERSION})
-    start_node("validate", {"consulta": query})
-    graph = build_graph(catalog, traced_decider)
+    start_node("validate")
+    graph = build_graph(catalog, traced_planner, traced_resolver)
     for chunk in graph.stream({"consulta": query}, stream_mode="updates"):
         for node, update in chunk.items():
             state.update(update)
             if node == "validate":
                 details = {"consulta_normalizada": update["consulta"], "longitud": len(update["consulta"])}
+            elif node == "interpret":
+                details = {"plan": asdict(update["plan"]), "model_calls": 1}
             elif node == "retrieve":
                 details = {
-                    "fuente": update["fuente"],
-                    "archivo": str(catalog.path),
-                    "business_id": DEMO_BUSINESS_ID,
-                    "store_id": DEMO_STORE_ID,
-                    "terminos": sorted(tokens(state["consulta"])),
-                    "limite_candidatos": 5,
-                    "candidatos": [asdict(item) for item in update["candidatos"]],
+                    "fuente": update["fuente"], "archivo": str(catalog.path),
+                    "business_id": catalog.business_id, "store_id": catalog.store_id,
+                    "hallazgos": [
+                        {
+                            "query": item["query"], "request": asdict(item["request"]),
+                            "terminos": sorted(tokens(item["query"])),
+                            "candidates": [asdict(p) for p in item["candidates"]],
+                            "nearby": [asdict(p) for p in item["nearby"]],
+                        }
+                        for item in update["hallazgos"]
+                    ],
                 }
-            elif node == "decide":
-                details = {"selected_sku": update["decision"].selected_sku, "model_called": True}
             else:
                 details = {
-                    "estado": update["estado"],
-                    "respuesta": update["respuesta"],
-                    "model_called": update["model_called"],
-                    "prompt_version": update["prompt_version"],
+                    "estado": update["estado"], "respuesta": update["respuesta"],
+                    "model_calls": update["model_calls"], "prompt_version": update["prompt_version"],
                 }
             push("node", node=node, status="complete", duration_ms=round((perf_counter() - node_started) * 1000), details=details)
             if node == "validate":
-                start_node("retrieve", {"consulta": state["consulta"], "limite_candidatos": 5})
-            elif node == "retrieve":
-                if update["candidatos"]:
-                    start_node("decide", {"candidatos_enviados": [item.sku for item in update["candidatos"]]})
+                start_node("interpret")
+            elif node == "interpret":
+                if update["plan"].action == "search_products":
+                    start_node("retrieve")
                 else:
-                    push("route", details={"motivo": "Sin candidatos: se omite Grok."})
-                    start_node("render")
-            elif node == "decide":
-                start_node("render")
-    push("final", details={"estado": state["estado"], "respuesta": state["respuesta"], "model_called": state["model_called"]})
+                    push("route", details={"motivo": "Grok decidió responder sin consultar catálogo."})
+                    start_node("respond")
+            elif node == "retrieve":
+                start_node("respond")
+    push("final", details={
+        "estado": state["estado"], "respuesta": state["respuesta"],
+        "model_called": state["model_called"], "model_calls": state["model_calls"],
+        "cost": run_cost(call_costs),
+    })
     return state
