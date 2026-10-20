@@ -18,8 +18,8 @@
   const costLines = document.querySelector('#cost-lines');
   const filterButtons = [...document.querySelectorAll('[data-filter]')];
   const nodeNames = ['validate', 'interpret', 'retrieve', 'respond'];
-  const nodeLabels = {validate:'Validar mensaje', interpret:'Grok interpreta', retrieve:'Consultar catálogo', respond:'Resolver y verificar'};
-  const stateLabels = {found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida'};
+  const nodeLabels = {validate:'Validar mensaje', interpret:'Grok decide', retrieve:'Ejecutar herramienta', respond:'Resolver y verificar'};
+  const stateLabels = {found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
@@ -125,8 +125,8 @@
   }
   function subtitleOf(event) {
     if (event.type === 'node' && event.node === 'retrieve' && event.status === 'complete') {
-      const findings = event.details?.hallazgos || [];
-      return findings.length + (findings.length === 1 ? ' producto consultado' : ' productos consultados');
+      const call = event.details?.tool_call || {};
+      return (call.requested_tool || 'Herramienta') + ' · ' + (call.response?.status || '—');
     }
     return ({model:'Grok', tool:'Catálogo', system:'Sistema', error:'Error'})[kindOf(event)];
   }
@@ -191,8 +191,7 @@
       document.querySelector('#metric-tokens').textContent = tokenKnown ? tokenTotal.toLocaleString('es-CO') : 's/d';
       if (event.details?.phase === 'interpret') {
         const plan = event.details;
-        const route = plan.action === 'search_products' ?
-          'Catálogo · ' + (plan.items?.length || 0) : 'Directa';
+        const route = plan.action === 'call_tool' ? 'Herramientas' : 'Directa';
         document.querySelector('#metric-route').textContent = route;
       }
     }
@@ -204,7 +203,7 @@
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
       renderCost(result.cost, true);
       setStatus(stateLabels[result.estado] || result.estado || 'Finalizado',
-        ['found', 'answered'].includes(result.estado) ? 'success' : 'warning');
+        ['found', 'answered'].includes(result.estado) || result.estado === 'quoted' ? 'success' : 'warning');
       copy.disabled = !currentAnswer;
     }
     if (event.type === 'error') {
