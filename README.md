@@ -183,3 +183,7 @@ La visión y las tareas están organizadas en [PLANIFICACION.md](PLANIFICACION.m
 ## Relación con el Agent Challenge
 
 AsisTendero nació como proyecto del Agent Challenge. Esta primera entrega demuestra el recorrido **mensaje → Grok → procesamiento → respuesta** con una clave de API real y un catálogo de prueba. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
+
+## Licencia
+
+Código bajo [licencia MIT](LICENSE). Según las reglas del reto, Platica recibe una licencia no exclusiva y la titularidad del código sigue siendo de sus autores. Los datos del catálogo de demostración son ficticios.

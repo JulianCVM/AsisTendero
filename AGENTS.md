@@ -30,8 +30,9 @@ el sitio no publica fechas límite por hito.
 - **El consumo debe venir de tareas reales del agente** y quedar registrado en bitácora. **Inflar el contador
   descalifica**: nada de bucles, reintentos ni corridas de relleno para gastar créditos. Los créditos se liberan por
   tramos, al aprobar cada hito.
-- **El repositorio es público y lleva licencia abierta.** Platica recibe una licencia no exclusiva y la titularidad del
-  código sigue siendo de quienes participan. *Pendiente: el repositorio todavía no tiene `LICENSE`.*
+- **El repositorio es público y lleva licencia abierta**: MIT, en `LICENSE`. Platica recibe una licencia no exclusiva y
+  la titularidad del código sigue siendo de quienes participan. Una dependencia nueva debe tener una licencia
+  compatible con MIT.
 - **Hitos del Track 1:**
   - S1: flujo extremo a extremo con Grok, repositorio público y README con el problema.
   - S2: tres herramientas, manejo de errores, diez ejecuciones y video de dos minutos.
@@ -40,8 +41,8 @@ el sitio no publica fechas límite por hito.
 - **Evaluación del Track 1 (sobre 100):** impacto 25, autonomía y funcionalidad 25, ingeniería sobre Grok 20, evidencia
   con datos reales 15, viabilidad 10 y comunicación 5. Con 60 se pasa a revisión humana y con 80 o más se es
   finalista. Un harness automático mide la autonomía y los datos reales.
-- *Por validar con la organización:* el sitio dice que el Track 1 es de participación individual, y este proyecto lo
-  trabajan dos personas.
+- **Equipo:** el sitio dice que el Track 1 es de participación individual, pero la organización aprobó que este
+  proyecto lo trabajen dos personas (Julian y Laura), según confirmó Julian el 20-10-2026.
 
 ## Cuando dos reglas chocan
 
