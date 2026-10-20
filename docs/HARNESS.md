@@ -17,7 +17,7 @@ LangGraph recorre `validate → interpret → retrieve → interpret … → res
 | `consultar_disponibilidad` | `{"sku": "PVC-050"}` | Existencias, unidad y fecha del SKU; no aparta unidades |
 | `calcular_cotizacion_informativa` | `{"lines": [{"sku": "PVC-050", "quantity": 2}]}` | Precio unitario, subtotales y total en COP con `reservation_created=false` |
 
-La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)`. `executor.catalog_executor(catalog)` fija el catálogo para la terminal, el visor y el evaluador. Toda respuesta tiene la forma `{"status", "data", "error", "source", "observed_at"}`; las formas de `data` que lee el grafo están en el docstring de `graph.py`.
+La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)`. `executor.catalog_executor(catalog)` fija el catálogo para la terminal, el visor y el evaluador. Toda respuesta tiene la forma `{"status", "data", "error", "source", "observed_at"}`; las formas de `data` que lee el grafo están en el docstring de `observations.py`. El código se reparte así: `graph.py` (nodos y ruta), `validation.py` (reglas antes de ejecutar), `observations.py` (lectura de respuestas de herramientas) y `answers.py` (respuesta final).
 
 ## Validación antes de ejecutar
 

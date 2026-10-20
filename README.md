@@ -160,7 +160,10 @@ Ese comando consume cupo y guarda el reporte localmente en `.local/`.
 
 | Ruta | Contenido |
 | --- | --- |
-| `src/asistendero/graph.py` | Flujo LangGraph y verificación de respuestas. |
+| `src/asistendero/graph.py` | Flujo LangGraph: Grok decide, el servidor ejecuta y se responde. |
+| `src/asistendero/validation.py` | Reglas que una solicitud de Grok cumple antes de ejecutarse. |
+| `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
+| `src/asistendero/answers.py` | Respuesta final verificada contra lo que devolvieron las herramientas. |
 | `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
 | `src/asistendero/seed.py` | Datos ficticios para la demostración. |
