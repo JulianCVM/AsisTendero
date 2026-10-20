@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
 from asistendero.executor import catalog_executor
-from asistendero.graph import Planner
+from asistendero.graph import Planner, ToolExecutor
 from asistendero.grok import DEFAULT_MODEL, PROMPT_VERSION, decide_with_grok
 from asistendero.pricing import run_cost
 from asistendero.tracing import run_traced
@@ -19,6 +19,8 @@ from asistendero.validation import grounded_products
 
 
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
+INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"
+FAILURE_QUERY = "Necesito 2 metros de tubo PVC de 1/2 para agua"
 
 
 def _selected_skus(query: str, tool_calls: list[dict]) -> list[str]:
@@ -34,67 +36,145 @@ def _selected_skus(query: str, tool_calls: list[dict]) -> list[str]:
     return list(dict.fromkeys(skus))
 
 
+def _run_record(
+    case: dict,
+    *,
+    executor: ToolExecutor,
+    planner: Planner,
+) -> dict:
+    events: list[dict] = []
+    result = run_traced(case["query"], events.append, executor, planner)
+    final_details = events[-1]["details"]
+    tool_calls = result.get("tool_calls", [])
+    selected_skus = _selected_skus(case["query"], tool_calls)
+    passed = result["estado"] == case["expected_status"]
+    if case.get("expected_sku"):
+        passed = passed and case["expected_sku"] in selected_skus
+    if case.get("expected_skus"):
+        passed = passed and all(sku in selected_skus for sku in case["expected_skus"])
+    expected_error = case.get("expected_error_code")
+    if expected_error:
+        error_codes = {
+            (call["response"].get("error") or {}).get("code")
+            for call in tool_calls
+        }
+        if result.get("error"):
+            error_codes.add(result["error"].get("code"))
+        passed = passed and expected_error in error_codes
+
+    return {
+        "id": case["id"],
+        "run_id": result["run_id"],
+        "query": case["query"],
+        "expected_status": case["expected_status"],
+        "actual_status": result["estado"],
+        "expected_sku": case.get("expected_sku"),
+        "expected_skus": case.get("expected_skus"),
+        "expected_error_code": expected_error,
+        "selected_skus": selected_skus,
+        "passed": passed,
+        "response": result["respuesta"],
+        "model_called": result["model_called"],
+        "model_calls": result["model_calls"],
+        "tools": final_details["tools_requested"],
+        "tools_executed": final_details["tools_executed"],
+        "tool_calls": [
+            {
+                "step": call["step"],
+                "requested_tool": call["requested_tool"],
+                "executed": call["executed"],
+                "status": call["response"].get("status"),
+                "error": call["response"].get("error"),
+                "duration_ms": call["duration_ms"],
+            }
+            for call in tool_calls
+        ],
+        "error": result.get("error"),
+        "input_tokens": final_details["input_tokens"],
+        "output_tokens": final_details["output_tokens"],
+        "cached_input_tokens": final_details["cached_input_tokens"],
+        "total_tokens": final_details["total_tokens"],
+        "cost": final_details["cost"],
+        "elapsed_ms": final_details["duration_ms"],
+        "events": events,
+    }
+
+
+def run_controlled_failures(
+    *,
+    catalog: MockCatalog,
+    planner: Planner = decide_with_grok,
+) -> list[dict]:
+    """Ejecuta los dos fallos controlados de S2: catálogo ausente y modelo inaccesible."""
+    missing_catalog = MockCatalog(catalog.path.parent / "missing_catalog_s2_failure.sqlite3")
+    catalog_failure = _run_record(
+        {
+            "id": "F-01-CATALOG_UNAVAILABLE",
+            "query": FAILURE_QUERY,
+            "expected_status": "tool_error",
+            "expected_error_code": "CATALOG_UNAVAILABLE",
+        },
+        executor=catalog_executor(missing_catalog),
+        planner=planner,
+    )
+    previous_url = os.environ.get("GROK_BASE_URL")
+    previous_key = os.environ.get("GROK_API_KEY")
+    os.environ["GROK_BASE_URL"] = INVALID_LOCAL_BASE_URL
+    if not (previous_key or "").strip():
+        os.environ["GROK_API_KEY"] = "clave-local-prueba-fallo"
+    try:
+        model_failure = _run_record(
+            {
+                "id": "F-02-MODEL_UNAVAILABLE",
+                "query": FAILURE_QUERY,
+                "expected_status": "model_error",
+                "expected_error_code": "MODEL_UNAVAILABLE",
+            },
+            executor=catalog_executor(catalog),
+            planner=decide_with_grok,
+        )
+    finally:
+        if previous_url is None:
+            os.environ.pop("GROK_BASE_URL", None)
+        else:
+            os.environ["GROK_BASE_URL"] = previous_url
+        if previous_key is None:
+            os.environ.pop("GROK_API_KEY", None)
+        else:
+            os.environ["GROK_API_KEY"] = previous_key
+    return [catalog_failure, model_failure]
+
+
+def _parse_skip(raw_skip: list[str] | None) -> set[str]:
+    skipped: set[str] = set()
+    for entry in raw_skip or []:
+        for item in entry.split(","):
+            if item.strip():
+                skipped.add(item.strip())
+    return skipped
+
+
 def evaluate_cases(
     cases: list[dict],
     *,
     catalog: MockCatalog,
     planner: Planner = decide_with_grok,
+    skip_ids: set[str] | None = None,
+    include_failures: bool = False,
 ) -> dict:
     """Ejecuta una lista de casos sobre el grafo trazado y construye el reporte de métricas."""
+    skipped = skip_ids or set()
+    selected_cases = [case for case in cases if case["id"] not in skipped]
     executor = catalog_executor(catalog)
-    records = []
-    for case in cases:
-        events: list[dict] = []
-        result = run_traced(case["query"], events.append, executor, planner)
-        final_details = events[-1]["details"]
-        tool_calls = result.get("tool_calls", [])
-        selected_skus = _selected_skus(case["query"], tool_calls)
-        passed = result["estado"] == case["expected_status"]
-        if case.get("expected_sku"):
-            passed = passed and case["expected_sku"] in selected_skus
-        if case.get("expected_skus"):
-            passed = passed and all(sku in selected_skus for sku in case["expected_skus"])
-
-        records.append({
-            "id": case["id"],
-            "run_id": result["run_id"],
-            "query": case["query"],
-            "expected_status": case["expected_status"],
-            "actual_status": result["estado"],
-            "expected_sku": case.get("expected_sku"),
-            "expected_skus": case.get("expected_skus"),
-            "selected_skus": selected_skus,
-            "passed": passed,
-            "response": result["respuesta"],
-            "model_called": result["model_called"],
-            "model_calls": result["model_calls"],
-            "tools": final_details["tools_requested"],
-            "tools_executed": final_details["tools_executed"],
-            "tool_calls": [
-                {
-                    "step": call["step"],
-                    "requested_tool": call["requested_tool"],
-                    "executed": call["executed"],
-                    "status": call["response"].get("status"),
-                    "error": call["response"].get("error"),
-                    "duration_ms": call["duration_ms"],
-                }
-                for call in tool_calls
-            ],
-            "error": result.get("error"),
-            "input_tokens": final_details["input_tokens"],
-            "output_tokens": final_details["output_tokens"],
-            "cached_input_tokens": final_details["cached_input_tokens"],
-            "total_tokens": final_details["total_tokens"],
-            "cost": final_details["cost"],
-            "elapsed_ms": final_details["duration_ms"],
-        })
+    records = [_run_record(case, executor=executor, planner=planner) for case in selected_cases]
+    failures = run_controlled_failures(catalog=catalog, planner=planner) if include_failures else []
 
     return {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "model": os.getenv("GROK_MODEL", DEFAULT_MODEL),
         "prompt_version": PROMPT_VERSION,
         "mock_db_sha256": hashlib.sha256(catalog.path.read_bytes()).hexdigest(),
+        "skipped_ids": sorted(skipped),
         "passed": sum(record["passed"] for record in records),
         "total": len(records),
         "model_calls": sum(record["model_calls"] for record in records),
@@ -106,6 +186,7 @@ def evaluate_cases(
         "elapsed_ms": sum(record["elapsed_ms"] for record in records),
         "cost": run_cost([record["cost"] for record in records]),
         "cases": records,
+        "controlled_failures": failures,
     }
 
 
@@ -113,6 +194,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Evalúa el harness con casos sintéticos")
     parser.add_argument("--live", action="store_true", help="Hacer llamadas reales al modelo (consume cupo)")
     parser.add_argument("--limit", type=int, default=10, help="Máximo de casos; predeterminado: 10")
+    parser.add_argument("--skip", nargs="*", default=[], help="IDs de casos a omitir (ej. --skip S2-02)")
+    parser.add_argument("--include-failures", action="store_true", help="Ejecutar también los 2 fallos controlados")
     args = parser.parse_args()
     if not args.live:
         print("Sin llamadas al modelo. Usa --live para ejecutar los casos sintéticos.")
@@ -124,13 +207,21 @@ def main() -> int:
     all_cases = json.loads(DEFAULT_CASES_PATH.read_text(encoding="utf-8"))
     if not 1 <= args.limit <= len(all_cases):
         parser.error(f"--limit debe estar entre 1 y {len(all_cases)}")
-    report = evaluate_cases(all_cases[:args.limit], catalog=catalog)
+    report = evaluate_cases(
+        all_cases[:args.limit],
+        catalog=catalog,
+        skip_ids=_parse_skip(args.skip),
+        include_failures=args.include_failures,
+    )
     for record in report["cases"]:
         print(f"{record['id']}: {'PASS' if record['passed'] else 'FAIL'} ({record['actual_status']})")
+    for failure in report["controlled_failures"]:
+        print(f"{failure['id']}: {'PASS' if failure['passed'] else 'FAIL'} ({failure['actual_status']})")
     report_path = Path(".local") / f"eval-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Resultado: {report['passed']}/{report['total']}. Reporte local: {report_path}")
-    return 0 if report["passed"] == report["total"] else 1
+    failures_ok = all(item["passed"] for item in report["controlled_failures"])
+    return 0 if report["passed"] == report["total"] and failures_ok else 1
 
 
 if __name__ == "__main__":

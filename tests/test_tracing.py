@@ -188,6 +188,56 @@ def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
     assert report["cost"]["basis"] == "xai_public_estimate"
     assert len({item["run_id"] for item in report["cases"]}) == 10
     assert all(item["passed"] for item in report["cases"])
+    assert all(isinstance(item["events"], list) and item["events"][-1]["type"] == "final" for item in report["cases"])
+
+
+def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_path, monkeypatch):
+    catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
+    cases = json.loads(Path("evaluation/cases.json").read_text(encoding="utf-8"))[:2]
+    monkeypatch.setenv("GROK_API_KEY", "clave-local-no-publicar")
+    monkeypatch.setenv("GROK_BASE_URL", "https://api.reto.pltk.mx/v1")
+
+    steps = iter([
+        Decision("call_tool", "productos", "buscar_productos",
+                 {"items": [{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]}, "",
+                 "grok-4.20-0309-non-reasoning", 80, 15),
+        Decision("call_tool", "productos", "calcular_cotizacion_informativa",
+                 {"lines": [{"sku": "PVC-050", "quantity": 2}]}, "", "grok-4.20-0309-non-reasoning", 90, 15),
+        Decision("respond", "productos", None, None, "", "grok-4.20-0309-non-reasoning", 100, 20),
+        # Pasos para F-01-CATALOG_UNAVAILABLE:
+        Decision("call_tool", "productos", "buscar_productos",
+                 {"items": [{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo"}]}, "",
+                 "grok-4.20-0309-non-reasoning", 80, 15),
+        Decision("respond", "productos", None, None, "", "grok-4.20-0309-non-reasoning", 90, 20),
+    ])
+
+    report = evaluate.evaluate_cases(
+        cases,
+        catalog=catalog,
+        planner=lambda *_: next(steps),
+        skip_ids=evaluate._parse_skip(["S2-02"]),
+        include_failures=True,
+    )
+
+    assert report["skipped_ids"] == ["S2-02"]
+    assert [item["id"] for item in report["cases"]] == ["S2-01"]
+    assert report["passed"] == 1 and report["total"] == 1
+
+    f_catalog, f_model = report["controlled_failures"]
+    assert f_catalog["id"] == "F-01-CATALOG_UNAVAILABLE"
+    assert f_catalog["passed"]
+    assert f_catalog["actual_status"] == "tool_error"
+    assert f_catalog["tool_calls"][0]["error"]["code"] == "CATALOG_UNAVAILABLE"
+    assert f_catalog["events"][-1]["type"] == "final"
+
+    assert f_model["id"] == "F-02-MODEL_UNAVAILABLE"
+    assert f_model["passed"]
+    assert f_model["actual_status"] == "model_error"
+    assert f_model["error"]["code"] == "MODEL_UNAVAILABLE"
+    assert f_model["cost"] is None
+    model_req = next(event for event in f_model["events"] if event["type"] == "model_request")
+    assert model_req["details"]["endpoint"] == "http://127.0.0.1:9/v1"
+    assert "clave-local-no-publicar" not in json.dumps(report)
 
 
 def test_evaluate_cli_exits_without_calling_grok_when_live_flag_is_absent(monkeypatch, capsys):

@@ -1,6 +1,6 @@
 # Harness experimental de AsisTendero
 
-**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v1`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La validación en vivo de `s2-tools-v1` con Grok real (L-05) sigue pendiente de ejecución autorizada.
+**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v1`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok (`7/10` casos oficiales aprobados y `2/2` fallos controlados aprobados) está documentada en `evaluation/S2_EVIDENCIA.md`.
 
 ## Contrato del flujo
 
@@ -55,7 +55,7 @@ El visor muestra el costo **por ejecución** y por llamada, en USD. Primero usa 
 - los fallos del catálogo y del modelo, el límite de llamadas y la inyección de precio;
 - la ausencia de la clave en la traza y el registro de `run_id`, latencia, tokens y costos.
 
-`python -m asistendero.evaluate --live --limit 10` usa Grok real y las herramientas integradas sobre los diez casos `S2-01` a `S2-10` de `evaluation/cases.json`, y registra `run_id`, versión del prompt, herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia en `.local/`. Las diez corridas en vivo (`S2-01` a `S2-10`) y los dos fallos inducidos con Grok real corresponden a L-05.
+`python -m asistendero.evaluate --live --limit 10 --include-failures` (con `--skip` opcional para omitir IDs ya verificados) usa Grok real y las herramientas integradas sobre los diez casos `S2-01` a `S2-10` de `evaluation/cases.json` y los dos fallos controlados, guardando los eventos completos, `run_id`, versión del prompt, herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia en `.local/`. Los resultados reales verificados y las trazas de entrega se encuentran en `evaluation/S2_EVIDENCIA.md`.
 
 Las mediciones de `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
 
