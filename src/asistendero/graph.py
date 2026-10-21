@@ -13,14 +13,26 @@ from langgraph.graph import END, START, StateGraph
 from asistendero.answers import direct_response, render_answer, reply_is_grounded
 from asistendero.grok import PROMPT_VERSION, Decision, ModelError
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
-from asistendero.validation import Rejected, validate_request
+from asistendero.validation import Rejected, grounded_products, quantities_in_message, validate_request
 
 
-__all__ = ["MAX_TOOL_CALLS", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
+__all__ = ["MAX_TOOL_CALLS", "QUOTE_REMINDER", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
 
 Planner = Callable[[str, list[dict], int], Decision]
 
 MAX_TOOL_CALLS = 6
+# En la corrida real s2-tools-v1, Grok respondió tras buscar sin cotizar cantidades dichas (S2-01, S2-07,
+# S2-10). El servidor se lo recuerda una sola vez; la decisión de cotizar sigue siendo de Grok.
+QUOTE_REMINDER = {
+    "herramienta": None,
+    "estado": "aviso",
+    "error": {
+        "code": "QUOTE_REQUIRED",
+        "message": "El cliente dio cantidades para productos que el mensaje distingue: llama a "
+                   "calcular_cotizacion_informativa con esas cantidades antes de responder. La herramienta "
+                   "comprueba las existencias.",
+    },
+}
 
 
 class AgentState(TypedDict):
@@ -34,6 +46,18 @@ class AgentState(TypedDict):
     prompt_version: NotRequired[str]
     model_called: NotRequired[bool]
     model_calls: NotRequired[int]
+    quote_reminded_at: NotRequired[int]
+
+
+def _quote_missing(state: AgentState) -> bool:
+    calls = state.get("tool_calls", [])
+    return (
+        state.get("quote_reminded_at") is None
+        and len(calls) < MAX_TOOL_CALLS
+        and not any(call["requested_tool"] == "calcular_cotizacion_informativa" for call in calls)
+        and bool(quantities_in_message(state["consulta"]))
+        and bool(grounded_products(state["consulta"], calls))
+    )
 
 
 def next_node(state: AgentState) -> str:
@@ -43,6 +67,8 @@ def next_node(state: AgentState) -> str:
     decision = state["decisiones"][-1]
     if decision.valid_json and decision.action == "call_tool" and len(state.get("tool_calls", [])) < MAX_TOOL_CALLS:
         return "retrieve"
+    if decision.valid_json and decision.action == "respond" and _quote_missing(state):
+        return "interpret"
     return "respond"
 
 
@@ -58,16 +84,22 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     def interpret(state: AgentState) -> dict:
         calls = state["tool_calls"]
         model_calls = state["model_calls"] + 1
+        observations = [observation_for_model(call) for call in calls]
+        update: dict = {"model_called": True, "model_calls": model_calls}
+        reminded_at = state.get("quote_reminded_at")
+        # Solo se vuelve aquí tras un «respond» cuando next_node detectó una cotización pendiente.
+        if reminded_at is None and state["decisiones"] and state["decisiones"][-1].action == "respond":
+            reminded_at = update["quote_reminded_at"] = len(calls)
+        if reminded_at is not None:
+            observations.insert(reminded_at, QUOTE_REMINDER)
         try:
-            decision = planner(state["consulta"], [observation_for_model(call) for call in calls],
-                               MAX_TOOL_CALLS - len(calls))
+            decision = planner(state["consulta"], observations, MAX_TOOL_CALLS - len(calls))
         except ModelError as exc:
-            return {"model_called": True, "model_calls": model_calls,
-                    "error": {"code": exc.code, "message": str(exc)}}
+            return {**update, "error": {"code": exc.code, "message": str(exc)}}
         except Exception as exc:
-            return {"model_called": True, "model_calls": model_calls,
-                    "error": {"code": "MODEL_UNAVAILABLE", "message": f"Fallo inesperado del modelo ({type(exc).__name__})."}}
-        return {"decisiones": state["decisiones"] + [decision], "model_called": True, "model_calls": model_calls}
+            return {**update, "error": {"code": "MODEL_UNAVAILABLE",
+                                        "message": f"Fallo inesperado del modelo ({type(exc).__name__})."}}
+        return {**update, "decisiones": state["decisiones"] + [decision]}
 
     def retrieve(state: AgentState) -> dict:
         decision = state["decisiones"][-1]
@@ -126,7 +158,9 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     builder.add_node("respond", respond)
     builder.add_edge(START, "validate")
     builder.add_edge("validate", "interpret")
-    builder.add_conditional_edges("interpret", next_node, {"retrieve": "retrieve", "respond": "respond"})
+    builder.add_conditional_edges(
+        "interpret", next_node, {"retrieve": "retrieve", "respond": "respond", "interpret": "interpret"},
+    )
     builder.add_edge("retrieve", "interpret")
     builder.add_edge("respond", END)
     return builder.compile()

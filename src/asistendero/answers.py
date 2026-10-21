@@ -9,9 +9,11 @@ from asistendero.validation import grounded_products, grounded_selection, normal
 
 
 PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones"}
-# Una afirmación de acción ejecutada, descuento o equivalencia invalida la redacción de Grok.
+# Una afirmación de acción ejecutada, descuento o equivalencia invalida la redacción de Grok, y también
+# ofrecer apartar o reservar (en S2-02 Grok preguntó «¿Quieres apartar…?»): la demo no lo hace.
 FORBIDDEN_CLAIMS = re.compile(
     r"\b(reservad|apartad|pagad|despachad|entregad|facturad|descuent|compatib|equivalen|abiert|cerrad)\w*"
+    r"|\b(?:apart|reserv)ar\w*"
     r"|\bpedido\s+(?:creado|registrado|confirmado|listo)",
     re.I,
 )

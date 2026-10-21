@@ -1,6 +1,6 @@
 # Harness experimental de AsisTendero
 
-**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v1`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok (`7/10` casos oficiales aprobados y `2/2` fallos controlados aprobados) está documentada en `evaluation/S2_EVIDENCIA.md`.
+**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v2`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok está en `evaluation/S2_EVIDENCIA.md`: con `s2-tools-v1` se aprobaron `7/10` casos oficiales y `2/2` fallos controlados; `s2-tools-v2` corrige los tres casos en los que Grok respondía sin cotizar.
 
 ## Contrato del flujo
 
@@ -9,7 +9,8 @@ LangGraph recorre `validate → interpret → retrieve → interpret … → res
 1. `validate` limita la entrada textual a 2.000 caracteres.
 2. `interpret` envía a Grok el mensaje, las observaciones de las herramientas ya ejecutadas y las llamadas disponibles. Grok devuelve una decisión JSON: `respond` o `call_tool` con una de tres herramientas. Un nombre fuera de la lista, un JSON mal formado o argumentos de más de 1.500 caracteres invalidan la decisión.
 3. `retrieve` valida la solicitud **antes** de ejecutarla y solo entonces llama a `tool_executor(name, arguments)`. Si la rechaza, no llama al ejecutor y Grok recibe el rechazo con su código en el paso siguiente.
-4. `respond` entrega la respuesta. La redacción de Grok se usa solo si cada `$`, SKU y cantidad sale de las observaciones de esa ejecución, si incluye el total cuando hay cotización y si no afirma reserva, pago, entrega, descuento ni equivalencia. Si no, compone una salida determinista con los datos de las herramientas. Para preguntas sobre atención u horario comprueba además el texto original, aunque Grok lo haya clasificado como saludo.
+   - Si Grok decide `respond` cuando el cliente dio una cantidad, hay un match que el mensaje distingue, nadie ha pedido aún `calcular_cotizacion_informativa` y quedan llamadas, `next_node` vuelve a `interpret` **una sola vez**. En ese paso Grok recibe la observación `{"herramienta": null, "estado": "aviso"}` con el código `QUOTE_REQUIRED`, que queda en su lugar cronológico en los pasos siguientes. El servidor no cotiza por su cuenta: si Grok vuelve a responder, se entrega esa respuesta. Esta guarda existe porque con `s2-tools-v1` Grok respondió tras la búsqueda en S2-01, S2-07 y S2-10.
+4. `respond` entrega la respuesta. La redacción de Grok se usa solo si cada `$`, SKU y cantidad sale de las observaciones de esa ejecución, si incluye el total cuando hay cotización y si no afirma reserva, pago, entrega, descuento ni equivalencia, ni ofrece apartar o reservar. Si no, compone una salida determinista con los datos de las herramientas. Para preguntas sobre atención u horario comprueba además el texto original, aunque Grok lo haya clasificado como saludo.
 
 | Herramienta | Argumentos | Qué devuelve |
 |---|---|---|
