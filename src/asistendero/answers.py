@@ -170,6 +170,11 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall]) -> bool:
     counts = re.findall(r"\b(\d+)\s+(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\b", normalized)
     if any(int(count) not in allowed_counts for count in counts):
         return False
+    # «Agotado» solo vale si algún producto elegido tiene stock 0 (en S2-07 Grok escribió «agotado para 20»
+    # con 12 metros disponibles).
+    stocks = [availability.get(p.sku, {}).get("stock", p.stock) for p in selected.values()]
+    if "agotad" in normalized and 0 not in stocks:
+        return False
     # Cada producto elegido debe aparecer con su precio y su estado real.
     for product in selected.values():
         stock = availability.get(product.sku, {}).get("stock", product.stock)

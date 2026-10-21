@@ -201,6 +201,23 @@ Si cambias cómo funciona algo, actualiza en el mismo commit:
 Una documentación que describe algo que ya no existe es peor que no tenerla. La evidencia nunca afirma un resultado que
 no se midió: los datos son ficticios y no representan un piloto.
 
+## Memoria del proyecto en Obsidian
+
+La memoria del proyecto vive en el vault de Obsidian **PulsoTienda**, fuera del repositorio. Cada avance se registra ahí
+**el mismo día**, lo haga una persona o un asistente:
+
+- **Cuándo:** al abrir, revisar o fusionar un PR; al integrar ramas; al hacer una corrida real con Grok; al cerrar o
+  replantear una tarea del corte, y al descubrir un defecto o una diferencia con el plan.
+- **Qué se actualiza:**
+  - el plan del corte vigente (en S2, «S2 - Plan 72 horas»): estado de cada tarea con su PR o commit y lo que falta;
+  - la `Bitácora`: una entrada fechada con la plantilla de la nota y su etiqueta de certeza (`[HECHO]`, `[MEDIDO]`,
+    `[POR VALIDAR]`…); en una corrida real, también commit, `PROMPT_VERSION`, resultado y costo;
+  - `Estado comprobado`, si cambia lo verificado del repositorio (pruebas, comandos, resultados).
+- **Qué no va:** la llave, trazas con datos sensibles o datos de un piloto real. El vault resume y enlaza; el detalle y
+  la evidencia oficial siguen en el repositorio, que manda si los dos difieren.
+- Si el vault no está disponible en la máquina, el PR lo dice en «Qué tiene que hacer quien integra» para que otra
+  persona lo actualice.
+
 ## Commits y pull requests
 
 - **Sin trailers ni coautores**: nada de `Co-Authored-By:`, `Signed-off-by:`, «Generated with…», emojis de

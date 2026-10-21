@@ -312,6 +312,20 @@ def test_reminder_lets_quote_tool_detect_insufficient_stock():
     assert "Total" not in result["respuesta"]
 
 
+def test_agotado_is_not_accepted_when_product_has_stock():
+    text = "20 metros de PVC de 1/2 para agua"
+    planner = Script(
+        tool("buscar_productos", items=[{**PVC, "text": text}]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
+        say("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500 COP por metro. Solo hay 12 metros "
+            "disponibles (agotado para 20). Datos simulados."),
+    )
+    result = run(FakeExecutor({text: (["PVC-050"], [])}), planner, "Necesito 20 metros de tubo PVC de 1/2 para agua")
+    assert result["estado"] == "insufficient_stock"
+    assert "agotad" not in result["respuesta"]
+    assert "hay 12 metros disponibles" in result["respuesta"]
+
+
 def test_reminder_is_sent_once_and_server_never_quotes_alone():
     executor = FakeExecutor(PVC_SEARCH)
     planner = Script(tool("buscar_productos", items=[PVC]), EARLY_REPLY, EARLY_REPLY)
