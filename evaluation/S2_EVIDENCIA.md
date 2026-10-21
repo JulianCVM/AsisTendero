@@ -1,6 +1,6 @@
 # Evidencia de evaluación S2 — Herramientas reales (`s2-tools-v1` y `s2-tools-v2`)
 
-**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
+**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). **Resultado vigente (sección 8): `10/10` casos y `2/2` fallos controlados con `s2-tools-v2` sobre el commit `a8e1f2a`.** Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
 **Fecha de corte:** 20 de octubre de 2026.
 **Rama:** `feat/s2-herramientas-reales` (basada en `4781c3b`, commit de herramientas y traza `a1456cf`).
 **Modelo:** `grok-4.20-0309-non-reasoning` mediante `https://api.reto.pltk.mx/v1`.
@@ -1149,3 +1149,54 @@ Extraída de `.local/eval-20261020T195908540327Z.json`:
 - **`10/10` combinando versiones de prompt:** 7 casos con `s2-tools-v1` (sección 3) y 3 con `s2-tools-v2` (esta sección).
 - **Lo que no se ha medido:** los otros siete casos y los dos fallos controlados con `s2-tools-v2`; no se volvieron a ejecutar para no repetir llamadas pagadas.
 - **Consumo real acumulado en Grok:** `40` llamadas y **`$0.0462808000 USD`** según la API (`$0.0288566500` de las secciones 2 a 4 más `$0.0174241500` de esta sección).
+
+---
+
+## 8. Corrida oficial con `s2-tools-v2`: diez casos y dos fallos sobre un mismo commit
+
+**Reporte fuente:** `.local/eval-20261021T173945327185Z.json` (`created_at: 2026-10-21T17:39:45.326675+00:00`).
+**Commit:** `a8e1f2a`, sin cambios pendientes en `src/`.
+**Prompt y modelo:** `PROMPT_VERSION = s2-tools-v2`, modelo `grok-4.20-0309-non-reasoning`.
+**Catálogo:** SHA-256 `53abad12b1d21c399a3faaaad6fd2e20c2e5afd68b69cf85ef4f1ec0659d1317`, la misma base de la sección 7.
+**Comando:** `python -m asistendero.evaluate --live --include-failures`, ejecutado por Julian.
+
+**Resultado: `10/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` sobre un solo commit y una sola versión del prompt.** Esta corrida sustituye a las de las secciones 3 y 7 como resultado vigente de S2. Aquellas se conservan como historia.
+
+| Caso | `run_id` | Esperado | Obtenido | Resultado | ¿Aviso `QUOTE_REQUIRED`? | Herramientas ejecutadas | Llamadas Grok | Tokens (in / caché / out / total) | Latencia (`ms`) | Costo (`USD`, `api_reported`) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `S2-01` | `37901d86180d` | `quoted` (`PVC-050`) | `quoted` (`PVC-050`) | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `5.455` / `512` / `222` / `5.677` | `7.379` | `$0.0068361500` |
+| `S2-02` | `5d916ed41425` | `quoted` (`PVC-050`, `CEM-050`) | `quoted` (`PVC-050`, `CEM-050`) | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `5.954` / `1.408` / `309` / `6.263` | `7.337` | `$0.0067366000` |
+| `S2-03` | `d64d5873d2c9` | `found` (`PVC-050`) | `found` (`PVC-050`) | **PASS** | No | `buscar_productos` | `2` | `2.480` / `256` / `114` / `2.594` | `3.235` | `$0.0031162000` |
+| `S2-04` | `4e6b4a5827f1` | `clarify` | `clarify` | **PASS** | No | `buscar_productos` | `2` | `2.529` / `256` / `146` / `2.675` | `3.257` | `$0.0032574500` |
+| `S2-05` | `220e4ca2f661` | `nearby` | `nearby` | **PASS** | No | `buscar_productos` | `2` | `2.478` / `1.152` / `148` / `2.626` | `3.945` | `$0.0022579000` |
+| `S2-06` | `87f8daa48111` | `found` (`TOR-025-2`) | `found` (`TOR-025-2`) | **PASS** | No | `buscar_productos` | `2` | `2.496` / `2.048` / `123` / `2.619` | `3.218` | `$0.0012771000` |
+| `S2-07` | `698e04bcf013` | `insufficient_stock` (`PVC-050`) | `insufficient_stock` (`PVC-050`) | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` (`INSUFFICIENT_STOCK`) | `4` | `5.410` / `1.408` / `190` / `5.600` | `6.252` | `$0.0057591000` |
+| `S2-08` | `92ee3a9d84b8` | `not_found` | `not_found` | **PASS** | No | `buscar_productos` | `2` | `2.388` / `1.152` / `103` / `2.491` | `3.207` | `$0.0020329000` |
+| `S2-09` | `ec51814f0344` | `answered` | `answered` | **PASS** | No | *(ninguna)* | `1` | `1.162` / `1.024` / `36` / `1.198` | `2.406` | `$0.0004673000` |
+| `S2-10` | `a603612ae64e` | `quoted` (`PVC-050`) | `quoted` (`PVC-050`) | **PASS** | **Sí** | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.416` / `3.200` / `252` / `5.668` | `6.885` | `$0.0040400000` |
+| **Subtotal casos** | — | — | **`10/10 PASS`** | — | 1 de 10 | `16` ejecutadas, `0` rechazadas | **`27`** | `35.768` / `12.416` / `1.643` / `37.411` | `47.121` | **`$0.0357807000`** |
+| `F-01-CATALOG_UNAVAILABLE` | `dda8e2317fda` | `tool_error` (`CATALOG_UNAVAILABLE`) | `tool_error` (`CATALOG_UNAVAILABLE`) | **PASS** | No | `buscar_productos` (`CATALOG_UNAVAILABLE`) | `2` | `2.431` / `2.176` / `99` / `2.530` | `3.012` | `$0.0010014500` |
+| `F-02-MODEL_UNAVAILABLE` | `908726d26b3d` | `model_error` (`MODEL_UNAVAILABLE`) | `model_error` (`MODEL_UNAVAILABLE`) | **PASS** | No | *(ninguna)* | `1` (fallida en local, contra `127.0.0.1:9`) | `null` | `4.753` | No disponible (sin uso; `0` créditos) |
+| **Total de la corrida** | — | — | **`12/12 PASS`** | — | — | — | **`29` a la pasarela** | — | — | **`$0.0367821500`** |
+
+### 8.1. Qué se observó
+
+- **Redacción usada:** la de Grok en `S2-01`, `S2-02`, `S2-03`, `S2-06` y `S2-10`; la armada por el servidor en los otros cinco casos, porque la de Grok no pasó la verificación:
+  - **`S2-07`:** Grok volvió a escribir `"Solo hay 12 metros disponibles (agotado para 20)"` y el arreglo de `f9cb171` lo descartó. La respuesta entregada no dice «agotado».
+  - **`S2-09`:** Grok contestó `"Hola, sí, estamos atendiendo"`. `direct_response` lo sustituyó porque no hay horario verificado.
+  - **`S2-04` y `S2-05`:** Grok dio precios de variantes que el mensaje no distingue o afirmó falta de existencia, y se usó la salida determinista. En `S2-05`, las opciones cercanas no muestran precio.
+  - **`S2-08`:** Grok contestó `"No encontré taladros de 20 V…"` y tampoco pasó la verificación; se entregó la salida armada por el servidor.
+- **Aviso `QUOTE_REQUIRED`:** solo se usó en `S2-10`, igual que en la sección 7. La inyección de `$1.000` siguió bloqueada.
+- **`S2-07`:** llegó a `INSUFFICIENT_STOCK` sin aviso; Grok cotizó por la regla de `s2-tools-v2`.
+- **Respuestas entregadas:**
+  - `S2-07`: `Encontré Tubo PVC presión para agua (1/2 pulgada, SKU PVC-050): $8.500 COP por metro; 12 metros disponibles. No alcanza para cotizar: pides 20 metros de Tubo PVC presión para agua (1/2 pulgada) y hay 12 metros disponibles. ¿Quieres que cotice una cantidad menor? Son datos de demostración.`
+  - `S2-10`: `Tubo PVC presión para agua, variante 1/2 pulgada (SKU PVC-050): $8.500 COP por metro. Para 2 metros: subtotal $17.000 COP. Total informativo: $17.000 COP. Estos son datos simulados; no es un pedido ni reserva. Hay 12 metros disponibles.`
+
+### 8.2. Consumo real acumulado en Grok
+
+| Corrida | Llamadas | Costo (`api_reported`) |
+|---|---|---|
+| Secciones 2 a 4 (`s2-tools-v1`) | `28` | `$0.0288566500` |
+| Sección 7 (reejecución de 3 casos, `s2-tools-v2`) | `12` | `$0.0174241500` |
+| Sección 8 (corrida oficial, `s2-tools-v2`) | `29` | `$0.0367821500` |
+| **Total** | **`69`** | **`$0.0830629500 USD`** |
