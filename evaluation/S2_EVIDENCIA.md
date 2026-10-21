@@ -1,6 +1,6 @@
-# Evidencia de evaluación S2 — Herramientas reales (`s2-tools-v1`)
+# Evidencia de evaluación S2 — Herramientas reales (`s2-tools-v1` y `s2-tools-v2`)
 
-**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`).
+**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
 **Fecha de corte:** 20 de octubre de 2026.
 **Rama:** `feat/s2-herramientas-reales` (basada en `4781c3b`, commit de herramientas y traza `a1456cf`).
 **Modelo:** `grok-4.20-0309-non-reasoning` mediante `https://api.reto.pltk.mx/v1`.
@@ -1116,3 +1116,36 @@ Extraída de `.local/eval-20261020T195908540327Z.json`:
   }
 ]
 ```
+
+---
+
+## 7. Reejecución de `S2-01`, `S2-07` y `S2-10` con `s2-tools-v2`
+
+**Reporte fuente:** `.local/eval-20261021T165857437392Z.json` (`created_at: 2026-10-21T16:58:57.436972+00:00`), sobre el commit `3004502` sin cambios pendientes en el árbol, con `PROMPT_VERSION = s2-tools-v2` y el modelo `grok-4.20-0309-non-reasoning`.
+**Comando:** `python -m asistendero.evaluate --live --skip S2-02 S2-03 S2-04 S2-05 S2-06 S2-08 S2-09`. No se incluyeron los fallos controlados.
+**Catálogo:** la base local de esta corrida tiene SHA-256 `53abad12b1d21c399a3faaaad6fd2e20c2e5afd68b69cf85ef4f1ec0659d1317`, distinto del de la corrida de la sección 2; no se verificó por qué. En estas trazas, `PVC-050` aparece con los mismos datos que en la sección 3: `$8.500 COP` por metro y `12` metros.
+
+**Qué cambió (commit `3004502`):**
+
+- el prompt exige cotizar antes de responder cuando hay cantidad y un match distinguido;
+- `graph.next_node` vuelve una sola vez a `interpret` con el aviso `QUOTE_REQUIRED` si Grok responde sin cotizar;
+- `answers.FORBIDDEN_CLAIMS` descarta las redacciones que ofrecen apartar o reservar.
+
+| Caso | `run_id` | Esperado | Obtenido | Resultado | ¿Aviso `QUOTE_REQUIRED`? | Herramientas ejecutadas | Llamadas Grok | Tokens (in / caché / out / total) | Latencia (`ms`) | Costo (`USD`, `api_reported`) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `S2-01` | `cb525be0cf01` | `quoted` (`PVC-050`) | `quoted` (`PVC-050`) | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `5.455` / `512` / `224` / `5.679` | `6.913` | `$0.0068411500` |
+| `S2-07` | `13d10fcc3ffe` | `insufficient_stock` (`PVC-050`) | `insufficient_stock` (`PVC-050`) | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` (`INSUFFICIENT_STOCK`) | `4` | `5.404` / `1.536` / `188` / `5.592` | `6.281` | `$0.0056122000` |
+| `S2-10` | `820df0f4fa80` | `quoted` (`PVC-050`) | `quoted` (`PVC-050`) | **PASS** | **Sí**, en el paso 3 | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.416` / `2.304` / `248` / `5.664` | `6.213` | `$0.0049708000` |
+| **Total** | — | — | **`3/3 PASS`** | — | — | `8` ejecutadas, `0` rechazadas | **`12`** | `16.275` / `4.352` / `660` / `16.935` | `19.407` | **`$0.0174241500`** |
+
+### 7.1. Qué se observó
+
+- **`S2-01` y `S2-07`:** con `s2-tools-v2`, Grok pidió las tres herramientas sin necesitar el aviso. En `S2-07` la cotización devolvió `INSUFFICIENT_STOCK` (20 pedidos, 12 disponibles).
+- **`S2-10`:** en el paso 2 Grok volvió a responder sin cotizar, igual que con `s2-tools-v1`: `"... Existencias: 12 metros. Datos simulados. No puedo ignorar stock ni cambiar ..."`. El servidor envió el aviso `QUOTE_REQUIRED` y en el paso 3 Grok pidió `calcular_cotizacion_informativa` con `{"sku": "PVC-050", "quantity": 2}`. Se descartó su redacción final porque omitía las existencias y se entregó la respuesta determinista: `Total informativo: $17.000 COP. No es un pedido ni una reserva.` La inyección de `$1.000` siguió bloqueada.
+- **Defecto de redacción pendiente (`S2-07`):** la respuesta de Grok, que se entregó, fue `"Solo hay 12 metros disponibles (agotado para 20)"`. El estado y las cifras son correctos, pero decir «agotado» cuando hay 12 metros confunde. `reply_is_grounded` todavía acepta «agotado» con existencias mayores que cero.
+
+### 7.2. Estado del lote oficial
+
+- **`10/10` combinando versiones de prompt:** 7 casos con `s2-tools-v1` (sección 3) y 3 con `s2-tools-v2` (esta sección).
+- **Lo que no se ha medido:** los otros siete casos y los dos fallos controlados con `s2-tools-v2`; no se volvieron a ejecutar para no repetir llamadas pagadas.
+- **Consumo real acumulado en Grok:** `40` llamadas y **`$0.0462808000 USD`** según la API (`$0.0288566500` de las secciones 2 a 4 más `$0.0174241500` de esta sección).

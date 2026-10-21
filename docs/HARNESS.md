@@ -1,6 +1,6 @@
 # Harness experimental de AsisTendero
 
-**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v2`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok está en `evaluation/S2_EVIDENCIA.md`: con `s2-tools-v1` se aprobaron `7/10` casos oficiales y `2/2` fallos controlados; `s2-tools-v2` corrige los tres casos en los que Grok respondía sin cotizar.
+**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v2`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok está en `evaluation/S2_EVIDENCIA.md`: con `s2-tools-v1` se aprobaron `7/10` casos oficiales y `2/2` fallos controlados; con `s2-tools-v2` se volvieron a ejecutar los tres casos en los que Grok respondía sin cotizar (S2-01, S2-07 y S2-10) y pasaron `3/3`. Los otros siete casos no se han medido con `s2-tools-v2`.
 
 ## Contrato del flujo
 
