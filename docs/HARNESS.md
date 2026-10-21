@@ -1,6 +1,6 @@
 # Harness experimental de AsisTendero
 
-**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v1` y datos ficticios. Las herramientas del servidor (`tools.py`) llegan con la rama de Laura: hasta integrarla, el grafo solo se ejecuta en pruebas con un ejecutor falso, y el prompt `s2-tools-v1` aún no se ha validado con Grok real.
+**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v1`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok (`7/10` casos oficiales aprobados y `2/2` fallos controlados aprobados) está documentada en `evaluation/S2_EVIDENCIA.md`.
 
 ## Contrato del flujo
 
@@ -17,7 +17,7 @@ LangGraph recorre `validate → interpret → retrieve → interpret … → res
 | `consultar_disponibilidad` | `{"sku": "PVC-050"}` | Existencias, unidad y fecha del SKU; no aparta unidades |
 | `calcular_cotizacion_informativa` | `{"lines": [{"sku": "PVC-050", "quantity": 2}]}` | Precio unitario, subtotales y total en COP con `reservation_created=false` |
 
-La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)`. `executor.catalog_executor(catalog)` fija el catálogo para la terminal, el visor y el evaluador. Toda respuesta tiene la forma `{"status", "data", "error", "source", "observed_at"}`; las formas de `data` que lee el grafo están en el docstring de `observations.py`. El código se reparte así: `graph.py` (nodos y ruta), `validation.py` (reglas antes de ejecutar), `observations.py` (lectura de respuestas de herramientas) y `answers.py` (respuesta final).
+La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)` en `tools.py`. `executor.catalog_executor(catalog)` fija el catálogo para la terminal, el visor y el evaluador. Toda respuesta tiene la forma `{"status", "data", "error", "source", "observed_at"}`; las formas de `data` que lee el grafo están en el docstring de `observations.py`. El código se reparte así: `graph.py` (nodos y ruta), `validation.py` (reglas antes de ejecutar), `observations.py` (lectura de respuestas de herramientas), `answers.py` (respuesta final) y `tools.py` (ejecución sobre `MockCatalog`).
 
 ## Validación antes de ejecutar
 
@@ -41,21 +41,21 @@ Precio y existencias salen solo del catálogo, nunca del mensaje ni de una cifra
 
 ## Visor local de pruebas
 
-`python -m asistendero.visual` sirve `http://127.0.0.1:8765/`. Transmite los eventos del mismo grafo que usa la terminal: cada solicitud a Grok con sus observaciones, cada decisión y cada herramienta. La traza separa lo que Grok **pidió** (`requested_tool`, `requested_arguments`) de lo que el servidor **ejecutó** (`executed`, `arguments`, `response`, `duration_ms`), además de la ruta y la respuesta final. La clave API se omite de los eventos. Las trazas pueden contener mensajes y datos de prueba y solo se guardan al descargarlas manualmente.
+`python -m asistendero.visual` sirve `http://127.0.0.1:8765/`. Transmite los eventos del mismo grafo que usa la terminal con un `run_id` por ejecución: cada solicitud a Grok con sus observaciones, cada decisión y cada herramienta. La traza separa lo que Grok **pidió** (`requested_tool`, `requested_arguments`, `tools_requested`) de lo que el servidor **ejecutó** (`executed`, `arguments`, `response`, `duration_ms`, `tools_executed`), además de la ruta, los tokens, la latencia total y la respuesta final. La clave API se omite de los eventos. Las trazas pueden contener mensajes y datos de prueba y solo se guardan al descargarlas manualmente.
 
 El visor muestra el costo **por ejecución** y por llamada, en USD. Primero usa `usage.cost_in_usd_ticks` si la respuesta de la API lo incluye. Si la pasarela no lo informa, calcula una referencia con tokens de entrada, salida y caché (cuando está disponible) y las [tarifas públicas de xAI](https://docs.x.ai/developers/pricing) consultadas el 17 de octubre de 2026. En ese caso se rotula **estimado**. Si una llamada falla o falta su uso, la ejecución no tiene total: el visor muestra el subtotal conocido como «Parcial» o, si no conoce ninguno, «No disponible». Nunca se interpreta un dato ausente como costo cero. La tarifa o el débito de créditos de `api.reto.pltk.mx` puede ser distinto y sigue por verificar.
 
 ## Evaluación
 
-`python -m pytest -q --basetemp=.tmp/pytest` no hace llamadas pagadas: usa un Grok guionizado y un ejecutor falso que cumple el contrato. Comprueba:
+`python -m pytest -q` no hace llamadas pagadas: usa un Grok guionizado y prueba tanto el grafo con un ejecutor falso como las herramientas reales (`tools.py`), el conector `catalog_executor` y el evaluador sobre SQLite temporal. Comprueba:
 
 - el orden Grok → herramienta y las tres herramientas en secuencia;
 - la validación de nombres y argumentos, el SKU y la cantidad respaldados y las opciones cercanas;
 - el stock insuficiente y el producto agotado;
 - los fallos del catálogo y del modelo, el límite de llamadas y la inyección de precio;
-- la ausencia de la clave en la traza.
+- la ausencia de la clave en la traza y el registro de `run_id`, latencia, tokens y costos.
 
-`python -m asistendero.evaluate --live --limit 8` usa Grok real y las herramientas integradas, y registra versión del prompt, herramientas, resultados, tokens y latencia en `.local/`. `evaluation/cases.json` conserva los casos anteriores a S2. Las diez corridas S2-01 a S2-10 y los dos fallos inducidos se registrarán al integrar.
+`python -m asistendero.evaluate --live --limit 10 --include-failures` (con `--skip` opcional para omitir IDs ya verificados) usa Grok real y las herramientas integradas sobre los diez casos `S2-01` a `S2-10` de `evaluation/cases.json` y los dos fallos controlados, guardando los eventos completos, `run_id`, versión del prompt, herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia en `.local/`. Los resultados reales verificados y las trazas de entrega se encuentran en `evaluation/S2_EVIDENCIA.md`.
 
 Las mediciones de `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
 
