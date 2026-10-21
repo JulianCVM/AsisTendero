@@ -38,7 +38,8 @@ El visor sirve [Nunito Sans](src/asistendero/ui/NunitoSans.ttf) e [Inter](src/as
 3. **Compositor:** campo etiquetado, contador de caracteres, cuatro escenarios de ejemplo y botón ámbar. El envío conserva la validación de longitud y las llamadas del flujo existente.
 4. **Así lo resolvió:** cuatro pasos con estado visible: recibir, entender, consultar y verificar/responder. La consulta de catálogo puede omitirse cuando Grok responde directamente.
 5. **Uso y costo:** monto por ejecución, costo por llamada cuando está disponible, base del cálculo y métricas. Las cifras son informadas por la API o estimadas según el caso; nunca se presentan como débito confirmado de los créditos del reto.
-6. **Traza técnica:** eventos plegables y filtros por Grok, catálogo y sistema. Permite copiar la respuesta o descargar manualmente el JSON.
+6. **Mapa del harness:** seis etapas (recibir, Grok lee y decide, ruta, validar y ejecutar, verificar y responder, ¿salió bien?) para explicar el flujo. Cada afirmación lleva una etiqueta de capa: **Instrucción** (borde punteado), **Decide Grok** (petróleo sólido), **Regla** (ámbar) y **Dato** (verde). La capa se lee en el texto de la etiqueta, no solo en el color. Muestra el prompt completo, las herramientas, los rechazos y los estados finales agrupados, que llegan de `/api/harness` (`harness_info.py`), y debajo el recorrido de la última ejecución, paso a paso.
+7. **Traza técnica:** eventos plegables y filtros por Grok, catálogo y sistema. Permite copiar la respuesta o descargar manualmente el JSON.
 
 En escritorio, el chat ocupa la columna principal y la explicación queda al lado. En pantallas estrechas, primero aparece la conversación y después los paneles de explicación; las trazas permanecen más abajo. Los controles interactivos tienen foco visible y la acción principal mide al menos 44 px de alto.
 

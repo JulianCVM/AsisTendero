@@ -110,6 +110,8 @@
     expand.disabled = true;
     expand.textContent = 'Expandir visibles';
     nodeNames.forEach(name => setStep(name, ''));
+    // harness.js escucha estos eventos para iluminar el mapa del harness.
+    document.dispatchEvent(new CustomEvent('asistendero:reset'));
   }
   function kindOf(event) {
     if (event.type === 'model_request' || event.type === 'model_response') return 'model';
@@ -178,6 +180,7 @@
     if (!row.hidden) list.scrollTop = list.scrollHeight;
   }
   function show(event) {
+    document.dispatchEvent(new CustomEvent('asistendero:event', {detail:event}));
     if (event.type === 'node') {
       setStep(event.node, event.status);
       if (event.status === 'running') setStatus(nodeLabels[event.node], 'warning');

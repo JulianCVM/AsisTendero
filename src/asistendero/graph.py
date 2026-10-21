@@ -16,11 +16,12 @@ from asistendero.observations import ToolCall, ToolExecutor, error_envelope, exe
 from asistendero.validation import Rejected, grounded_products, quantities_in_message, validate_request
 
 
-__all__ = ["MAX_TOOL_CALLS", "QUOTE_REMINDER", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
+__all__ = ["MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "QUOTE_REMINDER", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
 
 Planner = Callable[[str, list[dict], int], Decision]
 
 MAX_TOOL_CALLS = 6
+MAX_MESSAGE_CHARS = 2000
 # En la corrida real s2-tools-v1, Grok respondió tras buscar sin cotizar cantidades dichas (S2-01, S2-07,
 # S2-10). El servidor se lo recuerda una sola vez; la decisión de cotizar sigue siendo de Grok.
 QUOTE_REMINDER = {
@@ -77,8 +78,8 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         message = state["consulta"].strip()
         if not message:
             raise ValueError("La consulta no puede estar vacía.")
-        if len(message) > 2000:
-            raise ValueError("La consulta supera el límite de 2000 caracteres.")
+        if len(message) > MAX_MESSAGE_CHARS:
+            raise ValueError(f"La consulta supera el límite de {MAX_MESSAGE_CHARS} caracteres.")
         return {"consulta": message, "decisiones": [], "tool_calls": [], "error": None, "model_calls": 0}
 
     def interpret(state: AgentState) -> dict:
