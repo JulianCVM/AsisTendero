@@ -2,7 +2,7 @@
 
 **AsisTendero** es un agente conversacional basado en Grok que busca ayudar a ferreterías y tiendas de barrio colombianas a atender consultas y operar con información confiable. Forma parte de **PulsoTienda**, el nombre de trabajo de una plataforma para conectar conversaciones, catálogo, inventario y decisiones del comercio.
 
-Este repositorio contiene una **primera versión ejecutable**: recibe mensajes escritos, interpreta lo que necesita el cliente, consulta un catálogo ficticio de ferretería cuando hace falta y responde con los productos encontrados. También incluye una interfaz local para explorar cada ejecución. El piloto con un comercio real y las funciones comerciales más amplias siguen en definición y desarrollo.
+Este repositorio contiene una **versión ejecutable del corte S2**: recibe mensajes escritos y deja que Grok decida cuál de **tres herramientas del servidor** necesita (buscar productos, consultar disponibilidad y calcular una cotización informativa). El servidor valida cada solicitud antes de ejecutarla sobre un catálogo ficticio de ferretería y responde solo con datos comprobados. También incluye una interfaz local para explorar cada ejecución y un mapa del harness que explica el flujo. El piloto con un comercio real y las funciones comerciales más amplias siguen en definición y desarrollo.
 
 ## El problema
 
@@ -15,14 +15,24 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 ## Qué hace hoy
 
 - Recibe consultas de texto desde la terminal o desde un visor web local.
-- Usa Grok para interpretar el mensaje antes de decidir si necesita consultar productos.
-- Descompone una solicitud de hasta cinco artículos en criterios como tipo de producto, material, medida, uso, presentación y cantidad.
-- Busca coincidencias acotadas en SQLite. Si falta una variante, pide precisión; si la medida solicitada no existe, puede mostrar unas pocas opciones cercanas sin tratarlas como equivalentes.
-- Responde preguntas generales que no necesitan catálogo. Por ejemplo, si preguntan si la tienda está atendiendo, indica que no hay un horario verificado.
-- Comprueba los SKU, precios y existencias de las respuestas de producto contra el catálogo de prueba.
-- Muestra en el visor la ruta seguida, las llamadas al modelo y el costo por ejecución cuando la API lo informa o es posible estimarlo con una tarifa de referencia.
+- Usa Grok para decidir, paso a paso, si responde o pide una de tres herramientas:
+  - `buscar_productos`: hasta cinco artículos por llamada, con criterios como tipo de producto, material, medida, uso y presentación.
+  - `consultar_disponibilidad`: existencias de un SKU.
+  - `calcular_cotizacion_informativa`: precio, subtotales y total en COP con las cantidades que dijo el cliente.
+- Valida cada solicitud de Grok **antes** de ejecutarla:
+  - herramienta permitida y argumentos dentro de sus límites;
+  - SKU que salió de una búsqueda y que el mensaje distingue;
+  - cantidad que el cliente expresó;
+  - como máximo seis herramientas por ejecución.
 
-El catálogo, los precios y las existencias de esta versión son **ficticios**. La cantidad que escribe el cliente se conserva como contexto de la consulta, pero el agente todavía no arma pedidos ni reserva unidades.
+  Si la rechaza, la herramienta no corre y Grok recibe el código.
+- Si falta una variante, pide precisión; si la medida no existe, muestra opciones cercanas sin tratarlas como equivalentes; si no hay existencias suficientes, dice cuánto hay.
+- Responde preguntas generales que no necesitan catálogo. Por ejemplo, si preguntan si la tienda está atendiendo, indica que no hay un horario verificado.
+- Usa la redacción de Grok solo si cada precio, SKU y cantidad coincide con lo que devolvieron las herramientas; si no, responde con los datos del catálogo.
+- Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
+- Muestra en el visor la ruta seguida, las llamadas al modelo, las herramientas pedidas y ejecutadas, el costo por ejecución y un mapa del harness con las seis etapas del flujo.
+
+El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa**: no crea pedidos, reservas, pagos ni facturas (`reservation_created=false`).
 
 ## Cómo funciona
 
@@ -30,28 +40,28 @@ El catálogo, los precios y las existencias de esta versión son **ficticios**. 
 Mensaje del cliente
        │
        ▼
-Validación de entrada
+1. validate ── texto no vacío, máximo 2.000 caracteres
        │
        ▼
-Grok interpreta la intención y estructura la solicitud
+2. interpret ── Grok lee su prompt + mensaje + observaciones ◄─────────┐
+       │        y devuelve JSON: respond o call_tool                   │
+       ▼                                                               │
+3. next_node ── call_tool ─► 4. retrieve: el servidor valida la        │
+       │                       solicitud y, si la acepta, ejecuta la   │
+       │                       herramienta en SQLite (solo lectura) ───┘
        │
-       ├── Pregunta general ────────────────┐
-       │                                    │
-       └── Consulta de productos            │
-                    │                       │
-                    ▼                       │
-           Código consulta SQLite           │
-                    │                       │
-                    ▼                       │
-           Grok recibe los hallazgos        │
-                    └──────────┬────────────┘
-                               ▼
-                    Respuesta verificada
+       ├── respond sin cotizar con cantidad dicha ─► vuelve a 2 una vez con el aviso QUOTE_REQUIRED
+       │
+       ▼
+5. respond ── verifica la redacción de Grok o arma la respuesta con los datos
+       │
+       ▼
+6. estado ── quoted, found, clarify, nearby, insufficient_stock… o un fallo controlado
 ```
 
-Grok decide **qué información necesita** y solicita la búsqueda mediante una estructura de parámetros. El código ejecuta esa búsqueda con reglas propias; el modelo no tiene acceso SQL libre. En una consulta de productos, Grok suele intervenir dos veces: para interpretar la solicitud y para responder con los resultados. Una pregunta general suele necesitar una llamada. Si la redacción propuesta por el modelo no conserva los hechos comprobables, el código genera una respuesta basada en los datos recuperados.
+**Grok decide** qué información necesita y **el servidor ejecuta**: el modelo no tiene acceso SQL libre, no elige negocio ni sede y no puede imponer precio ni existencias. Una pregunta general suele necesitar una llamada a Grok; una cotización de un producto, unas cuatro (buscar, consultar, cotizar y responder). El detalle del contrato, las barreras y los códigos está en [docs/HARNESS.md](docs/HARNESS.md), y el visor lo muestra en su sección **Mapa del harness**.
 
-Por ejemplo, ante «Busco tubo PVC de 1/2 para agua y un bulto de cemento gris de 50 kg», el agente puede separar ambos artículos y encontrar `PVC-050` y `CEM-050` en el catálogo de demostración. Ante «Busco tubo PVC de 1 pulgada», indica que no encontró esa medida exacta y muestra únicamente las medidas cercanas disponibles, sin afirmar que cumplen el mismo propósito.
+Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg», el agente busca ambos artículos, consulta `PVC-050` y `CEM-050` y entrega un total informativo de $56.500 COP con datos de demostración. Ante «Busco tubo PVC de 1 pulgada», indica que no encontró esa medida exacta y muestra las medidas cercanas sin afirmar que sirven para lo mismo. Ante «20 metros de PVC de 1/2», la cotización detecta que solo hay 12 y lo dice.
 
 ## Tecnologías
 
@@ -125,7 +135,7 @@ La redacción puede variar entre llamadas. El agente debe distinguir los datos f
 .\.venv\Scripts\python.exe -m asistendero.visual
 ```
 
-Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
+Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
 
 ### Docker
 
@@ -146,15 +156,16 @@ Ejecuta las pruebas automatizadas sin llamar a Grok:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-La [verificación de búsqueda estructurada](evaluation/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) registra cuatro escenarios con llamadas reales: varios productos, una medida ausente, una descripción parcial y una pregunta por horario. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. La [evidencia inicial de Semana 1](EVIDENCIA_SEMANA1.md) conserva una versión anterior del agente.
+La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con Grok de los diez casos `S2-01` a `S2-10` y de dos fallos controlados (catálogo inaccesible y modelo inaccesible), con `run_id`, tokens, latencia y costo informado por la API. Con `s2-tools-v1` pasaron 7 de 10 casos y los dos fallos. Los tres que fallaron se corrigieron en `s2-tools-v2` y pasaron 3 de 3 al volver a ejecutarlos. La corrida de los diez casos sobre un mismo commit con `s2-tools-v2` está pendiente. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. Las verificaciones de [búsqueda estructurada](evaluation/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) y de [Semana 1](EVIDENCIA_SEMANA1.md) corresponden a versiones anteriores del agente.
 
-También existe un [conjunto de casos sintéticos](evaluation/cases.json) y un comando de evaluación que **solo llama a Grok si se usa `--live`**:
+El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama a Grok si se usa `--live`**:
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --limit 4
+.\.venv\Scripts\python.exe -m asistendero.evaluate --live --include-failures
+.\.venv\Scripts\python.exe -m asistendero.evaluate --live --skip S2-02 S2-03   # omite casos ya verificados
 ```
 
-Ese comando consume cupo y guarda el reporte localmente en `.local/`.
+Ese comando consume cupo y guarda el reporte, con los eventos completos de cada caso, en `.local/`.
 
 ## Estructura del repositorio
 
@@ -165,7 +176,10 @@ Ese comando consume cupo y guarda el reporte localmente en `.local/`.
 | `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
 | `src/asistendero/answers.py` | Respuesta final verificada contra lo que devolvieron las herramientas. |
 | `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |
+| `src/asistendero/tools.py` | Las tres herramientas del servidor (`execute_tool`) sobre el catálogo. |
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
+| `src/asistendero/evaluate.py` | Evaluador de casos y fallos controlados. |
+| `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
 | `src/asistendero/seed.py` | Datos ficticios para la demostración. |
 | `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |
 | `src/asistendero/tracing.py` y `pricing.py` | Trazas, uso y costos de ejecución. |
@@ -182,7 +196,7 @@ La visión y las tareas están organizadas en [PLANIFICACION.md](PLANIFICACION.m
 
 ## Relación con el Agent Challenge
 
-AsisTendero nació como proyecto del Agent Challenge. Esta primera entrega demuestra el recorrido **mensaje → Grok → procesamiento → respuesta** con una clave de API real y un catálogo de prueba. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
+AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el recorrido **mensaje → Grok → procesamiento → respuesta**. El corte S2 agrega tres herramientas reales del servidor, el manejo de errores y las corridas registradas en la evidencia, con una clave de API real y un catálogo de prueba. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
 
 ## Licencia
 
