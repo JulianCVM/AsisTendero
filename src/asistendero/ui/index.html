@@ -150,6 +150,7 @@
           <div class="hstage-head"><span class="hstage-number">3</span><div><h3>El servidor elige la ruta</h3><code>next_node</code></div><span class="hstage-state">Pendiente</span></div>
           <ul class="hstage-facts">
             <li><span class="layer-tag" data-layer="rule">Regla</span><code>call_tool</code> → etapa 4. <code>respond</code> → etapa 5. Error del modelo → etapa 5 en estado seguro.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Si responde sin buscar cuando el mensaje pide productos, vuelve una sola vez a la etapa 2 con el aviso <code>SEARCH_REQUIRED</code>.</li>
             <li><span class="layer-tag" data-layer="rule">Regla</span>Si responde sin cotizar cuando el cliente dio cantidad, vuelve una sola vez a la etapa 2 con el aviso <code>QUOTE_REQUIRED</code>.</li>
             <li><span class="layer-tag" data-layer="rule">Regla</span>Tope de <span data-harness="max_tool_calls">6</span> herramientas por corrida (<code>TOOL_CALL_LIMIT</code>).</li>
           </ul>

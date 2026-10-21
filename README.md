@@ -50,6 +50,7 @@ Mensaje del cliente
        │                       solicitud y, si la acepta, ejecuta la   │
        │                       herramienta en SQLite (solo lectura) ───┘
        │
+       ├── respond sin buscar cuando pide productos ─► vuelve a 2 una vez con el aviso SEARCH_REQUIRED
        ├── respond sin cotizar con cantidad dicha ─► vuelve a 2 una vez con el aviso QUOTE_REQUIRED
        │
        ▼
@@ -172,6 +173,7 @@ Ese comando consume cupo y guarda el reporte, con los eventos completos de cada 
 | Ruta | Contenido |
 | --- | --- |
 | `src/asistendero/graph.py` | Flujo LangGraph: Grok decide, el servidor ejecuta y se responde. |
+| `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar o sin cotizar. |
 | `src/asistendero/validation.py` | Reglas que una solicitud de Grok cumple antes de ejecutarse. |
 | `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
 | `src/asistendero/answers.py` | Respuesta final verificada contra lo que devolvieron las herramientas. |

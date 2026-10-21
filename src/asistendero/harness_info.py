@@ -6,8 +6,9 @@ código (prompt, versión, herramientas, límites, códigos y estados) para que 
 
 import os
 
-from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS, QUOTE_REMINDER
+from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
 from asistendero.grok import AGENT_PROMPT, DEFAULT_MODEL, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES
+from asistendero.reminders import REMINDERS
 from asistendero.validation import MAX_QUANTITY
 
 
@@ -30,6 +31,7 @@ TOOLS = {
 REJECTIONS = {
     "UNKNOWN_TOOL": "Herramienta fuera de la lista permitida.",
     "INVALID_ARGUMENT": "Argumentos con forma, campos o longitud no permitidos.",
+    "TOO_MANY_ITEMS": f"Más de {MAX_ITEMS} artículos, o una lista recortada después de ese rechazo.",
     "INVALID_QUANTITY": f"Cantidad que no es un entero de 1 a {MAX_QUANTITY}.",
     "SKU_NOT_GROUNDED": "SKU que no salió de una búsqueda o que el mensaje no distingue.",
     "QUANTITY_NOT_GROUNDED": "Cantidad que el cliente no dijo.",
@@ -95,6 +97,6 @@ def describe_harness() -> dict:
         "tools": [{"name": name, **TOOLS[name]} for name in TOOL_NAMES],
         "rejections": REJECTIONS,
         "errors": ERRORS,
-        "reminder": QUOTE_REMINDER["error"],
+        "reminders": [item["error"] for item in REMINDERS.values()],
         "outcomes": OUTCOMES,
     }

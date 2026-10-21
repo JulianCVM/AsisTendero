@@ -13,27 +13,16 @@ from langgraph.graph import END, START, StateGraph
 from asistendero.answers import direct_response, render_answer, reply_is_grounded
 from asistendero.grok import PROMPT_VERSION, Decision, ModelError
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
-from asistendero.validation import Rejected, grounded_products, quantities_in_message, validate_request
+from asistendero.reminders import pending_reminder, with_reminders
+from asistendero.validation import Rejected, validate_request
 
 
-__all__ = ["MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "QUOTE_REMINDER", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
+__all__ = ["MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
 
 Planner = Callable[[str, list[dict], int], Decision]
 
 MAX_TOOL_CALLS = 6
 MAX_MESSAGE_CHARS = 2000
-# En la corrida real s2-tools-v1, Grok respondió tras buscar sin cotizar cantidades dichas (S2-01, S2-07,
-# S2-10). El servidor se lo recuerda una sola vez; la decisión de cotizar sigue siendo de Grok.
-QUOTE_REMINDER = {
-    "herramienta": None,
-    "estado": "aviso",
-    "error": {
-        "code": "QUOTE_REQUIRED",
-        "message": "El cliente dio cantidades para productos que el mensaje distingue: llama a "
-                   "calcular_cotizacion_informativa con esas cantidades antes de responder. La herramienta "
-                   "comprueba las existencias.",
-    },
-}
 
 
 class AgentState(TypedDict):
@@ -47,18 +36,15 @@ class AgentState(TypedDict):
     prompt_version: NotRequired[str]
     model_called: NotRequired[bool]
     model_calls: NotRequired[int]
-    quote_reminded_at: NotRequired[int]
+    avisos: NotRequired[list[dict]]
 
 
-def _quote_missing(state: AgentState) -> bool:
+def _pending(state: AgentState) -> str | None:
     calls = state.get("tool_calls", [])
-    return (
-        state.get("quote_reminded_at") is None
-        and len(calls) < MAX_TOOL_CALLS
-        and not any(call["requested_tool"] == "calcular_cotizacion_informativa" for call in calls)
-        and bool(quantities_in_message(state["consulta"]))
-        and bool(grounded_products(state["consulta"], calls))
-    )
+    if len(calls) >= MAX_TOOL_CALLS:
+        return None
+    sent = {item["code"] for item in state.get("avisos", [])}
+    return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent)
 
 
 def next_node(state: AgentState) -> str:
@@ -68,7 +54,7 @@ def next_node(state: AgentState) -> str:
     decision = state["decisiones"][-1]
     if decision.valid_json and decision.action == "call_tool" and len(state.get("tool_calls", [])) < MAX_TOOL_CALLS:
         return "retrieve"
-    if decision.valid_json and decision.action == "respond" and _quote_missing(state):
+    if _pending(state):
         return "interpret"
     return "respond"
 
@@ -85,14 +71,12 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     def interpret(state: AgentState) -> dict:
         calls = state["tool_calls"]
         model_calls = state["model_calls"] + 1
-        observations = [observation_for_model(call) for call in calls]
         update: dict = {"model_called": True, "model_calls": model_calls}
-        reminded_at = state.get("quote_reminded_at")
-        # Solo se vuelve aquí tras un «respond» cuando next_node detectó una cotización pendiente.
-        if reminded_at is None and state["decisiones"] and state["decisiones"][-1].action == "respond":
-            reminded_at = update["quote_reminded_at"] = len(calls)
-        if reminded_at is not None:
-            observations.insert(reminded_at, QUOTE_REMINDER)
+        avisos = state.get("avisos", [])
+        # Solo se vuelve aquí tras un «respond» cuando next_node detectó un aviso pendiente.
+        if state["decisiones"] and state["decisiones"][-1].action == "respond":
+            avisos = update["avisos"] = avisos + [{"code": _pending(state), "at": len(calls)}]
+        observations = with_reminders([observation_for_model(call) for call in calls], avisos)
         try:
             decision = planner(state["consulta"], observations, MAX_TOOL_CALLS - len(calls))
         except ModelError as exc:

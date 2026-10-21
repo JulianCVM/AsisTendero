@@ -8,7 +8,7 @@
   const routeTexts = {
     retrieve:'Ruta: ejecutar la herramienta que pidió Grok',
     respond:'Ruta: pasar a verificar y responder',
-    interpret:'Ruta: volver a Grok con el aviso QUOTE_REQUIRED (cotización pendiente)',
+    interpret:'Ruta: volver a Grok con un aviso del servidor (SEARCH_REQUIRED o QUOTE_REQUIRED)',
   };
   const groupTones = {verified:'success', clarify:'warning', safe_failure:'error'};
   let outcomes = {};

@@ -24,7 +24,7 @@ def test_description_comes_from_the_code_constants():
     assert [tool["name"] for tool in info["tools"]] == list(TOOL_NAMES)
     assert info["limits"]["max_tool_calls"] == MAX_TOOL_CALLS
     assert info["limits"]["max_message_chars"] == MAX_MESSAGE_CHARS
-    assert info["reminder"]["code"] == "QUOTE_REQUIRED"
+    assert [item["code"] for item in info["reminders"]] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED"]
 
 
 def test_every_rejection_code_in_the_flow_is_on_the_map():

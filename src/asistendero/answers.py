@@ -3,7 +3,7 @@
 import re
 
 from asistendero.catalog import Product, tokens
-from asistendero.grok import Decision
+from asistendero.grok import MAX_ITEMS, Decision
 from asistendero.observations import ToolCall, availability_by_sku, latest_quote, search_findings
 from asistendero.validation import grounded_products, grounded_selection, normalize_text
 
@@ -65,6 +65,9 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
     """Respuesta determinista construida solo con lo que devolvieron las herramientas."""
     findings = search_findings(calls)
     if not findings:
+        if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
+            return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
+                               f"en grupos de {MAX_ITEMS} o menos?")
         if any(call["response"]["status"] == "error" for call in calls):
             return "tool_error", ("No pude consultar el catálogo de demostración en este momento, así que no "
                                   "tengo precios ni existencias verificados. Intenta de nuevo en unos minutos.")

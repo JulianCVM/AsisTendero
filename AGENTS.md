@@ -84,7 +84,7 @@ propio.
 
 | Persona | Es dueña de | No edita |
 |---|---|---|
-| Julian | `grok.py`, `graph.py`, `validation.py`, `observations.py`, `answers.py`, `executor.py`, `tests/test_graph.py`, `tests/test_search_contract.py`, `README.md`, video | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py` |
+| Julian | `grok.py`, `graph.py`, `reminders.py`, `validation.py`, `observations.py`, `answers.py`, `executor.py`, `tests/test_graph.py`, `tests/test_search_contract.py`, `README.md`, video | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py` |
 | Laura | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py`, `evaluation/`, integración y evidencia | Los archivos de Julian (deja el defecto como comentario reproducible en el PR) |
 
 Si un cambio obliga a tocar un archivo ajeno (por ejemplo, porque cambió una firma), el cambio es mínimo, se explica en
@@ -99,6 +99,7 @@ el PR y la dueña decide si lo reescribe.
 | Leer un dato nuevo de la respuesta de una herramienta | `observations.py` y su docstring |
 | Cambiar cómo se redacta o verifica la respuesta final | `answers.py` |
 | Un nodo o una ruta del flujo | `graph.py` (la traza usa `next_node`) |
+| Un aviso del servidor cuando Grok responde sin un paso que el mensaje exige | `reminders.py` (`pending_reminder`), con su prueba en `tests/test_graph.py` |
 | Una herramienta del servidor o un código de error de negocio | `tools.py` (`execute_tool`), con su prueba aislada |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |

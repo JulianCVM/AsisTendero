@@ -13,6 +13,9 @@ from asistendero.search import ProductQuery
 MAX_QUANTITY = 1000
 QUERY_FIELDS = ("product", "use", "material", "measure", "presentation", "color", "brand")
 SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{1,31}$")
+# «2 metros» o «1 bulto» es cuánto se vende, no una medida del producto: en la corrida exploratoria X-03
+# Grok la puso en measure y la búsqueda devolvió opciones cercanas en vez de preguntar el diámetro.
+SALE_QUANTITY = re.compile(r"^\s*\d+\s*(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
 NUMBER_WORDS = {
     "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
     "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "quince": 15, "veinte": 20,
@@ -91,8 +94,14 @@ def validate_request(name: str | None, arguments: object, message: str, calls: l
 
     if name == "buscar_productos":
         items = arguments.get("items")
-        if set(arguments) != {"items"} or not isinstance(items, list) or not 1 <= len(items) <= MAX_ITEMS:
-            raise Rejected("INVALID_ARGUMENT", f"Se requieren de 1 a {MAX_ITEMS} artículos en items.")
+        if set(arguments) != {"items"} or not isinstance(items, list) or not items:
+            raise Rejected("INVALID_ARGUMENT", "Se requiere al menos un artículo en items.")
+        # Tras pasarse del límite, tampoco vale una lista recortada: en X-09 Grok quitó un artículo en silencio.
+        if len(items) > MAX_ITEMS or any(
+            (call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls
+        ):
+            raise Rejected("TOO_MANY_ITEMS", f"El cliente pidió más de {MAX_ITEMS} artículos: no recortes la "
+                                             "lista; responde pidiéndole que la divida.")
         clean = []
         for item in items:
             # quantity se tolera porque Grok la extrae con el artículo, pero la búsqueda no la usa.
@@ -108,6 +117,8 @@ def validate_request(name: str | None, arguments: object, message: str, calls: l
                     if not isinstance(value, str) or not value.strip() or len(value) > 80:
                         raise Rejected("INVALID_ARGUMENT", f"Atributo {field} inválido.")
                     fields[field] = value.strip()
+            if SALE_QUANTITY.match(normalize_text(fields.get("measure", ""))):
+                del fields["measure"]
             query = ProductQuery(text.strip(), **fields).grounded(message, tokens)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}
