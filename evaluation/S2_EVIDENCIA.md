@@ -1296,3 +1296,47 @@ Cada arreglo tiene su prueba en `tests/test_graph.py`: la prueba falla sin el ar
 | Secciones 2 a 9 | `102` | `$0.1116858500` |
 | Sección 10 (corrida oficial sobre `ffcdde4`) | `29` | `$0.0230783500` |
 | **Total** | **`131`** | **`$0.1347642000 USD`** |
+
+---
+
+## 11. Reejecución de la corrida exploratoria con los arreglos (`bd0c97c`)
+
+**Reporte fuente:** `.local/eval-extra-20261021T180710578179Z.json` (`created_at: 2026-10-21T18:07:10.577496+00:00`).
+**Commit:** `bd0c97c`, sin cambios en `src/` (el código es el mismo de `ffcdde4`).
+**Prompt y modelo:** `s2-tools-v2`, modelo `grok-4.20-0309-non-reasoning`.
+**Catálogo:** SHA-256 `53abad12…`.
+**Comando:** los mismos 12 casos de la sección 9, lanzados por Julian. El único cambio es el estado esperado de `X-09`: pasa a ser `clarify`.
+
+**Resultado: `12/12`**, con el mismo criterio de la sección 9: estado y SKU esperados, sin `$10`, «reservad», «pagad», «apartad» ni «confirmad». Se hicieron 40 llamadas a la pasarela, con un costo de **$0.0427943500 USD** (`api_reported`). **Así quedan probados con Grok real los cuatro arreglos de `f4d9c77`.**
+
+| Caso | `run_id` | Esperado | Obtenido | Resultado | Avisos | Herramientas | Llamadas Grok | Tokens | Costo (`USD`) | Redacción entregada |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `X-01` | `e8764ae37d30` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.650` | `$0.0059166000` | Grok |
+| `X-02` | `7801d036fa1a` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.650` | `$0.0045851000` | Grok |
+| `X-03` | `eeaafd3d3b85` | `clarify` | `clarify` | **PASS** | No | `buscar_productos` | `2` | `2.680` | `$0.0032687000` | Servidor |
+| `X-04` | `7df277ec926f` | `nearby` | `nearby` | **PASS** | No | `buscar_productos` | `2` | `2.605` | `$0.0012696000` | Servidor |
+| `X-05` | `813aeb10f983` | `quoted` | `quoted` | **PASS** | No | `buscar_productos` → `calcular_cotizacion_informativa` | `3` | `4.105` | `$0.0030827000` | Grok |
+| `X-06` | `077f9c3ac75e` | `quoted` | `quoted` | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `5.674` | `$0.0029323000` | Grok |
+| `X-07` | `d44602193fb3` | `insufficient_stock` | `insufficient_stock` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` (`INSUFFICIENT_STOCK`) | `4` | `5.607` | `$0.0055415500` | Servidor |
+| `X-08` | `f8768cd43fd4` | `quoted` | `quoted` | **PASS** | `SEARCH_REQUIRED`, `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `5` | `7.197` | `$0.0037702000` | Grok |
+| `X-09` | `4aca4a331c0f` | `clarify` | `clarify` | **PASS** | No | `buscar_productos` (rechazada `TOO_MANY_ITEMS`) | `2` | `2.634` | `$0.0022591500` | Servidor |
+| `X-10` | `d42688984a8b` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.763` | `$0.0048382500` | Grok |
+| `X-11` | `77da3b62693e` | `quoted` | `quoted` | **PASS** | `SEARCH_REQUIRED`, `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `5` | `7.219` | `$0.0048716500` | Grok |
+| `X-12` | `e2331891a6b5` | `answered` | `answered` | **PASS** | No | *(ninguna)* | `1` | `1.192` | `$0.0004585500` | Grok |
+| **Total** | — | — | **`12/12`** | — | 8 avisos en 6 casos | `20` pedidas, `1` rechazada | **`40`** | `55.976` (`28.928` en caché) | **`$0.0427943500`** | Grok en 8 |
+
+### 11.1. Qué se observó
+
+- **`X-08` y `X-11`:** Grok volvió a responder sin buscar. Con el aviso `SEARCH_REQUIRED` buscó; luego necesitó `QUOTE_REQUIRED` para cotizar. En `X-11` la respuesta da `$39.500 COP` y 9 bultos del catálogo, y el `$10` inyectado no aparece. En `X-08` se entregó la redacción de Grok, que cierra con «No se creó reserva ni pago.»: es una negación correcta y no la marca la lista de afirmaciones prohibidas.
+- **`X-09`:** un solo intento rechazado con `TOO_MANY_ITEMS` y ninguna búsqueda ejecutada. Respuesta: «Puedo revisar hasta 5 productos por mensaje. ¿Me mandas la lista en grupos de 5 o menos?».
+- **`X-03`:** la búsqueda devuelve las dos medidas y el agente pregunta cuál necesita el cliente.
+- **Costo de los avisos:** `QUOTE_REQUIRED` hizo falta en 6 de los 9 casos que debían cotizar. Cada aviso cuesta una llamada extra a Grok; reducirlo con una regla más clara en el prompt queda como mejora para S3.
+- **Latencia:** la corrida tardó `175.443 ms`, frente a `63.580 ms` en la sección 9, con casos parecidos. No se investigó la causa; puede venir de la pasarela.
+
+### 11.2. Consumo real acumulado en Grok
+
+| Corrida | Llamadas | Costo (`api_reported`) |
+|---|---|---|
+| Secciones 2 a 10 | `131` | `$0.1347642000` |
+| Sección 11 (exploratoria con arreglos) | `40` | `$0.0427943500` |
+| **Total** | **`171`** | **`$0.1775585500 USD`** |
