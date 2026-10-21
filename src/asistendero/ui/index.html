@@ -7,6 +7,7 @@
   <title>Pruebas de conversación | AsisTendero</title>
   <link rel="stylesheet" href="/assets/conversacion.css">
   <script src="/assets/app.js" defer></script>
+  <script src="/assets/harness.js" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -24,7 +25,10 @@
         <h1>Probemos una conversación</h1>
         <p>Escribe como cliente y mira cómo AsisTendero llega a su respuesta.</p>
       </div>
-      <span class="context-note">Las consultas con Grok pueden consumir cupo del reto.</span>
+      <div class="intro-side">
+        <span class="context-note">Las consultas con Grok pueden consumir cupo del reto.</span>
+        <a class="map-link" href="#harness">Ver cómo funciona el harness ↓</a>
+      </div>
     </div>
 
     <div class="workspace-grid">
@@ -97,6 +101,97 @@
         </section>
       </aside>
     </div>
+
+    <section id="harness" class="surface panel-pad harness-panel" aria-labelledby="harness-title">
+      <div class="panel-head">
+        <div>
+          <span class="section-label">CÓMO FUNCIONA</span>
+          <h2 id="harness-title">Mapa del harness</h2>
+          <p>Del mensaje a la respuesta: qué lee Grok, qué decide, qué reglas aplica el servidor y cómo se sabe si la corrida salió bien. Se ilumina con cada prueba.</p>
+        </div>
+        <span id="harness-status" class="status-pill" role="status" aria-live="polite">Sin ejecutar</span>
+      </div>
+      <dl class="harness-facts">
+        <div><dt>Prompt</dt><dd data-harness="prompt_version">—</dd></div>
+        <div><dt>Modelo</dt><dd data-harness="model">—</dd></div>
+        <div><dt>Herramientas por corrida</dt><dd data-harness="max_tool_calls">—</dd></div>
+        <div><dt>Mensaje máximo</dt><dd><span data-harness="max_message_chars">—</span> caracteres</dd></div>
+      </dl>
+
+      <ul class="harness-legend" aria-label="Qué significa cada etiqueta">
+        <li><span class="layer-tag" data-layer="prompt">Instrucción</span> Lo que Grok lee en su prompt</li>
+        <li><span class="layer-tag" data-layer="model">Decide Grok</span> Lo que elige el modelo</li>
+        <li><span class="layer-tag" data-layer="rule">Regla</span> Lo que impone el código del servidor</li>
+        <li><span class="layer-tag" data-layer="data">Dato</span> Lo que sale del catálogo SQLite</li>
+      </ul>
+
+      <ol class="harness-stages">
+        <li id="hstage-validate" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">1</span><div><h3>Recibe el mensaje</h3><code>validate</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Texto no vacío de máximo <span data-harness="max_message_chars">2000</span> caracteres. Si se pasa, se rechaza; nunca se recorta.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>El mensaje es un dato: sus instrucciones no cambian reglas, precios ni existencias.</li>
+          </ul>
+        </li>
+        <li id="hstage-interpret" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">2</span><div><h3>Grok lee y decide</h3><code>interpret</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="prompt">Instrucción</span>Recibe el prompt del sistema con su papel, las <strong>tres herramientas</strong> y sus argumentos, el orden de uso y lo que nunca puede afirmar.</li>
+            <li><span class="layer-tag" data-layer="data">Dato</span>Junto al prompt llegan el mensaje, las observaciones de las herramientas ya ejecutadas y las llamadas disponibles.</li>
+            <li><span class="layer-tag" data-layer="model">Decide Grok</span>Devuelve un JSON: <code>respond</code> o <code>call_tool</code> con una herramienta y sus argumentos.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Un JSON inválido o una herramienta fuera de la lista se descartan (<code>MODEL_INVALID_OUTPUT</code>).</li>
+          </ul>
+          <details class="harness-prompt">
+            <summary>Ver las instrucciones completas que recibe Grok</summary>
+            <pre id="harness-instructions">Cargando…</pre>
+          </details>
+        </li>
+        <li id="hstage-route" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">3</span><div><h3>El servidor elige la ruta</h3><code>next_node</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="rule">Regla</span><code>call_tool</code> → etapa 4. <code>respond</code> → etapa 5. Error del modelo → etapa 5 en estado seguro.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Si responde sin buscar cuando el mensaje pide productos, vuelve una sola vez a la etapa 2 con el aviso <code>SEARCH_REQUIRED</code>.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Si responde sin cotizar cuando el cliente dio cantidad, vuelve una sola vez a la etapa 2 con el aviso <code>QUOTE_REQUIRED</code>.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Tope de <span data-harness="max_tool_calls">6</span> herramientas por corrida (<code>TOOL_CALL_LIMIT</code>).</li>
+          </ul>
+        </li>
+        <li id="hstage-retrieve" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">4</span><div><h3>Valida y ejecuta la herramienta</h3><code>retrieve</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Antes de ejecutar, el servidor revisa la solicitud. Si la rechaza, la herramienta no corre y Grok recibe el código.</li>
+            <li><span class="layer-tag" data-layer="data">Dato</span>Si la aprueba, la herramienta lee SQLite en solo lectura, con negocio y sede fijados por el servidor.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>La respuesta vuelve a Grok como observación (las opciones cercanas, sin precio) y el flujo regresa a la etapa 2. <span class="loop-mark">↺ vuelve a 2</span></li>
+          </ul>
+          <div class="harness-codes">
+            <h4>Herramientas que puede pedir</h4>
+            <ul id="harness-tools" class="code-list"></ul>
+            <h4>Rechazos antes de ejecutar</h4>
+            <ul id="harness-rejections" class="code-list"></ul>
+          </div>
+        </li>
+        <li id="hstage-respond" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">5</span><div><h3>Verifica y responde</h3><code>respond</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="model">Decide Grok</span>Propone la redacción de la respuesta.</li>
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Solo se usa si cada <code>$</code>, SKU y cantidad coincide con las observaciones y no ofrece reserva, pago ni equivalencias.</li>
+            <li><span class="layer-tag" data-layer="data">Dato</span>Si no pasa, el servidor arma la respuesta con los datos de las herramientas.</li>
+          </ul>
+        </li>
+        <li id="hstage-outcome" class="hstage">
+          <div class="hstage-head"><span class="hstage-number">6</span><div><h3>¿Salió bien?</h3><code>estado</code></div><span class="hstage-state">Pendiente</span></div>
+          <ul class="hstage-facts">
+            <li><span class="layer-tag" data-layer="rule">Regla</span>Toda corrida termina con un estado. El evaluador lo compara con el estado y el SKU esperados en <code>evaluation/cases.json</code>.</li>
+          </ul>
+          <div id="harness-outcomes" class="outcome-groups"></div>
+        </li>
+      </ol>
+
+      <div class="harness-run">
+        <h3>Recorrido de la última ejecución</h3>
+        <p id="harness-verdict" class="harness-verdict">Ejecuta una prueba para ver qué etapas recorrió, qué pidió Grok y qué hizo el servidor.</p>
+        <ol id="harness-path" class="harness-path"></ol>
+      </div>
+    </section>
 
     <section class="surface panel-pad trace-panel" aria-labelledby="events-title">
       <div class="events-head">

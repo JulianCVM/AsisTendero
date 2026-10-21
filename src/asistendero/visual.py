@@ -7,6 +7,7 @@ import json
 
 from dotenv import load_dotenv
 
+from asistendero.harness_info import describe_harness
 from asistendero.tracing import run_traced
 
 
@@ -17,7 +18,11 @@ class TraceHandler(BaseHTTPRequestHandler):
         "/assets/Inter.ttf": ("Inter.ttf", "font/ttf"),
         "/assets/conversacion.css": ("conversacion.css", "text/css; charset=utf-8"),
         "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
+        "/assets/harness.js": ("harness.js", "text/javascript; charset=utf-8"),
     }
+
+    def _is_local_host(self) -> bool:
+        return self.headers.get("Host") == f"127.0.0.1:{self.server.server_port}"
 
     def _headers(self, status: int, content_type: str, length: int | None = None) -> None:
         self.send_response(status)
@@ -42,6 +47,14 @@ class TraceHandler(BaseHTTPRequestHandler):
             self._headers(200, content_type, len(body))
             self.wfile.write(body)
             return
+        if self.path == "/api/harness":
+            if not self._is_local_host():
+                self._json_error(403, "Origen local no permitido.")
+                return
+            body = json.dumps(describe_harness(), ensure_ascii=False).encode("utf-8")
+            self._headers(200, "application/json; charset=utf-8", len(body))
+            self.wfile.write(body)
+            return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
             return
@@ -54,7 +67,7 @@ class TraceHandler(BaseHTTPRequestHandler):
             self._json_error(404, "Ruta no encontrada.")
             return
         expected_origin = f"http://127.0.0.1:{self.server.server_port}"
-        if self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}" or self.headers.get("Origin") not in (None, expected_origin):
+        if not self._is_local_host() or self.headers.get("Origin") not in (None, expected_origin):
             self._json_error(403, "Origen local no permitido.")
             return
         if self.headers.get_content_type() != "application/json":
