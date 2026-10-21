@@ -1,6 +1,6 @@
 # Evidencia de evaluación S2 — Herramientas reales (`s2-tools-v1` y `s2-tools-v2`)
 
-**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). **Resultado vigente (sección 8): `10/10` casos y `2/2` fallos controlados con `s2-tools-v2` sobre el commit `a8e1f2a`.** Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
+**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). **Resultado vigente (sección 10): `10/10` casos y `2/2` fallos controlados con `s2-tools-v2` sobre el commit `ffcdde4`.** La sección 8 da el mismo resultado sobre `a8e1f2a`, antes de los arreglos de la corrida exploratoria (sección 9). Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
 **Fecha de corte:** 20 de octubre de 2026.
 **Rama:** `feat/s2-herramientas-reales` (basada en `4781c3b`, commit de herramientas y traza `a1456cf`).
 **Modelo:** `grok-4.20-0309-non-reasoning` mediante `https://api.reto.pltk.mx/v1`.
@@ -1160,7 +1160,7 @@ Extraída de `.local/eval-20261020T195908540327Z.json`:
 **Catálogo:** SHA-256 `53abad12b1d21c399a3faaaad6fd2e20c2e5afd68b69cf85ef4f1ec0659d1317`, la misma base de la sección 7.
 **Comando:** `python -m asistendero.evaluate --live --include-failures`, ejecutado por Julian.
 
-**Resultado: `10/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` sobre un solo commit y una sola versión del prompt.** Esta corrida sustituye a las de las secciones 3 y 7 como resultado vigente de S2. Aquellas se conservan como historia.
+**Resultado: `10/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` sobre un solo commit y una sola versión del prompt.** Esta corrida sustituyó a las de las secciones 3 y 7; a su vez, la sección 10 la sustituye como resultado vigente. Aquellas se conservan como historia.
 
 | Caso | `run_id` | Esperado | Obtenido | Resultado | ¿Aviso `QUOTE_REQUIRED`? | Herramientas ejecutadas | Llamadas Grok | Tokens (in / caché / out / total) | Latencia (`ms`) | Costo (`USD`, `api_reported`) |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1252,3 +1252,47 @@ Cada arreglo tiene su prueba en `tests/test_graph.py`: la prueba falla sin el ar
 | Secciones 2 a 8 | `69` | `$0.0830629500` |
 | Sección 9 (exploratoria) | `33` | `$0.0286229000` |
 | **Total** | **`102`** | **`$0.1116858500 USD`** |
+
+---
+
+## 10. Corrida oficial sobre el commit con los arreglos (`ffcdde4`)
+
+**Reporte fuente:** `.local/eval-20261021T175928868786Z.json` (`created_at: 2026-10-21T17:59:28.867715+00:00`).
+**Commit:** `ffcdde4`, sin cambios en `src/`.
+**Prompt y modelo:** `s2-tools-v2`, modelo `grok-4.20-0309-non-reasoning`.
+**Catálogo:** SHA-256 `53abad12…`, el mismo de las secciones 8 y 9.
+**Comando:** `python -m asistendero.evaluate --live --include-failures`, ejecutado por Julian.
+
+**Resultado: `10/10` casos y `2/2` fallos controlados `PASS`.** Es el resultado vigente de S2. Reemplaza al de la sección 8, porque `f4d9c77` cambió `src/`.
+
+| Caso | `run_id` | Esperado | Obtenido | Resultado | Aviso | Herramientas ejecutadas | Llamadas Grok | Tokens | Costo (`USD`) | Redacción entregada |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `S2-01` | `03299af97fd2` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.670` | `$0.0047482500` | Grok |
+| `S2-02` | `05aaf5155d60` | `quoted` | `quoted` | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `6.265` | `$0.0037848000` | Grok |
+| `S2-03` | `fe41ba444034` | `found` | `found` | **PASS** | No | `buscar_productos` | `2` | `2.598` | `$0.0012446000` | Grok |
+| `S2-04` | `b9eb28cac7ac` | `clarify` | `clarify` | **PASS** | No | `buscar_productos` | `2` | `2.675` | `$0.0013758500` | Servidor |
+| `S2-05` | `9f83770b6b9c` | `nearby` | `nearby` | **PASS** | No | `buscar_productos` | `2` | `2.609` | `$0.0011402000` | Servidor |
+| `S2-06` | `2a5c7ffa5588` | `found` | `found` | **PASS** | No | `buscar_productos` | `2` | `2.619` | `$0.0008739000` | Grok |
+| `S2-07` | `2ed4a59bbbfc` | `insufficient_stock` | `insufficient_stock` | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` (`INSUFFICIENT_STOCK`) | `4` | `5.600` | `$0.0045495000` | Servidor |
+| `S2-08` | `67877a46ade5` | `not_found` | `not_found` | **PASS** | No | `buscar_productos` | `2` | `2.490` | `$0.0020304000` | Servidor |
+| `S2-09` | `0c587d89a830` | `answered` | `answered` | **PASS** | No | *(ninguna)* | `1` | `1.199` | `$0.0003354000` | Servidor |
+| `S2-10` | `437ffbb7567b` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.656` | `$0.0021284000` | Servidor |
+| **Subtotal casos** | — | — | **`10/10 PASS`** | — | 2 de 10 | `15` ejecutadas, `0` rechazadas | **`27`** | `37.381` (`25.344` en caché) | **`$0.0222113000`** | Grok en 5 |
+| `F-01-CATALOG_UNAVAILABLE` | `87d894845a5b` | `tool_error` | `tool_error` | **PASS** | No | `buscar_productos` (`CATALOG_UNAVAILABLE`) | `2` | `2.530` | `$0.0008670500` | Servidor |
+| `F-02-MODEL_UNAVAILABLE` | `16fd8ac2c95f` | `model_error` | `model_error` | **PASS** | No | *(ninguna)* | `1` (local, contra `127.0.0.1:9`) | `null` | Sin costo | Servidor |
+| **Total de la corrida** | — | — | **`12/12 PASS`** | — | — | — | **`29` a la pasarela** | — | — | **`$0.0230783500`** |
+
+### 10.1. Qué se observó
+
+- **Aviso `SEARCH_REQUIRED`:** no se usó en ningún caso del lote oficial. En los diez, Grok buscó por su cuenta cuando había que buscar. Los cuatro arreglos de `f4d9c77` (X-03, X-08, X-09 y X-11) **todavía no se han probado con Grok real**: para eso hay que repetir la corrida exploratoria de la sección 9.
+- **Aviso `QUOTE_REQUIRED`:** se usó en S2-01 y en S2-10.
+- **S2-07:** esta vez la redacción entregada fue la del servidor, que no dice «agotado».
+- **Costo:** es menor que el de la sección 8 ($0.0231 frente a $0.0368 USD), por la mayor proporción de tokens en caché: 25.344 de 35.704 de entrada.
+
+### 10.2. Consumo real acumulado en Grok
+
+| Corrida | Llamadas | Costo (`api_reported`) |
+|---|---|---|
+| Secciones 2 a 9 | `102` | `$0.1116858500` |
+| Sección 10 (corrida oficial sobre `ffcdde4`) | `29` | `$0.0230783500` |
+| **Total** | **`131`** | **`$0.1347642000 USD`** |
