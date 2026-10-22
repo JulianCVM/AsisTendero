@@ -15,7 +15,7 @@ from datetime import date, time
 import json
 import re
 
-from asistendero.grok import MAX_ARGUMENT_CHARS
+from asistendero.grok import MAX_ARGUMENT_CHARS, ORDER_TOOLS
 from asistendero.guardrails import redact_personal_data
 from asistendero.observations import ToolCall, latest_quote, order_results
 from asistendero.orders import MAX_NOTE_CHARS, ORDER_ID, WEEKDAYS
@@ -41,6 +41,11 @@ CANCEL_INTENT = re.compile(
 )
 # Lo que la respuesta anterior ofreció: un «sí» a «¿te registro el pedido?» también expresa intención de compra.
 ORDER_OFFER = re.compile(r"\b(?:registr\w*|apart\w*|pedido|llevar(?:lo|la|los|las)?|lo\s+llevas|confirmas)\b")
+# Preguntas por el pedido propio: estado, total o lo que se paga al recoger.
+ORDER_QUESTION = re.compile(
+    r"\b(?:mis?\s+pedidos?|como\s+va|cuanto\s+(?:me\s+)?(?:toca|tengo\s+que|hay\s+que|debo|queda\s+por)\s+pag\w*"
+    r"|cuanto\s+(?:pago|debo|es\s+el\s+total)|(?:el|mi)\s+total)\b"
+)
 HOUR_MENTION = re.compile(
     r"\b(?:a\s+las?|tipo|como\s+a\s+las?|despues\s+de\s+las?|antes\s+de\s+las?|hacia\s+las?|por\s+ahi\s+a\s+las?)\s+"
     r"(\d{1,2})(?::(\d{2}))?|\b(\d{1,2}):(\d{2})\b|\b(\d{1,2})\s*(?:am|pm|a\.\s?m|p\.\s?m)\b"
@@ -183,21 +188,27 @@ def validate_order_request(
     return {"pedido": order_id}
 
 
-def order_action_pending(current: str, reference: str, calls: list[ToolCall], context: dict | None) -> bool:
-    """¿El mensaje pide una acción de pedido que Grok no intentó? Lo usa el aviso ORDER_REQUIRED."""
+def order_action_pending(current: str, reference: str, calls: list[ToolCall], context: dict | None) -> str | None:
+    """Herramienta de pedido que el mensaje pide y Grok no intentó; la usa el aviso ORDER_REQUIRED."""
     if context is None:
-        return False
+        return None
     tools = {call["requested_tool"] for call in calls}
     orders = [*(context.get("pedidos") or []), *(order for _, order in order_results(calls))]
     pending = any(order.get("estado") == "pendiente" for order in orders)
     active = any(order.get("estado") in {"pendiente", "confirmado"} for order in orders)
     text = normalize_text(current)
     if CANCEL_INTENT.search(text):
-        return active and "cancelar_pedido" not in tools
+        return "cancelar_pedido" if active and "cancelar_pedido" not in tools else None
     if pending and confirms(current) and "confirmar_pedido" not in tools and "registrar_pedido" not in tools:
-        return True
+        return "confirmar_pedido"
     if active and mentioned_hours(current) and "agendar_recogida" not in tools:
-        return True
+        return "agendar_recogida"
     known = set(grounded_products(reference, calls)) | {item.get("sku") for item in context.get("productos") or []}
-    return (wants_to_buy(current, context) and bool(order_quantities(reference)) and bool(known)
-            and "registrar_pedido" not in tools and not pending)
+    # Un pedido vencido no se confirma: si el cliente aún lo quiere, se registra de nuevo (P-02, primera corrida S4).
+    if (wants_to_buy(current, context) and order_quantities(reference) and known
+            and "registrar_pedido" not in tools and not pending):
+        return "registrar_pedido"
+    # «"pedidos"» no trae precios: el total o el estado solo salen de la herramienta (L-02, primera corrida S4).
+    if orders and ORDER_QUESTION.search(text) and not tools & set(ORDER_TOOLS):
+        return "consultar_pedido"
+    return None

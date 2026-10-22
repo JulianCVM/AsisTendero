@@ -8,7 +8,7 @@ from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
 from asistendero.grok import AGENT_PROMPT, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES, current_model
 from asistendero.orders import HOLD_MINUTES
 from asistendero.guardrails import SENSITIVE_TOPICS
-from asistendero.reminders import REMINDERS
+from asistendero.reminders import REMINDER_CODES
 from asistendero.validation import MAX_QUANTITY
 
 
@@ -147,7 +147,7 @@ def describe_harness() -> dict:
         "tools": [{"name": name, **TOOLS[name]} for name in TOOL_NAMES],
         "rejections": REJECTIONS,
         "errors": ERRORS,
-        "reminders": [item["error"] for item in REMINDERS.values()],
+        "reminders": REMINDER_CODES,
         "guardrails": GUARDRAILS,
         "outcomes": OUTCOMES,
     }

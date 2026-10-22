@@ -15,10 +15,13 @@ class ProductQuery:
     brand: str | None = None
     quantity: int | None = None
 
-    def grounded(self, message: str, tokenize) -> "ProductQuery":
-        """Descarta filtros que Grok no pueda respaldar con la frase y el mensaje."""
+    def grounded(self, message: str, tokenize, phrase: str | None = None) -> "ProductQuery":
+        """Descarta filtros que Grok no pueda respaldar con la frase y el mensaje.
+
+        ``phrase`` es lo que el cliente dijo de este artículo; por defecto, el ``text`` que armó Grok.
+        """
         message_words = tokenize(message)
-        phrase_words = tokenize(self.text)
+        phrase_words = tokenize(phrase or self.text)
         changes = {}
         for field in ("product", "use", "material", "measure", "presentation", "color", "brand"):
             value = getattr(self, field)

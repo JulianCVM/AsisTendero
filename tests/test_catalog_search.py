@@ -108,6 +108,9 @@ def _selected(catalog, message, **item):
     # «2 metros» separa el tubo de los codos y tees de 1/2 que también son de PVC para agua.
     ("Necesito 2 metros de PVC de 1/2 para agua", {"text": "2 metros de PVC de 1/2 para agua", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}, ["PVC-050"]),
     ("Un bulto de cemento gris de 50", {"text": "bulto de cemento gris de 50", "product": "cemento", "color": "gris"}, ["CEM-050"]),
+    # Primera corrida S4: Grok dejó «galón» en presentation y no en text; con un solo artículo, el mensaje lo respalda.
+    ("apártame 1 galón de pintura blanca de vinilo", {"text": "pintura blanca de vinilo", "product": "pintura",
+                                                      "color": "blanca", "presentation": "galón"}, ["PIN-BLA"]),
     ("Bombillo LED de 9 W luz cálida", {"text": "bombillo LED de 9 W luz cálida", "product": "bombillo"}, ["BOM-09C"]),
     ("Bombillo LED de 9 W", {"text": "bombillo LED de 9 W", "product": "bombillo"}, []),
 ])
@@ -131,3 +134,15 @@ def test_plural_filter_covers_singular_variant(catalog):
     # «galones» cubre la variante «galón»: en la primera corrida S3 solo quedaba el cuñete de 5 galones.
     result = catalog.search(q("pintura blanca en galones", product="pintura", color="blanca", presentation="galones"))
     assert "PIN-BLA" in {product.sku for product in result.matches}
+
+
+def test_with_two_items_an_attribute_must_be_in_its_own_phrase(catalog):
+    # «gris» es del cemento: no puede filtrar el tubo aunque esté en el mensaje.
+    from asistendero.validation import validate_request
+
+    message = "Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg"
+    arguments = validate_request("buscar_productos", {"items": [
+        {"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "color": "gris"},
+        {"text": "1 bulto de cemento gris de 50 kg", "product": "cemento", "color": "gris"},
+    ]}, message, [])
+    assert "color" not in arguments["items"][0] and arguments["items"][1]["color"] == "gris"

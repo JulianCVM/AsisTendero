@@ -260,6 +260,47 @@ def test_a_yes_answered_without_the_tool_gets_the_order_reminder_and_never_a_fal
     assert book.get(code)["estado"] == "pendiente"
 
 
+def test_order_reminder_names_the_missing_tool(chat):
+    # Primera corrida S4: con un aviso genérico Grok confirmó un pedido vencido en vez de registrarlo de nuevo.
+    turn, sessions, book, _, clock = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    clock.advance(minutes=6)
+    again = turn(session, "sí, me los llevo de nuevo", say("¿Quieres que lo registre? Datos simulados."), say())
+    reminder = again["planner"].seen[1]["observaciones"][-1]["error"]
+    assert reminder["code"] == "ORDER_REQUIRED" and "registrar_pedido" in reminder["message"]
+    assert [order["estado"] for order in book.session_orders(session)] == ["vencido"]
+
+
+def test_question_about_the_total_needs_the_order_tool(chat):
+    # Primera corrida S4 (L-02): «¿cuánto me toca pagar?» se respondió sin consultar el pedido.
+    turn, sessions, _, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    asked = turn(session, "¿cuánto me toca pagar al recoger?", say("Pagas en caja. Datos simulados."),
+                 tool("consultar_pedido"), say())
+    reminder = asked["planner"].seen[1]["observaciones"][-1]["error"]
+    assert reminder["code"] == "ORDER_REQUIRED" and "consultar_pedido" in reminder["message"]
+    assert asked["estado"] == "order_status" and "$25.500" in asked["respuesta"]
+    # Una pregunta de precio sin pedidos no pide la herramienta de pedidos.
+    other = sessions.create()
+    plain = turn(other, "¿cuánto vale el total de 3 metros de tubo PVC de 1/2 para agua?",
+                 tool("buscar_productos", items=[PVC_HALF]),
+                 tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    assert all(item.get("error", {}).get("code") != "ORDER_REQUIRED" for item in plain["planner"].seen[-1]["observaciones"])
+
+
+def test_an_invented_order_code_gets_an_order_answer(chat):
+    # Primera corrida S4 (P-03): «sí, confirmo» sin pedido y con «P-XXXXXX» terminaba en «No pude verificar ese producto».
+    turn, sessions, _, _, _ = chat
+    session = sessions.create()
+    result = turn(session, "sí, confirmo", tool("confirmar_pedido", pedido="P-XXXXXX"), say())
+    assert result["estado"] == "order_issue"
+    assert "No encuentro ese pedido" in result["respuesta"] and "producto en el catálogo" not in result["respuesta"]
+
+
 @pytest.mark.parametrize(("message", "hour"), [
     ("paso mañana", "08:00"),            # no dijo la hora: se pregunta
     ("paso mañana a las 4", "10:00"),    # dijo las 4, no las 10

@@ -29,6 +29,11 @@ REJECTION_TEXT = {
     "TIME_NOT_GROUNDED": "¿Qué día y a qué hora pasas a recoger? Por ejemplo: «hoy a las 4».",
     "CANCEL_NOT_STATED": "¿Quieres cancelar el pedido? Dímelo y lo cancelo.",
     "SESSION_REQUIRED": "Para registrar un pedido abre una conversación; aquí solo puedo cotizar.",
+    # Sin estos textos, un código de pedido inventado («P-XXXXXX») terminaba en «No pude verificar ese producto».
+    "INVALID_ARGUMENT": "No encuentro ese pedido en esta conversación. Si quieres llevar algo, dime el producto y "
+                        "cuántas unidades.",
+    "SKU_NOT_GROUNDED": "¿Qué producto te llevas? Dime cuál y cuántas unidades, y registro el pedido.",
+    "QUANTITY_NOT_GROUNDED": "¿Cuántas unidades te llevas? Dímelo y registro el pedido.",
 }
 
 

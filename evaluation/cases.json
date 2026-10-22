@@ -497,10 +497,12 @@
       "informed",
       "clarify",
       "found",
-      "partial"
+      "partial",
+      "not_found"
     ],
     "must_not_include": [
-      "Total informativo"
+      "Total informativo",
+      "$"
     ],
     "suite": "ruido"
   },

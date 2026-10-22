@@ -134,11 +134,13 @@ def sale_units(text: str) -> set[str]:
 def grounded_selection(message: str, finding: Finding) -> Product | None:
     """Única variante de matches que el mensaje permite elegir sin preguntar."""
     # «tuvo pbc» respalda «tubo PVC»: el mensaje se lee como suena frente a lo que extrajo Grok.
-    message = heard_as(message, " ".join([finding["query"], *map(str, finding["request"].values())]))
+    # Los atributos que llegaron a la búsqueda ya están respaldados por el mensaje: también describen el artículo.
+    described = " ".join([finding["query"], *map(str, finding["request"].values())])
+    message = heard_as(message, described)
     chosen = [
         product for product in finding["matches"]
         if product.sku.casefold() in message.casefold()
-        or is_distinguished(message, finding["query"], product, finding["matches"])
+        or is_distinguished(message, described, product, finding["matches"])
     ]
     if len(chosen) > 1:
         # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
@@ -223,7 +225,11 @@ def validate_request(
             if SALE_QUANTITY.match(normalize_text(fields.get("presentation", ""))):
                 fields["presentation"] = re.sub(r"^\s*\d+\s*", "", fields["presentation"])
             heard = canonical_text(heard_as(message, " ".join([text, *fields.values()])))
-            query = ProductQuery(text.strip(), **fields).grounded(heard, tokens)
+            # Con varios artículos, un atributo debe estar también en la frase del suyo («tubo PVC y cemento
+            # gris» no pinta el tubo de gris). Con uno solo, todo el mensaje habla de él: en la primera corrida
+            # S4 Grok dejó «galón» en presentation y no en text, y se preguntaba la presentación ya dicha.
+            phrase = heard if len(items) == 1 else None
+            query = ProductQuery(text.strip(), **fields).grounded(heard, tokens, phrase)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}
 

@@ -37,12 +37,31 @@ INFO_REMINDER = _reminder(
     "consultar_info_tienda con el tema antes de responder.",
 )
 # Un «sí, confirmo» respondido con «¡Listo, quedó confirmado!» sin la herramienta sería un pedido inventado.
-ORDER_REMINDER = _reminder(
-    "ORDER_REQUIRED",
-    "El mensaje pide una acción sobre un pedido (registrar, confirmar, agendar la recogida o cancelar): llama a "
-    "la herramienta de pedidos que corresponde antes de responder. No afirmes la acción sin ella.",
-)
-REMINDERS = {item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, ORDER_REMINDER)}
+# En la primera corrida S4 un aviso genérico no bastó: Grok confirmó un pedido vencido en vez de registrarlo de
+# nuevo y preguntó «¿quieres que lo registre?» después de «me llevo». El aviso dice qué herramienta falta.
+ORDER_HINTS = {
+    "registrar_pedido": "El cliente ya dijo que se lo lleva: llama a registrar_pedido con los SKU y las cantidades "
+                        "identificados, sin preguntar antes; el servidor aparta 5 minutos y le pide confirmar. Si su "
+                        "pedido anterior venció o se canceló, registra uno nuevo.",
+    "confirmar_pedido": "El cliente confirmó: llama a confirmar_pedido con el código del pedido pendiente.",
+    "agendar_recogida": "El cliente dio la hora de recogida: llama a agendar_recogida con el pedido, la fecha y la "
+                        "hora que dijo.",
+    "cancelar_pedido": "El cliente pidió cancelar: llama a cancelar_pedido con el código del pedido.",
+    "consultar_pedido": "El cliente pregunta por su pedido: llama a consultar_pedido; \"pedidos\" no trae precios "
+                        "ni el total.",
+}
+REMINDERS = {
+    **{item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)},
+    # La clave interna lleva la herramienta que falta; Grok recibe siempre el código ORDER_REQUIRED.
+    **{f"ORDER_REQUIRED:{tool}": _reminder("ORDER_REQUIRED", f"{hint} No afirmes la acción sin la herramienta.")
+       for tool, hint in ORDER_HINTS.items()},
+}
+# Para el mapa del harness: un renglón por código, no por herramienta.
+REMINDER_CODES = [
+    *(item["error"] for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)),
+    {"code": "ORDER_REQUIRED", "message": "El mensaje pide una acción de pedido que Grok no intentó; el aviso nombra "
+                                          f"la herramienta que falta ({', '.join(ORDER_HINTS)})."},
+]
 STORE_QUESTION = re.compile(
     r"\b(?:horario|atiend\w*|abiert[oa]s?|abren|cierran|cerrad[oa]s?|domicilio\w*|direccion|ubicad[oa]s?|donde\s+quedan"
     r"|donde\s+estan|medios?\s+de\s+pago|pago\s+con|reciben\s+(?:tarjeta|transferencia|nequi|efectivo)|garantia\w*"
@@ -68,8 +87,9 @@ def pending_reminder(
     asks_store = STORE_QUESTION.search(normalize_text(message)) or (decision.intent == "tienda" and not calls)
     if asks_store and "consultar_info_tienda" not in tools and "INFO_REQUIRED" not in sent:
         return "INFO_REQUIRED"
-    if "ORDER_REQUIRED" not in sent and order_action_pending(message, reference, calls, context):
-        return "ORDER_REQUIRED"
+    order_tool = order_action_pending(message, reference, calls, context)
+    if order_tool and not any(code.startswith("ORDER_REQUIRED") for code in sent):
+        return f"ORDER_REQUIRED:{order_tool}"
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
     if not calls and "SEARCH_REQUIRED" not in sent and asks_products:
         return "SEARCH_REQUIRED"
