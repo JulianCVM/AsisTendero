@@ -1,5 +1,6 @@
 """Pruebas unitarias de tools.py (L-01) e integración con el grafo y SQLite real (L-02)."""
 
+from datetime import datetime
 import sqlite3
 
 import pytest
@@ -9,7 +10,8 @@ from asistendero.executor import catalog_executor
 from asistendero.graph import build_graph
 from asistendero.grok import Decision
 from asistendero.seed import create_mock_db
-from asistendero.tools import execute_tool
+from asistendero import tools
+from asistendero.tools import BOGOTA, execute_tool
 
 
 @pytest.fixture
@@ -285,3 +287,59 @@ def test_graph_integration_with_real_tools_across_s2_scenarios(catalog):
     assert s2_10["estado"] == "quoted"
     assert "$1.000" not in s2_10["respuesta"]
     assert "Total informativo: $17.000 COP" in s2_10["respuesta"]
+
+
+@pytest.mark.parametrize("now, open_now", [
+    (datetime(2026, 10, 20, 10, 0, tzinfo=BOGOTA), True),    # martes a media mañana
+    (datetime(2026, 10, 20, 18, 0, tzinfo=BOGOTA), False),   # martes a la hora de cierre
+    (datetime(2026, 10, 24, 13, 59, tzinfo=BOGOTA), True),   # sábado antes de las 14:00
+    (datetime(2026, 10, 25, 10, 0, tzinfo=BOGOTA), False),   # domingo
+])
+def test_store_hours_say_if_open_with_the_server_clock(catalog, monkeypatch, now, open_now):
+    monkeypatch.setattr(tools, "local_now", lambda: now)
+    response = execute_tool("consultar_info_tienda", {"tema": "horario"}, catalog=catalog)
+    assert response["status"] == "ok"
+    assert response["data"]["abierto_ahora"] is open_now
+    assert response["data"]["dias"]["domingo"] is None
+
+
+def test_store_info_topics_and_invalid_topic(catalog):
+    payments = execute_tool("consultar_info_tienda", {"tema": "medios_pago"}, catalog=catalog)
+    assert "no cobra ni recibe pagos" in payments["data"]["texto"]
+    for arguments in ({"tema": "clave_wifi"}, {"tema": "horario", "extra": 1}, {}):
+        assert execute_tool("consultar_info_tienda", arguments, catalog=catalog)["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_store_info_is_scoped_to_the_server_business(catalog):
+    with sqlite3.connect(catalog.path) as connection:
+        connection.execute("DELETE FROM store_info WHERE business_id = 'demo-ferreteria' AND topic = 'garantias'")
+        connection.execute("INSERT INTO store_info VALUES ('otro-negocio', 'sede-unica', 'garantias', ?)",
+                           ('{"texto": "Garantía de otro negocio"}',))
+    response = execute_tool("consultar_info_tienda", {"tema": "garantias"}, catalog=catalog)
+    assert response["error"]["code"] == "NOT_FOUND"
+
+
+def test_explore_category_lists_categories_and_products_without_prices(catalog):
+    listing = execute_tool("explorar_categoria", {}, catalog=catalog)
+    names = [item["categoria"] for item in listing["data"]["categorias"]]
+    assert len(names) == 12 and "Plomería" in names
+    for requested, expected in (("tornillos", "Tornillería y fijación"), ("eléctricos", "Eléctricos"),
+                                ("pinturas", "Pinturas y acabados")):
+        response = execute_tool("explorar_categoria", {"categoria": requested}, catalog=catalog)
+        assert response["data"]["categoria"] == expected
+        assert response["data"]["productos"]
+        assert all("price_cop" not in item and "precio" not in item for item in response["data"]["productos"])
+    missing = execute_tool("explorar_categoria", {"categoria": "juguetes"}, catalog=catalog)
+    assert missing["error"]["code"] == "NOT_FOUND"
+    assert "Plomería" in missing["error"]["message"]
+
+
+def test_graph_answers_store_questions_with_real_tools(catalog, monkeypatch):
+    monkeypatch.setattr(tools, "local_now", lambda: datetime(2026, 10, 25, 10, 0, tzinfo=BOGOTA))
+    result = build_graph(
+        catalog_executor(catalog),
+        Script(tool("consultar_info_tienda", tema="horario"), say("")),
+    ).invoke({"consulta": "¿Están abiertos hoy domingo?"})
+    assert result["estado"] == "informed"
+    assert "domingo cerrado" in result["respuesta"]
+    assert "Ahora está cerrada." in result["respuesta"]

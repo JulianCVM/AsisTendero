@@ -1,6 +1,7 @@
 """Lectura acotada del catálogo mock; el modelo no construye SQL."""
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import sqlite3
@@ -191,3 +192,39 @@ class MockCatalog:
         finally:
             connection.close()
         return Product(**dict(row)) if row else None
+
+    def _rows(self, sql: str, params: tuple) -> list[sqlite3.Row]:
+        """Consulta parametrizada en solo lectura, siempre filtrada por el negocio y la sede del servidor."""
+        if not self.path.is_file():
+            raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
+        connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        try:
+            return connection.execute(sql, (self.business_id, self.store_id, *params)).fetchall()
+        finally:
+            connection.close()
+
+    def categories(self) -> list[dict]:
+        rows = self._rows(
+            """SELECT category, COUNT(*) AS variants, SUM(stock > 0) AS available FROM products
+               WHERE business_id = ? AND store_id = ? GROUP BY category ORDER BY category""",
+            (),
+        )
+        return [{"categoria": row["category"], "variantes": row["variants"], "con_existencias": row["available"]}
+                for row in rows]
+
+    def category_overview(self, category: str) -> list[dict]:
+        """Productos de una categoría con cuántas variantes tienen; sin precios, que salen de la búsqueda."""
+        rows = self._rows(
+            """SELECT name, COUNT(*) AS variants, SUM(stock > 0) AS available FROM products
+               WHERE business_id = ? AND store_id = ? AND category = ? GROUP BY name ORDER BY name""",
+            (category,),
+        )
+        return [{"nombre": row["name"], "variantes": row["variants"], "con_existencias": row["available"]}
+                for row in rows]
+
+    def store_info(self, topic: str) -> dict | None:
+        rows = self._rows(
+            "SELECT content FROM store_info WHERE business_id = ? AND store_id = ? AND topic = ?", (topic,),
+        )
+        return json.loads(rows[0]["content"]) if rows else None

@@ -6,7 +6,7 @@ import pytest
 
 from asistendero.graph import MAX_TOOL_CALLS, build_graph
 from asistendero.grok import Decision, ModelError
-from asistendero.seed import PRODUCTS
+from asistendero.seed import PRODUCTS, STORE_INFO
 
 
 CATALOG = {
@@ -29,9 +29,10 @@ def fail(code):
 class FakeExecutor:
     """Imita las tres herramientas: búsqueda por guion, disponibilidad y cotización reales."""
 
-    def __init__(self, search=None, errors=None):
+    def __init__(self, search=None, errors=None, open_now=True):
         self.search = search or {}
         self.errors = errors or {}
+        self.open_now = open_now
         self.calls = []
 
     def __call__(self, name, arguments):
@@ -49,6 +50,13 @@ class FakeExecutor:
             if not product:
                 return fail("NOT_FOUND")
             return ok({key: product[key] for key in ("sku", "name", "variant", "unit", "stock", "updated_at")})
+        if name == "consultar_info_tienda":
+            content = STORE_INFO[arguments["tema"]]
+            extra = {"ahora": "2026-10-21 10:00", "dia_actual": "martes", "abierto_ahora": self.open_now}
+            return ok({"tema": arguments["tema"], **content, **(extra if arguments["tema"] == "horario" else {})})
+        if name == "explorar_categoria":
+            return ok({"categoria": "Plomería", "productos": [{"nombre": "Tubo PVC presión para agua", "variantes": 2,
+                                                              "con_existencias": 2}]})
         lines = []
         for line in arguments["lines"]:
             product = CATALOG[line["sku"]]
@@ -401,13 +409,45 @@ def test_search_and_quote_reminders_are_sent_once_each_in_order():
     assert result["model_calls"] == 5
 
 
-@pytest.mark.parametrize(("message", "intent"), [("Hola, buenas tardes", "saludo"), ("¿Abren a las 8?", "horario")])
-def test_greeting_or_hours_question_gets_no_search_reminder(message, intent):
+def test_greeting_gets_no_reminder():
     executor = FakeExecutor()
-    result = run(executor, Script(say("Hola, ¿en qué te ayudo?", intent)), message)
+    result = run(executor, Script(say("Hola, ¿en qué te ayudo?", "saludo")), "Hola, buenas tardes")
     assert result["model_calls"] == 1
     assert executor.calls == []
     assert result["estado"] == "answered"
+
+
+@pytest.mark.parametrize("intent", ["horario", "saludo"])
+def test_hours_question_gets_info_reminder_then_answers_from_the_tool(intent):
+    executor = FakeExecutor(open_now=False)
+    planner = Script(
+        say("Sí, estamos abiertos hasta las 8.", intent),
+        tool("consultar_info_tienda", tema="horario"),
+        say("Sí, estamos abiertos ahora, datos simulados."),
+    )
+    result = run(executor, planner, "¿Abren a las 8?")
+    assert planner.seen[1]["observations"][0]["error"]["code"] == "INFO_REQUIRED"
+    assert executor.calls == [("consultar_info_tienda", {"tema": "horario"})]
+    assert result["estado"] == "informed"
+    # El servidor dice que está cerrada: la redacción de Grok que afirma lo contrario se descarta.
+    assert "abiertos" not in result["respuesta"]
+    assert "Ahora está cerrada." in result["respuesta"]
+    assert "lunes a viernes de 7:00 a 18:00" in result["respuesta"]
+
+
+def test_store_reply_from_grok_is_used_only_with_hours_from_the_tool():
+    planner = Script(
+        tool("consultar_info_tienda", tema="horario"),
+        say("Hoy abrimos de 7:00 a 18:00 y ahora estamos abiertos. Datos simulados."),
+    )
+    result = run(FakeExecutor(open_now=True), planner, "¿A qué hora abren hoy?")
+    assert result["respuesta"] == "Hoy abrimos de 7:00 a 18:00 y ahora estamos abiertos. Datos simulados."
+    invented = Script(
+        tool("consultar_info_tienda", tema="horario"),
+        say("Hoy abrimos de 6:00 a 21:00, datos simulados."),
+    )
+    result = run(FakeExecutor(open_now=True), invented, "¿A qué hora abren hoy?")
+    assert "6:00" not in result["respuesta"] and "21:00" not in result["respuesta"]
 
 
 def test_more_than_max_items_is_rejected_and_never_trimmed():
@@ -517,8 +557,11 @@ def test_invalid_model_output_is_safe():
 
 
 def test_hours_and_unverified_direct_claims_are_not_invented():
-    result = run(FakeExecutor(), Script(say("Sí, abiertos hasta las 8.", "saludo")), "¿Están atendiendo?")
-    assert "No tengo un horario verificado" in result["respuesta"]
+    # Si Grok insiste en responder sin consultar la tienda, no se afirma apertura.
+    hours_claim = say("Sí, abiertos hasta las 8.", "saludo")
+    result = run(FakeExecutor(), Script(hours_claim, hours_claim), "¿Están atendiendo?")
+    assert "No pude verificar el horario" in result["respuesta"]
+    assert "abiertos" not in result["respuesta"]
 
     # Responder sin buscar a una pregunta de producto recibe el aviso SEARCH_REQUIRED; si Grok insiste,
     # la respuesta directa tampoco puede afirmar precio ni existencias.

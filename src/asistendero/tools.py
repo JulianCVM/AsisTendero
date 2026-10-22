@@ -1,12 +1,12 @@
 """Herramientas del servidor que Grok puede solicitar sobre el catálogo ficticio."""
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
 
-from asistendero.catalog import MockCatalog
-from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, TOOL_NAMES
+from asistendero.catalog import MockCatalog, tokens
+from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.observations import error_envelope
 from asistendero.search import ProductQuery
 from asistendero.validation import MAX_QUANTITY, QUERY_FIELDS, SKU_PATTERN
@@ -15,6 +15,10 @@ from asistendero.validation import MAX_QUANTITY, QUERY_FIELDS, SKU_PATTERN
 SOURCE = "mock_sqlite"
 MAX_TEXT_CHARS = 180
 MAX_FIELD_CHARS = 80
+MAX_CATEGORY_CHARS = 60
+# Colombia no cambia de hora en el año: un desfase fijo evita depender de tzdata en Windows.
+BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
+WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
 
 
 class _ToolError(Exception):
@@ -139,6 +143,56 @@ def _calculate_quote(arguments: dict, catalog: MockCatalog) -> dict:
     })
 
 
+def local_now() -> datetime:
+    """Hora local de la tienda; las pruebas la reemplazan para fijar el día y la hora."""
+    return datetime.now(BOGOTA)
+
+
+def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
+    topic = arguments.get("tema")
+    if set(arguments) != {"tema"} or topic not in STORE_TOPICS:
+        raise _ToolError("INVALID_ARGUMENT", f"tema debe ser uno de: {', '.join(STORE_TOPICS)}.")
+    content = catalog.store_info(topic)
+    if content is None:
+        raise _ToolError("NOT_FOUND", "La tienda no tiene información registrada sobre ese tema.")
+    data = {"tema": topic, **content}
+    if topic == "horario":
+        # Abierto o cerrado lo calcula el servidor con su reloj: Grok no sabe qué hora es.
+        now = local_now()
+        day = WEEKDAYS[now.weekday()]
+        hours = content["dias"].get(day)
+        data.update(
+            ahora=now.strftime("%Y-%m-%d %H:%M"),
+            dia_actual=day,
+            abierto_ahora=bool(hours) and hours[0] <= now.strftime("%H:%M") < hours[1],
+        )
+    return _ok(data)
+
+
+def _stems(text: str) -> set[str]:
+    # «tornillos» debe encontrar «Tornillería y fijación»: se comparan las primeras seis letras.
+    return {word[:6] for word in tokens(text) if len(word) >= 4}
+
+
+def _explore_category(arguments: dict, catalog: MockCatalog) -> dict:
+    if not set(arguments) <= {"categoria"}:
+        raise _ToolError("INVALID_ARGUMENT", "explorar_categoria solo acepta el campo categoria.")
+    available = catalog.categories()
+    requested = arguments.get("categoria")
+    if requested is None:
+        return _ok({"categorias": available})
+    if not isinstance(requested, str) or not requested.strip() or len(requested) > MAX_CATEGORY_CHARS:
+        raise _ToolError("INVALID_ARGUMENT", "categoria debe ser un texto breve.")
+    wanted = _stems(requested)
+    scores = {item["categoria"]: len(wanted & _stems(item["categoria"])) for item in available}
+    best = max(scores.values(), default=0)
+    chosen = [name for name, score in scores.items() if score == best]
+    if best == 0 or len(chosen) != 1:
+        names = ", ".join(item["categoria"] for item in available)
+        raise _ToolError("NOT_FOUND", f"No hay una categoría con ese nombre. Categorías: {names}.")
+    return _ok({"categoria": chosen[0], "productos": catalog.category_overview(chosen[0])})
+
+
 def execute_tool(name: str, arguments: dict, *, catalog: MockCatalog) -> dict:
     """Ejecuta una herramienta validada contra el catálogo de la sede del servidor."""
     if not isinstance(catalog, MockCatalog):
@@ -159,6 +213,10 @@ def execute_tool(name: str, arguments: dict, *, catalog: MockCatalog) -> dict:
             return _search_products(arguments, catalog)
         if name == "consultar_disponibilidad":
             return _check_availability(arguments, catalog)
+        if name == "consultar_info_tienda":
+            return _store_info(arguments, catalog)
+        if name == "explorar_categoria":
+            return _explore_category(arguments, catalog)
         return _calculate_quote(arguments, catalog)
     except _ToolError as exc:
         return error_envelope("error", exc.code, str(exc), SOURCE)

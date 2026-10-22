@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 from asistendero.catalog import Product, tokens
-from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, TOOL_NAMES
+from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.measures import UNITS, atom_support, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
 from asistendero.search import ProductQuery
@@ -147,14 +147,32 @@ def grounded_products(message: str, calls: list[ToolCall]) -> dict[str, Product]
     return selected
 
 
-def validate_request(name: str | None, arguments: object, message: str, calls: list[ToolCall]) -> dict:
-    """Devuelve los argumentos que efectivamente recibirá el ejecutor o rechaza la solicitud."""
+def validate_request(
+    name: str | None, arguments: object, message: str, calls: list[ToolCall], quantities: set[int] | None = None,
+) -> dict:
+    """Devuelve los argumentos que efectivamente recibirá el ejecutor o rechaza la solicitud.
+
+    ``message`` es lo que el cliente dijo (en una sesión, sus turnos recientes más el actual) y
+    ``quantities``, las cantidades que puede cotizar; por omisión, las de ``message``.
+    """
     if name not in TOOL_NAMES:
         raise Rejected("UNKNOWN_TOOL", "Herramienta fuera de la lista permitida.")
     if not isinstance(arguments, dict):
         raise Rejected("INVALID_ARGUMENT", "Los argumentos deben ser un objeto.")
     if len(json.dumps(arguments, ensure_ascii=False)) > MAX_ARGUMENT_CHARS:
         raise Rejected("INVALID_ARGUMENT", "Los argumentos superan el límite de longitud.")
+
+    if name == "consultar_info_tienda":
+        if set(arguments) != {"tema"} or arguments.get("tema") not in STORE_TOPICS:
+            raise Rejected("INVALID_ARGUMENT", f"tema debe ser uno de: {', '.join(STORE_TOPICS)}.")
+        return {"tema": arguments["tema"]}
+    if name == "explorar_categoria":
+        category = arguments.get("categoria")
+        if not set(arguments) <= {"categoria"} or (
+            category is not None and (not isinstance(category, str) or not category.strip() or len(category) > 60)
+        ):
+            raise Rejected("INVALID_ARGUMENT", "explorar_categoria acepta solo una categoria de texto breve.")
+        return {"categoria": category.strip()} if category else {}
 
     if name == "buscar_productos":
         items = arguments.get("items")
@@ -199,7 +217,7 @@ def validate_request(name: str | None, arguments: object, message: str, calls: l
     lines = arguments.get("lines")
     if set(arguments) != {"lines"} or not isinstance(lines, list) or not 1 <= len(lines) <= MAX_ITEMS:
         raise Rejected("INVALID_ARGUMENT", f"Se requieren de 1 a {MAX_ITEMS} líneas.")
-    allowed_quantities = quantities_in_message(message)
+    allowed_quantities = quantities_in_message(message) if quantities is None else quantities
     clean_lines = []
     for line in lines:
         if not isinstance(line, dict) or set(line) != {"sku", "quantity"}:

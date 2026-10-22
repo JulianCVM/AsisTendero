@@ -3,8 +3,10 @@
 import re
 
 from asistendero.catalog import Product, tokens
-from asistendero.grok import MAX_ITEMS, Decision
-from asistendero.observations import ToolCall, availability_by_sku, latest_quote, search_findings
+from asistendero.grok import AGENT_PROMPT, MAX_ITEMS, Decision
+from asistendero.guardrails import leaks
+from asistendero.observations import ToolCall, availability_by_sku, latest_quote, search_findings, store_info_by_topic
+from asistendero.store_replies import store_lines, store_reply_is_consistent
 from asistendero.validation import grounded_products, grounded_selection, normalize_text
 
 
@@ -44,18 +46,19 @@ def _available_options(products: list[Product]) -> str:
 
 
 def direct_response(original: str, decision: Decision) -> str:
-    # La clasificación del modelo puede confundir «¿están atendiendo?» con un saludo.
-    # Nunca afirmar apertura sin un horario verificado, aunque el intent sea erróneo.
-    if decision.intent == "horario" or re.search(
+    # Sin consultar_info_tienda no hay horario verificado: aunque Grok clasifique «¿están atendiendo?»
+    # como saludo, nunca se afirma apertura.
+    if re.search(
         r"\b(atendiendo|atienden|atiende|abiert[oa]s?|cerrad[oa]s?|horario|abren|cierran)\b",
         normalize_text(original),
     ):
-        return ("No tengo un horario verificado de esta ferretería de demostración. "
+        return ("No pude verificar el horario de la tienda en este momento. "
                 "Si me dices qué producto buscas, puedo revisar el catálogo de prueba contigo.")
     reply = decision.reply.strip()
     # Sin herramientas no hay precio ni existencias comprobadas que se puedan afirmar.
     if (
         not reply or len(reply) > 400 or FORBIDDEN_CLAIMS.search(reply) or "$" in reply
+        or leaks(reply, AGENT_PROMPT)
         or re.search(r"\b\d+\s+(metro|bulto|unidad|galon)", normalize_text(reply))
     ):
         return "Puedo ayudarte a consultar productos del catálogo de demostración. ¿Qué necesitas?"
@@ -65,6 +68,9 @@ def direct_response(original: str, decision: Decision) -> str:
 def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
     """Respuesta determinista construida solo con lo que devolvieron las herramientas."""
     findings = search_findings(calls)
+    store = store_lines(calls)
+    if not findings and store:
+        return "informed", "\n".join(store) + "\nSon datos de demostración."
     if not findings:
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
             return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
@@ -108,7 +114,8 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
             statuses.append("clarify")
 
     status = "found" if all(s == "found" for s in statuses) else (statuses[0] if len(statuses) == 1 else "partial")
-    answer = ("Con gusto, esto encontré:\n" if len(lines) > 1 else "")
+    answer = "".join(line + "\n" for line in store)
+    answer += ("Con gusto, esto encontré:\n" if len(lines) > 1 else "")
     answer += ("\n".join(f"• {line.removeprefix('Encontré ')}" for line in lines) if len(lines) > 1 else lines[0])
 
     quote, quote_call = latest_quote(calls)
@@ -145,16 +152,23 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
 
 def reply_is_grounded(reply: str, message: str, calls: list[ToolCall]) -> bool:
     """La redacción de Grok solo se usa si cada cifra sale de una observación de esta ejecución."""
-    if not reply or len(reply) > 1200 or FORBIDDEN_CLAIMS.search(reply):
+    if not reply or len(reply) > 1200 or leaks(reply, AGENT_PROMPT):
         return False
     normalized = normalize_text(reply)
+    # Con el horario consultado, «abierto» y «cerrado» valen si coinciden con el reloj del servidor.
+    checked = re.sub(r"\b(?:abiert|cerrad)\w*", "", reply, flags=re.I) if "horario" in store_info_by_topic(calls) else reply
+    if FORBIDDEN_CLAIMS.search(checked):
+        return False
+    consistent, store_amounts = store_reply_is_consistent(normalized, calls)
+    if not consistent:
+        return False
     if not re.search(r"simulad|demostracion|fictici|de prueba", normalized):
         return False
     findings = search_findings(calls)
     selected = grounded_products(message, calls)
     availability = availability_by_sku(calls)
     quote, quote_call = latest_quote(calls)
-    allowed_amounts = {format_cop(p.price_cop) for p in selected.values()}
+    allowed_amounts = {format_cop(p.price_cop) for p in selected.values()} | store_amounts
     allowed_counts = {p.stock for f in findings for p in f["matches"] + f["nearby"]}
     allowed_counts |= {data["stock"] for data in availability.values()}
     allowed_skus = {p.sku for f in findings for p in f["matches"] + f["nearby"]}

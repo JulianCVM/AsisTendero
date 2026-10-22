@@ -8,6 +8,7 @@ import os
 
 from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
 from asistendero.grok import AGENT_PROMPT, DEFAULT_MODEL, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES
+from asistendero.guardrails import SENSITIVE_TOPICS
 from asistendero.reminders import REMINDERS
 from asistendero.validation import MAX_QUANTITY
 
@@ -25,7 +26,18 @@ TOOLS = {
         "arguments": '{"lines": [{"sku": "PVC-050", "quantity": 2}]}',
         "returns": "Precio unitario, subtotales y total en COP con reservation_created=false.",
     },
+    "consultar_info_tienda": {
+        "arguments": '{"tema": "horario"}',
+        "returns": "Información ficticia de la tienda; con horario, si está abierta según el reloj del servidor.",
+    },
+    "explorar_categoria": {
+        "arguments": '{"categoria": "plomería"}',
+        "returns": "Sin categoría, la lista de categorías; con ella, sus productos y variantes, sin precios.",
+    },
 }
+
+# Lo que se quita del mensaje antes de Grok y la respuesta fija que recibe el cliente.
+GUARDRAILS = {code: reply for code, (_, reply) in SENSITIVE_TOPICS.items()}
 
 # Rechazos del servidor antes de ejecutar: la solicitud nunca llega a la herramienta.
 REJECTIONS = {
@@ -64,6 +76,7 @@ OUTCOMES = {
             "quoted": "Cotización informativa", "found": "Productos encontrados",
             "insufficient_stock": "Existencias insuficientes", "nearby": "Opciones cercanas",
             "not_found": "Sin coincidencia", "answered": "Respondido sin herramientas",
+            "informed": "Información de la tienda o del catálogo",
         },
     },
     "clarify": {
@@ -76,6 +89,7 @@ OUTCOMES = {
             "tool_error": "Catálogo no disponible", "quote_error": "Cotización no disponible",
             "model_error": "Fallo del modelo", "model_invalid": "Respuesta no válida",
             "limit_reached": "Límite de herramientas", "not_verified": "Sin verificar",
+            "refused": "Pedido de información que no se entrega",
         },
     },
 }
@@ -98,5 +112,6 @@ def describe_harness() -> dict:
         "rejections": REJECTIONS,
         "errors": ERRORS,
         "reminders": [item["error"] for item in REMINDERS.values()],
+        "guardrails": GUARDRAILS,
         "outcomes": OUTCOMES,
     }

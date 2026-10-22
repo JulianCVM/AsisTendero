@@ -9,6 +9,10 @@ lee este módulo (si cambian, solo hay que ajustar ``search_findings`` y ``lates
 - consultar_disponibilidad: ``{"sku", "stock", "unit", ...}``.
 - calcular_cotizacion_informativa: ``{"lines": [{"sku", "quantity", "unit_price_cop",
   "subtotal_cop", ...}], "total_cop", "reservation_created": false}``.
+- consultar_info_tienda: ``{"tema", "texto"}``; con ``tema="horario"``: ``{"dias": {día: [abre,
+  cierra] | None}, "festivos", "zona_horaria", "ahora", "dia_actual", "abierto_ahora"}``.
+- explorar_categoria: ``{"categorias": [{"categoria", "variantes", "con_existencias"}]}`` o
+  ``{"categoria", "productos": [{"nombre", "variantes", "con_existencias"}]}``, sin precios.
 
 ``producto`` usa los campos de ``catalog.Product``.
 """
@@ -90,6 +94,28 @@ def availability_by_sku(calls: list[ToolCall]) -> dict[str, dict]:
             if isinstance(data, dict) and isinstance(data.get("stock"), int):
                 result[call["arguments"]["sku"]] = data
     return result
+
+
+def store_info_by_topic(calls: list[ToolCall]) -> dict[str, dict]:
+    """Última respuesta válida de consultar_info_tienda por tema."""
+    result = {}
+    for call in calls:
+        if call["requested_tool"] == "consultar_info_tienda" and call["response"]["status"] == "ok":
+            data = call["response"].get("data")
+            if isinstance(data, dict) and isinstance(data.get("tema"), str):
+                result[data["tema"]] = data
+    return result
+
+
+def category_listings(calls: list[ToolCall]) -> list[dict]:
+    """Respuestas válidas de explorar_categoria, en orden."""
+    listings = []
+    for call in calls:
+        if call["requested_tool"] == "explorar_categoria" and call["response"]["status"] == "ok":
+            data = call["response"].get("data")
+            if isinstance(data, dict) and (isinstance(data.get("categorias"), list) or isinstance(data.get("productos"), list)):
+                listings.append(data)
+    return listings
 
 
 def latest_quote(calls: list[ToolCall]) -> tuple[dict | None, ToolCall | None]:

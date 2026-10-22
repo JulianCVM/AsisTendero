@@ -4,9 +4,11 @@ Cada aviso se envía como máximo una vez por ejecución y queda como observaci�
 cronológico. El servidor solo recuerda: nunca ejecuta la herramienta por su cuenta.
 """
 
+import re
+
 from asistendero.grok import Decision
 from asistendero.observations import ToolCall
-from asistendero.validation import grounded_products, quantities_in_message
+from asistendero.validation import grounded_products, normalize_text, quantities_in_message
 
 
 def _reminder(code: str, message: str) -> dict:
@@ -27,21 +29,43 @@ QUOTE_REMINDER = _reminder(
     "calcular_cotizacion_informativa con esas cantidades antes de responder. La herramienta "
     "comprueba las existencias.",
 )
-REMINDERS = {item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER)}
+# Sin la herramienta, un «sí, estamos abiertos» sería una afirmación inventada.
+INFO_REMINDER = _reminder(
+    "INFO_REQUIRED",
+    "El mensaje pregunta por la tienda (horario, ubicación, pagos, domicilios o garantías): llama a "
+    "consultar_info_tienda con el tema antes de responder.",
+)
+REMINDERS = {item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)}
+STORE_QUESTION = re.compile(
+    r"\b(?:horario|atiend\w*|abiert[oa]s?|abren|cierran|cerrad[oa]s?|domicilio\w*|direccion|ubicad[oa]s?|donde\s+quedan"
+    r"|donde\s+estan|medios?\s+de\s+pago|pago\s+con|reciben\s+(?:tarjeta|transferencia|nequi|efectivo)|garantia\w*"
+    r"|devoluci\w+|cambios?\s+de\s+producto)\b"
+)
 
 
-def pending_reminder(message: str, decision: Decision, calls: list[ToolCall], sent: set[str]) -> str | None:
-    """Código del aviso que corresponde tras un ``respond`` de Grok, o None si puede responder."""
+def pending_reminder(
+    message: str, decision: Decision, calls: list[ToolCall], sent: set[str], reference: str | None = None,
+) -> str | None:
+    """Código del aviso que corresponde tras un ``respond`` de Grok, o None si puede responder.
+
+    Las cantidades salen del mensaje del turno; ``reference`` (los turnos previos más el mensaje) sirve
+    para saber qué producto distingue el cliente cuando dice «dame 3 de ese».
+    """
     if not decision.valid_json or decision.action != "respond":
         return None
+    reference = reference or message
     quantities = quantities_in_message(message)
-    asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"horario", "saludo"})
+    tools = {call["requested_tool"] for call in calls}
+    asks_store = decision.intent == "tienda" or STORE_QUESTION.search(normalize_text(message))
+    if asks_store and "consultar_info_tienda" not in tools and "INFO_REQUIRED" not in sent:
+        return "INFO_REQUIRED"
+    asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
     if not calls and "SEARCH_REQUIRED" not in sent and asks_products:
         return "SEARCH_REQUIRED"
     if (
         "QUOTE_REQUIRED" not in sent and quantities
-        and not any(call["requested_tool"] == "calcular_cotizacion_informativa" for call in calls)
-        and grounded_products(message, calls)
+        and "calcular_cotizacion_informativa" not in tools
+        and grounded_products(reference, calls)
     ):
         return "QUOTE_REQUIRED"
     return None

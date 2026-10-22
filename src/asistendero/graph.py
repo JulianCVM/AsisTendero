@@ -1,7 +1,8 @@
-"""Flujo S2: Grok decide → el servidor valida y ejecuta la herramienta → respuesta verificada.
+"""Flujo: barreras → Grok decide → el servidor valida y ejecuta la herramienta → respuesta verificada.
 
-Cada paso vive en su módulo: ``validation`` (antes de ejecutar), ``observations`` (lo que
-devuelven las herramientas) y ``answers`` (la respuesta final).
+Cada paso vive en su módulo: ``guardrails`` (lo que nunca llega a Grok), ``validation`` (antes de
+ejecutar), ``observations`` (lo que devuelven las herramientas) y ``answers`` (la respuesta final).
+En una sesión de chat, ``contexto`` trae los turnos previos que guardó ``sessions``.
 """
 
 from collections.abc import Callable
@@ -12,17 +13,24 @@ from langgraph.graph import END, START, StateGraph
 
 from asistendero.answers import direct_response, render_answer, reply_is_grounded
 from asistendero.grok import PROMPT_VERSION, Decision, ModelError
+from asistendero.guardrails import screen_message
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
 from asistendero.reminders import pending_reminder, with_reminders
-from asistendero.validation import Rejected, validate_request
+from asistendero.validation import Rejected, quantities_in_message, validate_request
 
 
 __all__ = ["MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
 
-Planner = Callable[[str, list[dict], int], Decision]
+# planner(mensaje, observaciones, llamadas_disponibles[, context=...]): el contexto solo va en una sesión.
+Planner = Callable[..., Decision]
 
 MAX_TOOL_CALLS = 6
 MAX_MESSAGE_CHARS = 2000
+# Turnos previos del cliente que cuentan como «lo que dijo» para elegir variante y cantidad.
+REFERENCE_TURNS = 3
+REFUSAL_CLOSING = ("Con gusto te ayudo con productos, precios y existencias del catálogo de demostración, "
+                   "o con información de la tienda.")
+PERSONAL_DATA_NOTE = "No hace falta compartir datos personales para cotizar; no los guardo."
 
 
 class AgentState(TypedDict):
@@ -37,6 +45,9 @@ class AgentState(TypedDict):
     model_called: NotRequired[bool]
     model_calls: NotRequired[int]
     avisos: NotRequired[list[dict]]
+    contexto: NotRequired[dict | None]
+    referencia: NotRequired[str]
+    filtro: NotRequired[dict]
 
 
 def _pending(state: AgentState) -> str | None:
@@ -44,7 +55,7 @@ def _pending(state: AgentState) -> str | None:
     if len(calls) >= MAX_TOOL_CALLS:
         return None
     sent = {item["code"] for item in state.get("avisos", [])}
-    return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent)
+    return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent, state.get("referencia"))
 
 
 def next_node(state: AgentState) -> str:
@@ -59,6 +70,18 @@ def next_node(state: AgentState) -> str:
     return "respond"
 
 
+def after_validate(state: AgentState) -> str:
+    """Si todo el mensaje pedía algo que no se entrega, se responde sin llamar a Grok."""
+    return "interpret" if state["consulta"] else "respond"
+
+
+def reference_text(message: str, context: dict | None) -> str:
+    """Lo que el cliente dijo en la conversación reciente más el mensaje actual."""
+    turns = (context or {}).get("turnos") or []
+    previous = [turn["cliente"] for turn in turns[-REFERENCE_TURNS:] if isinstance(turn.get("cliente"), str)]
+    return "\n".join([*previous, message])
+
+
 def build_graph(tool_executor: ToolExecutor, planner: Planner):
     def validate(state: AgentState) -> dict:
         message = state["consulta"].strip()
@@ -66,7 +89,13 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             raise ValueError("La consulta no puede estar vacía.")
         if len(message) > MAX_MESSAGE_CHARS:
             raise ValueError(f"La consulta supera el límite de {MAX_MESSAGE_CHARS} caracteres.")
-        return {"consulta": message, "decisiones": [], "tool_calls": [], "error": None, "model_calls": 0}
+        screening = screen_message(message)
+        context = state.get("contexto") or None
+        return {
+            "consulta": screening.consulta, "decisiones": [], "tool_calls": [], "error": None, "model_calls": 0,
+            "referencia": reference_text(screening.consulta, context) if screening.consulta else "",
+            "filtro": {"codes": list(screening.codes), "refusal": screening.refusal, "redacted": screening.redacted},
+        }
 
     def interpret(state: AgentState) -> dict:
         calls = state["tool_calls"]
@@ -77,8 +106,10 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         if state["decisiones"] and state["decisiones"][-1].action == "respond":
             avisos = update["avisos"] = avisos + [{"code": _pending(state), "at": len(calls)}]
         observations = with_reminders([observation_for_model(call) for call in calls], avisos)
+        context = state.get("contexto")
         try:
-            decision = planner(state["consulta"], observations, MAX_TOOL_CALLS - len(calls))
+            decision = planner(state["consulta"], observations, MAX_TOOL_CALLS - len(calls),
+                               **({"context": context} if context else {}))
         except ModelError as exc:
             return {**update, "error": {"code": exc.code, "message": str(exc)}}
         except Exception as exc:
@@ -96,7 +127,9 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             "response": {}, "duration_ms": 0,
         }
         try:
-            arguments = validate_request(decision.tool, decision.arguments, state["consulta"], calls)
+            # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
+            quantities = quantities_in_message(state["consulta"]) or quantities_in_message(state["referencia"])
+            arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities)
             if any(previous["executed"] and previous["requested_tool"] == decision.tool
                    and previous["arguments"] == arguments for previous in calls):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")
@@ -108,8 +141,20 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         return {"tool_calls": calls + [call], "fuente": "mock_sqlite"}
 
     def respond(state: AgentState) -> dict:
-        message, calls = state["consulta"], state["tool_calls"]
-        common = {"prompt_version": PROMPT_VERSION, "model_called": state.get("model_called", False)}
+        guard = state.get("filtro") or {}
+        notes = [note for note in (guard.get("refusal"), PERSONAL_DATA_NOTE if guard.get("redacted") else "") if note]
+        if not state["consulta"]:
+            return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0,
+                    "estado": "refused", "respuesta": " ".join([*notes, REFUSAL_CLOSING])}
+        update = _respond(state)
+        if notes:
+            update["respuesta"] = " ".join(notes) + "\n" + update["respuesta"]
+        return update
+
+    def _respond(state: AgentState) -> dict:
+        message, calls = state["referencia"], state["tool_calls"]
+        common = {"prompt_version": PROMPT_VERSION, "model_called": state.get("model_called", False),
+                  "model_calls": state.get("model_calls", 0)}
         error = state.get("error")
         decision = state["decisiones"][-1] if state["decisiones"] else None
         if error is None and decision is not None and not decision.valid_json:
@@ -130,7 +175,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             return {**common, "estado": estado, "error": error, "respuesta": answer}
 
         if not calls:
-            return {**common, "estado": "answered", "respuesta": direct_response(message, decision)}
+            return {**common, "estado": "answered", "respuesta": direct_response(state["consulta"], decision)}
         status, answer = render_answer(message, calls)
         if reply_is_grounded(decision.reply, message, calls):
             answer = decision.reply.strip()
@@ -142,7 +187,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     builder.add_node("retrieve", retrieve)
     builder.add_node("respond", respond)
     builder.add_edge(START, "validate")
-    builder.add_edge("validate", "interpret")
+    builder.add_conditional_edges("validate", after_validate, {"interpret": "interpret", "respond": "respond"})
     builder.add_conditional_edges(
         "interpret", next_node, {"retrieve": "retrieve", "respond": "respond", "interpret": "interpret"},
     )
