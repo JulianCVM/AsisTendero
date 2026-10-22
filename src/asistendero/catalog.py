@@ -62,24 +62,30 @@ SYNONYMS = {
 }
 
 
+def _raw_words(value: str) -> list[str]:
+    return [word for word in re.findall(r"[a-z0-9]+(?:/[0-9]+)?", canonical_text(value)) if word not in STOPWORDS]
+
+
+def _forms(word: str, synonyms: bool = True) -> set[str]:
+    forms = {word}
+    # Plural regular («bisagras», «galones»): con cientos de productos no cabe un sinónimo por palabra.
+    if len(word) >= 5 and word.endswith("s") and not word[-2].isdigit():
+        forms.add(word[:-1])
+        if word.endswith("es") and len(word) >= 6:
+            forms.add(word[:-2])
+    if synonyms and word in SYNONYMS:
+        forms.add(SYNONYMS[word])
+    return forms
+
+
 def tokens(value: str, synonyms: bool = True) -> set[str]:
     """Palabras normalizadas con su singular; ``synonyms=False`` sirve para comparar variantes entre sí."""
-    ascii_text = canonical_text(value)
-    raw_words = [
-        word
-        for word in re.findall(r"[a-z0-9]+(?:/[0-9]+)?", ascii_text)
-        if word not in STOPWORDS
-    ]
-    result = set(raw_words)
-    for word in raw_words:
-        # Plural regular («bisagras», «galones»): con cientos de productos no cabe un sinónimo por palabra.
-        if len(word) >= 5 and word.endswith("s") and not word[-2].isdigit():
-            result.add(word[:-1])
-            if word.endswith("es") and len(word) >= 6:
-                result.add(word[:-2])
-        if synonyms and word in SYNONYMS:
-            result.add(SYNONYMS[word])
-    return result
+    return set().union(*(_forms(word, synonyms) for word in _raw_words(value)))
+
+
+def covers(value: str, words: set[str]) -> bool:
+    """Cada palabra de ``value`` está en ``words`` en alguna de sus formas: «galones» cubre «galón»."""
+    return all(_forms(word) & words for word in _raw_words(value))
 
 
 @dataclass(frozen=True)
@@ -157,7 +163,7 @@ class MockCatalog:
             }
             missing = [
                 field for field, (value, words) in constraints.items()
-                if value and not tokens(value) <= words
+                if value and not covers(value, words)
             ]
             score = 3 * len(query_words & name_words) + len(query_words & alias_words)
             score += 4 * (sum(bool(value) for value, _ in constraints.values()) - len(missing))

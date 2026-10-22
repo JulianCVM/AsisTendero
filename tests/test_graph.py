@@ -630,3 +630,90 @@ def test_enie_words_are_not_number_words():
 
     assert quantities_in_message("¿Cuánto vale el martillo de uña de 16 oz?") == set()
     assert quantities_in_message("Quiero una brocha de 2 pulgadas") == {1}
+
+
+# Primera corrida S3 (s3-conversacion-v1): defectos que destapó Grok real.
+def test_tool_name_in_action_is_read_as_call_tool():
+    from asistendero.grok import decision_from_raw
+
+    raw = ('{"action":"calcular_cotizacion_informativa","intent":"productos","tool":"calcular_cotizacion_informativa",'
+           '"arguments":{"lines":[{"sku":"PVC-050","quantity":2}]},"reply":""}')
+    decision = decision_from_raw(raw, model="grok-4.20-0309-non-reasoning")
+    assert decision.valid_json and decision.action == "call_tool"
+    assert decision.tool == "calcular_cotizacion_informativa"
+    # Otra herramienta en "tool" o una acción desconocida siguen siendo inválidas.
+    mixed = raw.replace('"tool":"calcular_cotizacion_informativa"', '"tool":"buscar_productos"')
+    assert not decision_from_raw(mixed, model="m").valid_json
+    assert not decision_from_raw(raw.replace('"action":"calcular_cotizacion_informativa"', '"action":"cotizar"'),
+                                 model="m").valid_json
+
+
+def test_codo_and_tubo_of_same_measure_are_separated_by_the_sale_unit_of_the_message():
+    text = "PVC de 1/2 para agua"
+    executor = FakeExecutor({text: (["PVC-050", "COD-050", "C45-050"], [])})
+    planner = Script(
+        tool("buscar_productos", items=[{"text": text, "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+        say(""),
+    )
+    result = run(executor, planner, "Necesito 2 metros de PVC de 1/2 para agua")
+    assert result["estado"] == "quoted" and "$17.000" in result["respuesta"]
+    # Sin unidad de venta que los separe, se pregunta.
+    ambiguous = Script(
+        tool("buscar_productos", items=[{"text": text, "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+        say(""),
+    )
+    result = run(executor, ambiguous, "Necesito 2 de PVC de 1/2 para agua")
+    assert result["tool_calls"][1]["response"]["error"]["code"] == "SKU_NOT_GROUNDED"
+    assert result["estado"] == "clarify"
+
+
+def test_sale_unit_as_use_is_not_a_search_filter():
+    text = "2 galones de pintura blanca"
+    executor = FakeExecutor({text: (["PIN-BLA", "PIN-BLA-14", "PIN-BLA-C5"], [])})
+    planner = Script(
+        tool("buscar_productos", items=[{"text": text, "product": "pintura", "use": "galones", "color": "blanca"}]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PIN-BLA", "quantity": 2}]),
+        say(""),
+    )
+    result = run(executor, planner, "¿Me fías 2 galones de pintura blanca?")
+    assert executor.calls[0][1] == {"items": [{"text": text, "product": "pintura", "color": "blanca"}]}
+    assert result["estado"] == "quoted" and "$112.000" in result["respuesta"]
+
+
+QUOTED_REPLY = ("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500 COP por metro; 12 metros disponibles. "
+                "Total informativo: $17.000 COP. Datos simulados.")
+
+
+@pytest.mark.parametrize("policy", ["Pago al retirar.", "Te lo enviamos a domicilio.", "Aceptamos Nequi.",
+                                    "Tiene garantía de un año."])
+def test_store_policies_need_the_store_tool_in_the_same_run(policy):
+    planner = Script(
+        tool("buscar_productos", items=[PVC]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+        say(f"{QUOTED_REPLY} {policy}"),
+    )
+    result = run(FakeExecutor(PVC_SEARCH), planner, "Necesito 2 metros de PVC de 1/2 para agua")
+    assert result["estado"] == "quoted"
+    assert policy not in result["respuesta"]
+    assert "$17.000" in result["respuesta"]
+
+
+@pytest.mark.parametrize(("message", "noted"), [
+    ("Apártame 2 metros de PVC de 1/2 para agua", True),
+    ("¿Me fías 2 metros de PVC de 1/2 para agua?", True),
+    ("Necesito 2 metros de PVC de 1/2 para agua, pago mañana", True),
+    ("Necesito 2 metros de PVC de 1/2 para agua", False),
+])
+def test_reservation_or_credit_requests_always_get_the_informative_note(message, noted):
+    text = PVC["text"]
+    planner = Script(
+        tool("buscar_productos", items=[PVC]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+        say(QUOTED_REPLY),
+    )
+    result = run(FakeExecutor({text: (["PVC-050"], [])}), planner, message)
+    assert result["respuesta"].startswith(QUOTED_REPLY)
+    assert ("No es un pedido ni una reserva" in result["respuesta"]) is noted
+    assert "apartad" not in result["respuesta"] and "reservad" not in result["respuesta"]

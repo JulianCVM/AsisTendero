@@ -125,3 +125,9 @@ def test_large_catalog_is_fictional_and_keeps_s2_rows(catalog):
     # S2-05 y S2-08 siguen sin coincidencia exacta.
     assert not catalog.search(q("tubo PVC de 1 pulgada para agua", product="tubo", material="PVC", measure="1 pulgada", use="agua")).matches
     assert not catalog.search(q("taladro de 20 V", product="taladro", measure="20 V")).matches
+
+
+def test_plural_filter_covers_singular_variant(catalog):
+    # «galones» cubre la variante «galón»: en la primera corrida S3 solo quedaba el cuñete de 5 galones.
+    result = catalog.search(q("pintura blanca en galones", product="pintura", color="blanca", presentation="galones"))
+    assert "PIN-BLA" in {product.sku for product in result.matches}

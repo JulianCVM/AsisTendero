@@ -8,7 +8,7 @@ import openai
 from openai import OpenAI
 
 
-PROMPT_VERSION = "s3-conversacion-v1"
+PROMPT_VERSION = "s3-conversacion-v2"
 DEFAULT_MODEL = "grok-4.20-0309-non-reasoning"
 DEFAULT_BASE_URL = "https://api.reto.pltk.mx/v1"
 # El reglamento del reto permite solo estas familias; otro modelo se rechaza antes de llamar a la pasarela.
@@ -35,6 +35,7 @@ la conversación previa; decides UNA acción: pedir una herramienta o responder.
 Devuelve solo JSON, sin Markdown:
 {"action":"call_tool"|"respond","intent":"productos"|"tienda"|"saludo"|"otro",
 "tool":"nombre"|null,"arguments":{...}|null,"reply":"texto"}
+"action" vale solo "call_tool" o "respond"; el nombre de la herramienta va en "tool".
 Con call_tool: reply="" y una herramienta de la lista. Con respond: tool=null y arguments=null.
 intent "tienda" es para horario, ubicación, pagos, domicilios, garantías o contacto.
 
@@ -71,14 +72,18 @@ Para horario, si está abierta, dirección, pagos, domicilios o garantías, cons
 consultar_info_tienda antes de responder y responde solo con lo que devuelve.
 
 Conversación: "conversacion" trae turnos previos y los productos ya identificados. Úsala para
-entender referencias como "ese", "el de 3/4" o "dame 3": vuelve a buscar el producto con el
-texto que dijo el cliente, porque precio y existencias se releen en cada turno. Si la referencia
+entender referencias como "ese", "el de 3/4", "negro" o "dame 3": vuelve a buscar el producto,
+porque precio y existencias se releen en cada turno. Arma "text" y los campos con lo que el
+cliente dijo del artículo en toda la conversación: tras "necesito cable 12 AWG", el turno "negro,
+15 metros" se busca como {"text":"cable 12 AWG negro","product":"cable","measure":"12 AWG",
+"color":"negro"}. Si el cliente cambia una medida, usa solo la nueva. Si la referencia
 admite más de un producto, pregunta cuál. Nunca tomes precios ni existencias de la conversación.
 
 Al responder después de herramientas: di nombre, variante, SKU, precio exacto como "$8.500 COP"
 por su unidad y existencias con la unidad correcta (12 metros, 9 bultos, 3 unidades) o
 "agotado"; si hubo cotización, da subtotales y el "Total informativo" y aclara que no es pedido
-ni reserva. Aclara una vez que son datos simulados. Saludo: ofrece ayuda. Más de cinco
+ni reserva. Aclara una vez que son datos simulados. No afirmes formas de pago, domicilios,
+garantías ni horario si no consultaste consultar_info_tienda en esta ejecución. Saludo: ofrece ayuda. Más de cinco
 artículos: pide dividir la lista. Fuera de la ferretería: explica brevemente que solo ayudas
 con productos e información de la tienda. Tono breve, cálido y concreto, sin apodos ni frases de
 plantilla. No ofrezcas apartar, reservar, separar, fiar, dar descuento ni cobrar: esta
@@ -181,6 +186,11 @@ def parse_decision(raw: str) -> tuple[str, str, str | None, dict | None, str]:
     reply = data["reply"]
     tool = data.get("tool")
     arguments = data.get("arguments")
+    # En la primera corrida S3, Grok 4.20 escribió 5 de 43 veces la herramienta en "action"
+    # ({"action":"calcular_cotizacion_informativa","tool":"calcular_cotizacion_informativa"}). La
+    # intención es inequívoca y los argumentos se validan igual, así que se lee como call_tool.
+    if action in TOOL_NAMES and tool in (None, action):
+        action, tool = "call_tool", action
     # «horario» era la intención de S2; se acepta como «tienda» para no invalidar una decisión correcta.
     intent = "tienda" if intent == "horario" else intent
     if intent not in INTENTS:

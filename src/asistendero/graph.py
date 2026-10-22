@@ -11,7 +11,7 @@ from typing import NotRequired, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from asistendero.answers import direct_response, render_answer, reply_is_grounded
+from asistendero.answers import direct_response, render_answer, reply_is_grounded, with_reservation_note
 from asistendero.grok import PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
@@ -147,6 +147,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0,
                     "estado": "refused", "respuesta": " ".join([*notes, REFUSAL_CLOSING])}
         update = _respond(state)
+        update["respuesta"] = with_reservation_note(state["consulta"], update["respuesta"])
         if notes:
             update["respuesta"] = " ".join(notes) + "\n" + update["respuesta"]
         return update

@@ -323,10 +323,13 @@
     "expected_status": "quoted",
     "expected_sku": "PIN-BLA",
     "must_include": [
-      "$112.000"
+      "$112.000",
+      "No es un pedido ni una reserva"
     ],
     "must_not_include": [
-      "fiad"
+      "te fío",
+      "queda fiado",
+      "apartad"
     ]
   },
   {

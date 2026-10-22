@@ -21,6 +21,20 @@ FORBIDDEN_CLAIMS = re.compile(
     re.I,
 )
 
+# Un pedido de apartar, reservar o fiar recibe siempre esta aclaración, la redacte Grok o no.
+RESERVATION_REQUEST = re.compile(
+    r"\b(?:apart\w+|reserv\w+|separ(?:a|e|ar|ame|amelo|en)\b|fia\w*|fiar\w*|credito|"
+    r"(?:pago|pagar|pagaria)\s+(?:manana|despues|luego|la\s+otra\s+semana))"
+)
+RESERVATION_NOTE = "No es un pedido ni una reserva: por este chat no aparto productos, no fío ni recibo pagos."
+
+
+def with_reservation_note(message: str, answer: str) -> str:
+    """Agrega la aclaración cuando el cliente pidió apartar, reservar o fiar y la respuesta no la trae."""
+    if not RESERVATION_REQUEST.search(normalize_text(message)) or "no es un pedido ni una reserva" in answer.casefold():
+        return answer
+    return f"{answer}\n{RESERVATION_NOTE}"
+
 
 def format_cop(value: int) -> str:
     return f"${value:,}".replace(",", ".")

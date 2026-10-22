@@ -16,7 +16,7 @@ QUERY_FIELDS = ("product", "use", "material", "measure", "presentation", "color"
 SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{1,31}$")
 # «2 metros» o «1 bulto» es cuánto se vende, no una medida del producto: en la corrida exploratoria X-03
 # Grok la puso en measure y la búsqueda devolvió opciones cercanas en vez de preguntar el diámetro.
-SALE_QUANTITY = re.compile(r"^\s*\d+\s*(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
+SALE_QUANTITY = re.compile(r"^\s*(?:\d+\s*)?(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
 SALE_UNIT = re.compile(
     r"\b(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
     r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?)\b"
@@ -137,8 +137,11 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
     if len(chosen) > 1:
         # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
         # de venta dicha (metro) los separa. Si aun así quedan varios, se pregunta.
-        units = sale_units(finding["query"]) & sale_units(message)
-        chosen = [product for product in chosen if normalize_text(product.unit) in units] if units else chosen
+        # Si Grok dejó la cantidad fuera del artículo («PVC de 1/2 para agua»), vale la unidad del mensaje,
+        # pero solo cuando deja un único producto.
+        units = sale_units(finding["query"]) & sale_units(message) or sale_units(message)
+        narrowed = [product for product in chosen if normalize_text(product.unit) in units]
+        chosen = narrowed if len(narrowed) == 1 else chosen
     return chosen[0] if len(chosen) == 1 else None
 
 
@@ -203,8 +206,10 @@ def validate_request(
                     if not isinstance(value, str) or not value.strip() or len(value) > 80:
                         raise Rejected("INVALID_ARGUMENT", f"Atributo {field} inválido.")
                     fields[field] = value.strip()
-            if SALE_QUANTITY.match(normalize_text(fields.get("measure", ""))):
-                del fields["measure"]
+            # En la primera corrida S3 Grok puso use="galones" y la búsqueda solo dejó el cuñete de 5 galones.
+            for field in ("measure", "use"):
+                if SALE_QUANTITY.match(normalize_text(fields.get(field, ""))):
+                    del fields[field]
             query = ProductQuery(text.strip(), **fields).grounded(message, tokens)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}

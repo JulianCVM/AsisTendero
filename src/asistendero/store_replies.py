@@ -12,6 +12,16 @@ MAX_LISTED_PRODUCTS = 15
 SAYS_OPEN = re.compile(r"\b(?:estamos|esta|seguimos|ya)\s+abiert|\babiert[oa]s?\s+(?:ahora|en\s+este\s+momento)")
 SAYS_CLOSED = re.compile(r"\b(?:estamos|esta|ya)\s+cerrad|\bcerrad[oa]s?\s+(?:ahora|en\s+este\s+momento)")
 
+# Políticas que Grok solo puede afirmar si consultó ese tema en la ejecución: en la primera corrida S3
+# cerró una cotización con «pago al retirar» sin haber consultado medios de pago.
+POLICY_CLAIMS = {
+    "medios_pago": re.compile(r"\b(?:efectivo|tarjetas?|nequi|daviplata|transferencias?|contraentrega"
+                              r"|pago\s+(?:al|en|con|contra)|pagar\s+(?:al|en|con))\b"),
+    "domicilios": re.compile(r"\b(?:domicilios?|envios?|enviamos|despachamos)\b"),
+    "garantias": re.compile(r"\b(?:garantias?|devoluci\w+)\b"),
+    "ubicacion": re.compile(r"\b(?:calle|carrera|direccion)\b"),
+}
+
 
 def _hour(value: str) -> str:
     return value.lstrip("0") if not value.startswith("00") else value[1:]
@@ -71,6 +81,9 @@ def store_allowances(calls: list[ToolCall]) -> tuple[set[str], set[str], bool | 
 def store_reply_is_consistent(normalized_reply: str, calls: list[ToolCall]) -> tuple[bool, set[str]]:
     """(¿la redacción respeta horario y apertura?, montos de la tienda que puede citar)."""
     amounts, hours, open_now = store_allowances(calls)
+    consulted = store_info_by_topic(calls)
+    if any(topic not in consulted and pattern.search(normalized_reply) for topic, pattern in POLICY_CLAIMS.items()):
+        return False, amounts
     said_hours = {_hour(value) for value in re.findall(r"\b\d{1,2}:\d{2}\b", normalized_reply)}
     if not said_hours <= hours:
         return False, amounts
