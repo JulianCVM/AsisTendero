@@ -224,6 +224,8 @@ def test_two_clients_never_hold_the_same_last_units_and_each_uses_its_model(cata
     assert sorted(item["model"] for item in record["clients"]) == sorted(models)
     assert set(grok.models) == set(models)
     assert set(report["summary"]["by_model"]) == set(models)
+    # El reporte nombra cada modelo una vez, no el texto que junta los de los clientes.
+    assert report["models"] == sorted(models)
 
 
 def test_models_rotate_by_case_and_cases_run_concurrently_in_order(catalog):

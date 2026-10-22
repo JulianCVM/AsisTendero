@@ -199,7 +199,8 @@ def evaluate_cases(
         "prompt_version": PROMPT_VERSION,
         "mock_db_sha256": hashlib.sha256(catalog.path.read_bytes()).hexdigest(),
         "skipped_ids": sorted(skipped),
-        "models": sorted({record["model"] for record in records}),
+        # En un caso con clientes, cada cliente usa su modelo; el renglón del caso los junta en un texto.
+        "models": sorted({unit["model"] for record in records for unit in record.get("clients", [record])}),
         "concurrency": concurrency,
         "budget_usd": None if budget_usd is None else str(budget_usd),
         "budget_skipped_ids": over_budget,
