@@ -299,6 +299,8 @@ def main() -> int:
     if not args.live:
         print("Sin llamadas al modelo. Usa --live para ejecutar los casos sintéticos.")
         return 0
+    # Se lee al empezar: una corrida larga no debe atribuirse a un commit hecho mientras corría.
+    state = git_state()
     load_dotenv()
     if args.model:
         os.environ["GROK_MODEL"] = args.model
@@ -317,7 +319,7 @@ def main() -> int:
         skip_ids=_parse_skip(args.skip),
         include_failures=args.include_failures,
     )
-    report.update(git_state())
+    report.update(state)
     for record in report["cases"]:
         detail = f" — {'; '.join(record['fail_reasons'])}" if record["fail_reasons"] else ""
         print(f"{record['id']}: {'PASS' if record['passed'] else 'FAIL'} ({record['actual_status']}){detail}")
