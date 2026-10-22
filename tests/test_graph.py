@@ -717,3 +717,17 @@ def test_reservation_or_credit_requests_always_get_the_informative_note(message,
     assert result["respuesta"].startswith(QUOTED_REPLY)
     assert ("No es un pedido ni una reserva" in result["respuesta"]) is noted
     assert "apartad" not in result["respuesta"] and "reservad" not in result["respuesta"]
+
+
+def test_sale_quantity_in_presentation_keeps_only_the_unit():
+    paint = {"text": "1 galón de pintura blanca de vinilo", "product": "pintura", "use": "vinilo", "color": "blanca",
+             "presentation": "1 galón"}
+    executor = FakeExecutor({paint["text"]: (["PIN-BLA", "PIN-BLA-14", "PIN-BLA-C5"], [])})
+    planner = Script(
+        tool("buscar_productos", items=[paint]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PIN-BLA", "quantity": 1}]),
+        say(""),
+    )
+    result = run(executor, planner, "Necesito 1 galón de pintura blanca de vinilo")
+    assert executor.calls[0][1]["items"][0]["presentation"] == "galón"
+    assert result["estado"] == "quoted" and "$56.000" in result["respuesta"]

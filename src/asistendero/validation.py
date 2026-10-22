@@ -210,6 +210,10 @@ def validate_request(
             for field in ("measure", "use"):
                 if SALE_QUANTITY.match(normalize_text(fields.get(field, ""))):
                     del fields[field]
+            # En presentation la unidad sí distingue (galón frente a cuñete), pero no la cantidad: con
+            # presentation="1 galón" (C-08 en la segunda corrida S3) ninguna variante cumplía el filtro.
+            if SALE_QUANTITY.match(normalize_text(fields.get("presentation", ""))):
+                fields["presentation"] = re.sub(r"^\s*\d+\s*", "", fields["presentation"])
             query = ProductQuery(text.strip(), **fields).grounded(message, tokens)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}
