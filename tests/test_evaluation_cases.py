@@ -124,4 +124,6 @@ def test_every_s3_case_passes_with_a_scripted_grok(tmp_path):
     # Las preguntas trampa que se rechazan no gastan llamadas a Grok.
     refused = [record for record in report["cases"] if record["actual_status"] == "refused"]
     assert len(refused) == 5 and all(record["model_calls"] == 0 for record in refused)
+    # Esos rechazos cuestan cero; no dejan el total como desconocido (pasó en la primera corrida S3).
+    assert summary["cost_complete"] and report["cost"] is not None
     assert summary["tasks"] == len(cases) and summary["turns"] == len(cases) + 5

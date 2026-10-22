@@ -162,7 +162,7 @@ def _run_conversation(case: dict, *, executor: ToolExecutor, planner: Planner) -
         "output_tokens": _sum([turn["output_tokens"] for turn in turns]),
         "cached_input_tokens": _sum([turn["cached_input_tokens"] for turn in turns]),
         "total_tokens": _sum([turn["total_tokens"] for turn in turns]),
-        "cost": run_cost([turn["cost"] for turn in turns]),
+        "cost": run_cost([turn["cost"] for turn in turns if turn["model_calls"]]),
         "elapsed_ms": sum(turn["elapsed_ms"] for turn in turns),
         "turns": turns,
     }
@@ -268,7 +268,8 @@ def evaluate_cases(
         "output_tokens": sum(record["output_tokens"] or 0 for record in records),
         "cached_input_tokens": sum(record["cached_input_tokens"] or 0 for record in records),
         "elapsed_ms": sum(record["elapsed_ms"] for record in records),
-        "cost": run_cost([record["cost"] for record in records]),
+        # Un caso rechazado antes de Grok no tiene llamadas: no es un costo desconocido sino cero.
+        "cost": run_cost([record["cost"] for record in records if record["model_calls"]]),
         "cases": records,
         "controlled_failures": failures,
     }
@@ -290,6 +291,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.compare:
         reports = [json.loads(Path(path).read_text(encoding="utf-8")) for path in args.compare]
+        for report in reports:
+            # Se recalcula con las reglas vigentes: así reportes viejos y nuevos se comparan igual.
+            report["summary"] = summarize(report)
         print(comparison_markdown(reports))
         return 0
     if not args.live:

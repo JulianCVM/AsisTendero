@@ -9,7 +9,10 @@ from decimal import Decimal
 
 def _cost(record: dict) -> Decimal | None:
     cost = record.get("cost")
-    return Decimal(cost["usd"]) if cost else None
+    if cost:
+        return Decimal(cost["usd"])
+    # Un rechazo antes de Grok (refused) no llama al modelo: su costo es cero, no desconocido.
+    return Decimal(0) if not record.get("model_calls") else None
 
 
 def _records_events(record: dict) -> list[dict]:
@@ -42,6 +45,7 @@ def summarize(report: dict) -> dict:
         suite["tokens"] += record.get("total_tokens") or 0
         suite["reminders"] += _reminders(record)
     tasks = len(records)
+    failure_costs = [_cost(record) for record in report.get("controlled_failures", [])]
     return {
         "tasks": tasks,
         "turns": sum(len(record.get("turns", [record])) for record in records),
@@ -52,6 +56,8 @@ def summarize(report: dict) -> dict:
         "model_calls_per_task": _per_task(report["model_calls"], tasks, ".2f"),
         "elapsed_ms_per_task": _per_task(report["elapsed_ms"], tasks, ".0f"),
         "reminders": sum(_reminders(record) for record in records),
+        # Los fallos controlados también consumen (F-01 llama a Grok): cuentan en el consumo, no por tarea.
+        "failures_cost_usd": format(sum((cost for cost in failure_costs if cost is not None), Decimal(0)), ".6f"),
         "failed_ids": [record["id"] for record in records if not record["passed"]],
         "by_suite": {
             name: {**values, "cost_usd": format(values["cost_usd"], ".6f")} for name, values in sorted(by_suite.items())
