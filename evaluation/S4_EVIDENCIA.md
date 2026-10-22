@@ -27,6 +27,16 @@ conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200
 | 6 | 4 modelos, 3 casos a la vez | `pedidos`, `sesion_larga`, `concurrencia` | **12/12** | 105 | 0.469057 | `eval-20261022T163032844564Z` |
 | 7 | 4 modelos, 3 casos a la vez | `ruido` | **12/12** | 28 | 0.119609 | `eval-20261022T163656473947Z` |
 
+**Regresión de los casos S2/S3 (43).**
+
+- Corrida 8, sobre `e813368`: **42/43**, 123 llamadas, USD 0.125625 (`eval-20261022T164250432025Z`). Falló C-08 (ver abajo).
+- Corrida 9, sobre `a1b2849`: la suite `catalogo`, con sus casos de varios artículos, da **12/12**, 37 llamadas,
+  USD 0.032644 (`eval-20261022T164712333710Z`).
+- Corrida 10, sobre `a1b2849`: la suite `s2`, que incluye el otro caso de varios artículos (S2-02, «tubo PVC… y
+  cemento gris»), da **10/10**, 28 llamadas, USD 0.025407 (`eval-20261022T164806841827Z`).
+- Las suites `seguridad`, `conversacion` y `tienda` no se repitieron sobre `a1b2849`: tienen un solo artículo por
+  mensaje y el cambio solo actúa con dos o más. Pasaron en la corrida 8.
+
 En K-01, con dos clientes simultáneos por 6 de los 9 bultos, uno obtuvo el pedido y el otro `INSUFFICIENT_STOCK`;
 nunca hubo más apartado que bodega.
 
@@ -61,6 +71,7 @@ Cada falla se reprodujo en una prueba con la decisión real de Grok, que falla s
 | R-06 | Búsqueda sin resultado ante «algo para arreglar la casa» | Respuesta segura: sin precio y pide otra referencia | El caso acepta `not_found` |
 | M-01 | «Dame 3 metros de ese» rechazado | Grok cotizó el SKU recordado sin volver a buscar | `e813368`: la cotización acepta los productos de la sesión, como los pedidos |
 | P-02 | Registró sin que el cliente lo pidiera | «¿Todavía lo puedo confirmar?» contaba como confirmación | `e813368`: una pregunta solo confirma si abre con el sí |
+| C-08 | Preguntó la presentación ya dicha (dos artículos) | La misma causa que P-03; el arreglo de `86c4a60` cubría un solo artículo | `a1b2849`: cada artículo se respalda con la parte del mensaje que habla de él |
 | G-07 | Estado `order_issue` sin conversación | El pedido rechazado (`SESSION_REQUIRED`) tapaba la cotización | `e813368`: el estado sigue siendo `quoted`; prompt `s4-pedidos-v3` |
 
 `e813368` también quitó el aviso `QUOTE_REQUIRED` tras registrar un pedido: el pedido ya trae precio y total, y el
@@ -115,4 +126,4 @@ Cómo se comprueba cada parte de la definición:
 - La base es local y sus datos son ficticios. Que sean ficticios no la vuelve «datos fijos»: el agente lee y
   escribe la misma base que el tendero administra.
 
-**Consumo S4 medido (corridas 1 a 7):** 635 llamadas, USD 1.262335.
+**Consumo S4 medido (corridas 1 a 10):** 823 llamadas, USD 1.446011.
