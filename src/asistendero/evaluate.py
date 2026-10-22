@@ -2,29 +2,37 @@
 
 import argparse
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 
 from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
-from asistendero.chat import run_turn
-from asistendero.eval_report import comparison_markdown, summarize
+from asistendero.eval_checks import record
+from asistendero.eval_report import comparison_markdown, record_cost, summarize
+from asistendero.eval_sessions import SIM_START, StoreClock, run_clients, run_conversation, store_time, using_model
 from asistendero.executor import catalog_executor
 from asistendero.graph import Planner, ToolExecutor
-from asistendero.grok import DEFAULT_MODEL, PROMPT_VERSION, current_model, decide_with_grok, decision_from_raw
+from asistendero.grok import (
+    ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, current_model, decide_with_grok, decision_from_raw,
+)
 from asistendero.pricing import run_cost
-from asistendero.sessions import SessionStore
 from asistendero.tracing import run_traced
-from asistendero.validation import grounded_products
 
 
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
+SUITES = ("s2", "catalogo", "tienda", "seguridad", "conversacion", "ruido", "pedidos", "sesion_larga", "concurrencia")
+# Más hilos no prueban nada nuevo y en S3 cinco corridas en paralelo agotaron la memoria del equipo.
+MAX_CONCURRENCY = 6
 INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"
 FAILURE_QUERY = "Necesito 2 metros de tubo PVC de 1/2 para agua"
 # Texto que no es una decisión JSON; recorre el mismo parse_decision que una respuesta real de Grok.
@@ -43,130 +51,10 @@ def git_state() -> dict:
     return {"commit": commit, "src_dirty": bool(dirty)}
 
 
-def _selected_skus(reference: str, tool_calls: list[dict]) -> list[str]:
-    skus: list[str] = []
-    for call in tool_calls:
-        if not call["executed"]:
-            continue
-        if call["requested_tool"] == "consultar_disponibilidad":
-            skus.append(call["arguments"]["sku"])
-        elif call["requested_tool"] == "calcular_cotizacion_informativa":
-            skus.extend(line["sku"] for line in call["arguments"]["lines"])
-    skus.extend(grounded_products(reference, tool_calls).keys())
-    return list(dict.fromkeys(skus))
-
-
-def _verdict(check: dict, result: dict, selected_skus: list[str]) -> list[str]:
-    """Motivos por los que un resultado no cumple lo esperado; vacío si pasa."""
-    reasons = []
-    expected = check["expected_status"]
-    if result["estado"] not in (expected if isinstance(expected, list) else [expected]):
-        reasons.append(f"estado {result['estado']}")
-    for sku in ([check["expected_sku"]] if check.get("expected_sku") else []) + check.get("expected_skus", []):
-        if sku not in selected_skus:
-            reasons.append(f"falta {sku}")
-    tool_calls = result.get("tool_calls", [])
-    executed = {call["requested_tool"] for call in tool_calls if call["executed"]}
-    reasons += [f"no ejecutó {name}" for name in check.get("expected_tools", []) if name not in executed]
-    response = result["respuesta"].casefold()
-    reasons += [f"no dice «{text}»" for text in check.get("must_include", []) if text.casefold() not in response]
-    reasons += [f"dice «{text}»" for text in check.get("must_not_include", []) if text.casefold() in response]
-    if "max_model_calls" in check and result["model_calls"] > check["max_model_calls"]:
-        reasons.append(f"{result['model_calls']} llamadas a Grok")
-    expected_error = check.get("expected_error_code")
-    if expected_error:
-        codes = {(call["response"].get("error") or {}).get("code") for call in tool_calls}
-        if result.get("error"):
-            codes.add(result["error"].get("code"))
-        if expected_error not in codes:
-            reasons.append(f"sin {expected_error}")
-    return reasons
-
-
-def _record(check: dict, result: dict, events: list[dict]) -> dict:
-    final_details = next(event["details"] for event in reversed(events) if event["type"] == "final")
-    tool_calls = result.get("tool_calls", [])
-    selected_skus = _selected_skus(result.get("referencia", ""), tool_calls)
-    reasons = _verdict(check, result, selected_skus)
-    return {
-        "query": check["query"],
-        "run_id": result["run_id"],
-        "expected_status": check["expected_status"],
-        "actual_status": result["estado"],
-        "expected_sku": check.get("expected_sku"),
-        "expected_skus": check.get("expected_skus"),
-        "expected_error_code": check.get("expected_error_code"),
-        "selected_skus": selected_skus,
-        "passed": not reasons,
-        "fail_reasons": reasons,
-        "response": result["respuesta"],
-        "model_called": result["model_called"],
-        "model_calls": result["model_calls"],
-        "tools": final_details["tools_requested"],
-        "tools_executed": final_details["tools_executed"],
-        "tool_calls": [
-            {
-                "step": call["step"],
-                "requested_tool": call["requested_tool"],
-                "executed": call["executed"],
-                "status": call["response"].get("status"),
-                "error": call["response"].get("error"),
-                "duration_ms": call["duration_ms"],
-            }
-            for call in tool_calls
-        ],
-        "error": result.get("error"),
-        "input_tokens": final_details["input_tokens"],
-        "output_tokens": final_details["output_tokens"],
-        "cached_input_tokens": final_details["cached_input_tokens"],
-        "total_tokens": final_details["total_tokens"],
-        "cost": final_details["cost"],
-        "elapsed_ms": final_details["duration_ms"],
-        "events": events,
-    }
-
-
 def _run_record(case: dict, *, executor: ToolExecutor, planner: Planner) -> dict:
     events: list[dict] = []
     result = run_traced(case["query"], events.append, executor, planner)
-    return {"id": case["id"], "suite": case.get("suite", "s2"), **_record(case, result, events)}
-
-
-def _sum(values: list) -> int | None:
-    known = [value for value in values if isinstance(value, int)]
-    return sum(known) if known else None
-
-
-def _run_conversation(case: dict, *, executor: ToolExecutor, planner: Planner) -> dict:
-    """Varios turnos en una sesión temporal: el caso pasa solo si pasa cada turno."""
-    with tempfile.TemporaryDirectory() as folder:
-        store = SessionStore(Path(folder) / "sessions.sqlite3")
-        session_id = store.create()
-        turns = []
-        for turn in case["turns"]:
-            events: list[dict] = []
-            result = run_turn(store, session_id, turn["query"], events.append, executor, planner)
-            turns.append(_record(turn, result, events))
-    return {
-        "id": case["id"],
-        "suite": case.get("suite", "conversacion"),
-        "query": " / ".join(turn["query"] for turn in case["turns"]),
-        "expected_status": [turn["expected_status"] for turn in turns],
-        "actual_status": [turn["actual_status"] for turn in turns],
-        "passed": all(turn["passed"] for turn in turns),
-        "fail_reasons": [f"turno {index}: {reason}" for index, turn in enumerate(turns, 1) for reason in turn["fail_reasons"]],
-        "response": turns[-1]["response"],
-        "model_calls": sum(turn["model_calls"] for turn in turns),
-        "tools": [name for turn in turns for name in turn["tools"]],
-        "tools_executed": [name for turn in turns for name in turn["tools_executed"]],
-        "input_tokens": _sum([turn["input_tokens"] for turn in turns]),
-        "output_tokens": _sum([turn["output_tokens"] for turn in turns]),
-        "cached_input_tokens": _sum([turn["cached_input_tokens"] for turn in turns]),
-        "total_tokens": _sum([turn["total_tokens"] for turn in turns]),
-        "cost": run_cost([turn["cost"] for turn in turns if turn["model_calls"]]),
-        "elapsed_ms": sum(turn["elapsed_ms"] for turn in turns),
-        "turns": turns,
-    }
+    return {"id": case["id"], "suite": case.get("suite", "s2"), "model": current_model(), **record(case, result, events)}
 
 
 def run_controlled_failures(
@@ -244,19 +132,66 @@ def evaluate_cases(
     skip_ids: set[str] | None = None,
     include_failures: bool = False,
     on_record: Callable[[dict], None] = lambda record: None,
+    models: list[str] | None = None,
+    concurrency: int = 1,
+    budget_usd: Decimal | None = None,
+    clock: Callable[[], datetime] | None = None,
 ) -> dict:
     """Ejecuta una lista de casos sobre el grafo trazado y construye el reporte de métricas.
 
     ``on_record`` recibe cada caso apenas termina: si la corrida se interrumpe, lo ya gastado queda registrado.
+    ``models`` se reparte en rueda: el caso i (y, en un caso con clientes, el cliente j) usa un modelo distinto.
+    ``concurrency`` casos corren a la vez. Con ``budget_usd`` no empieza ningún caso nuevo cuando lo gastado
+    llega al tope; los casos que ya corrían terminan, así que el total puede pasarlo por lo que cuesta uno.
+    ``clock`` fija la hora de la tienda (``StoreClock`` en una corrida real).
     """
     skipped = skip_ids or set()
     selected_cases = [case for case in cases if case["id"] not in skipped]
     executor = catalog_executor(catalog)
-    records = []
-    for case in selected_cases:
-        records.append((_run_conversation if "turns" in case else _run_record)(case, executor=executor, planner=planner))
-        on_record(records[-1])
-    failures = run_controlled_failures(catalog=catalog, planner=planner) if include_failures else []
+    rotation = list(models or [])
+    lock = threading.Lock()
+    spent = {"usd": Decimal(0)}
+    over_budget: list[str] = []
+    stop = threading.Event()
+
+    def run(index: int, case: dict, folder: Path) -> dict | None:
+        with lock:
+            if stop.is_set():
+                return None
+            if budget_usd is not None and spent["usd"] >= budget_usd:
+                over_budget.append(case["id"])
+                return None
+        # El caso i arranca la rueda en el modelo i: así cada modelo atiende a todos los tipos de cliente.
+        turn = rotation[index % len(rotation):] + rotation[:index % len(rotation)] if rotation else []
+        try:
+            with using_model(turn[0] if turn else None):
+                if "clients" in case:
+                    clients = turn or [current_model()]
+                    result = run_clients(case, catalog_path=catalog.path, folder=folder, planner=planner, models=clients)
+                elif "turns" in case:
+                    result = run_conversation(case, catalog_path=catalog.path, folder=folder, planner=planner)
+                else:
+                    result = _run_record(case, executor=executor, planner=planner)
+        except BaseException:
+            # Un caso que revienta (o un Ctrl-C) detiene la corrida: los casos en cola no deben seguir gastando.
+            stop.set()
+            raise
+        with lock:
+            spent["usd"] += record_cost(result) or 0
+            on_record(result)
+        return result
+
+    with store_time(clock) if clock else nullcontext(), tempfile.TemporaryDirectory() as folder:
+        pool = ThreadPoolExecutor(max_workers=max(1, concurrency))
+        try:
+            futures = [pool.submit(run, index, case, Path(folder)) for index, case in enumerate(selected_cases)]
+            records = [result for future in futures if (result := future.result()) is not None]
+        except BaseException:
+            stop.set()
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+        pool.shutdown()
+        failures = run_controlled_failures(catalog=catalog, planner=planner) if include_failures else []
 
     report = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -264,6 +199,11 @@ def evaluate_cases(
         "prompt_version": PROMPT_VERSION,
         "mock_db_sha256": hashlib.sha256(catalog.path.read_bytes()).hexdigest(),
         "skipped_ids": sorted(skipped),
+        "models": sorted({record["model"] for record in records}),
+        "concurrency": concurrency,
+        "budget_usd": None if budget_usd is None else str(budget_usd),
+        "budget_skipped_ids": over_budget,
+        "store_time_start": clock.start.isoformat(timespec="minutes") if isinstance(clock, StoreClock) else None,
         "passed": sum(record["passed"] for record in records),
         "total": len(records),
         "model_calls": sum(record["model_calls"] for record in records),
@@ -287,9 +227,14 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="Hacer llamadas reales al modelo (consume cupo)")
     parser.add_argument("--limit", type=int, help="Máximo de casos; predeterminado: todos")
     parser.add_argument("--skip", nargs="*", default=[], help="IDs de casos a omitir (ej. --skip S2-02)")
-    parser.add_argument("--suite", nargs="*", default=[],
-                        help="Solo estas suites: s2, catalogo, tienda, seguridad, conversacion")
+    parser.add_argument("--suite", nargs="*", default=[], choices=SUITES, help="Solo estas suites")
     parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
+    parser.add_argument("--models", nargs="+", metavar="MODELO",
+                        help="Varios modelos en rueda: cada caso (o cliente simulado) usa el siguiente")
+    parser.add_argument("--concurrency", type=int, default=1,
+                        help=f"Casos a la vez, de 1 a {MAX_CONCURRENCY}; predeterminado: 1")
+    parser.add_argument("--budget-usd", type=Decimal, metavar="USD",
+                        help="Tope de gasto: no empieza casos nuevos al llegar a él")
     parser.add_argument("--include-failures", action="store_true", help="Ejecutar también los 3 fallos controlados")
     parser.add_argument("--compare", nargs="+", metavar="REPORTE",
                         help="Tabla comparativa de reportes JSON ya generados; no llama a Grok")
@@ -301,6 +246,13 @@ def main() -> int:
             report["summary"] = summarize(report)
         print(comparison_markdown(reports))
         return 0
+    if not 1 <= args.concurrency <= MAX_CONCURRENCY:
+        parser.error(f"--concurrency debe estar entre 1 y {MAX_CONCURRENCY}")
+    for model in [args.model, *(args.models or [])]:
+        if model and not model.startswith(ALLOWED_MODEL_FAMILIES):
+            parser.error(f"{model} no es un modelo permitido por el reto (Grok 4.7, 4.6, 4.5 o 4.20)")
+    if args.budget_usd is not None and args.budget_usd <= 0:
+        parser.error("--budget-usd debe ser mayor que cero")
     if not args.live:
         print("Sin llamadas al modelo. Usa --live para ejecutar los casos sintéticos.")
         return 0
@@ -324,7 +276,7 @@ def main() -> int:
     partial_path = Path(".local") / f"eval-{started:%Y%m%dT%H%M%S%fZ}.partial.jsonl"
 
     def log_partial(record: dict) -> None:
-        line = {"id": record["id"], "model": current_model(), "prompt_version": PROMPT_VERSION, **state,
+        line = {"id": record["id"], "model": record["model"], "prompt_version": PROMPT_VERSION, **state,
                 "passed": record["passed"], "model_calls": record["model_calls"],
                 "total_tokens": record.get("total_tokens"), "cost": record.get("cost")}
         with partial_path.open("a", encoding="utf-8") as handle:
@@ -336,6 +288,10 @@ def main() -> int:
         skip_ids=_parse_skip(args.skip),
         include_failures=args.include_failures,
         on_record=log_partial,
+        models=args.models,
+        concurrency=args.concurrency,
+        budget_usd=args.budget_usd,
+        clock=StoreClock(SIM_START),
     )
     report.update(state)
     for record in report["cases"]:
@@ -346,8 +302,13 @@ def main() -> int:
     report_path = Path(".local") / f"eval-{started:%Y%m%dT%H%M%S%fZ}.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = report["summary"]
-    print(f"Resultado: {report['passed']}/{report['total']} con {report['model']}. Costo: {summary['cost_usd']} USD "
-          f"({summary['cost_per_task_usd']} por tarea). Reporte local: {report_path}")
+    for model, values in summary["by_model"].items():
+        print(f"  {model}: {values['passed']}/{values['total']} · {values['cost_usd']} USD · "
+              f"{values['model_calls']} llamadas · {values['tokens']} tokens")
+    if report["budget_skipped_ids"]:
+        print(f"Sin correr por el tope de gasto: {', '.join(report['budget_skipped_ids'])}")
+    print(f"Resultado: {report['passed']}/{report['total']} con {', '.join(report['models'])}. Costo: "
+          f"{summary['cost_usd']} USD ({summary['cost_per_task_usd']} por tarea). Reporte local: {report_path}")
     failures_ok = all(item["passed"] for item in report["controlled_failures"])
     return 0 if report["passed"] == report["total"] and failures_ok else 1
 

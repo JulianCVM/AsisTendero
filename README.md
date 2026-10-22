@@ -181,9 +181,13 @@ El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama 
 .\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite seguridad conversacion   # solo esas suites
 .\.venv\Scripts\python.exe -m asistendero.evaluate --live --model grok-4.20-0309-reasoning   # otro modelo permitido
 .\.venv\Scripts\python.exe -m asistendero.evaluate --compare .local\eval-A.json .local\eval-B.json   # tabla, sin Grok
+# S4: conversaciones largas con pedidos, clientes a la vez y varios modelos, con tope de gasto
+.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite ruido pedidos sesion_larga concurrencia --budget-usd 1
+.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite pedidos concurrencia --concurrency 3 `
+    --models grok-4.20-0309-non-reasoning grok-4.5 grok-4.7 --budget-usd 2
 ```
 
-Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los eventos completos y, caso por caso, una bitácora parcial (`*.partial.jsonl`).
+Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los eventos completos y, caso por caso, una bitácora parcial (`*.partial.jsonl`). `--models` reparte los modelos en rueda (cada caso, o cada cliente de un caso de concurrencia, usa el siguiente) y el reporte separa aprobados, llamadas, tokens y costo por modelo. `--concurrency` (1 a 6) corre varios casos a la vez y `--budget-usd` deja de empezar casos al llegar al tope; los que ya corrían terminan. La hora de la tienda en la evaluación arranca el miércoles 21-10-2026 a las 9:00 y avanza con el reloj real, para que «mañana a las 10» signifique siempre lo mismo.
 
 ## Estructura del repositorio
 
@@ -200,7 +204,7 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |
 | `src/asistendero/tools.py` | Las cinco herramientas del servidor (`execute_tool`) sobre el catálogo. |
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
-| `src/asistendero/evaluate.py` y `eval_report.py` | Evaluador de casos de uno o varios turnos, fallos controlados, costo por tarea y comparación de modelos. |
+| `src/asistendero/evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py` | Evaluador de casos de uno o varios turnos, conversaciones con pedidos, clientes a la vez, fallos controlados, costo por tarea y por modelo. |
 | `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
 | `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |
 | `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |

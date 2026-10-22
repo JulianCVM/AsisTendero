@@ -5,6 +5,7 @@ import http.client
 import json
 from pathlib import Path
 import re
+import shutil
 from threading import Thread
 
 import pytest
@@ -168,3 +169,12 @@ def test_ui_never_uses_inline_code_html_injection_or_blocking_dialogs():
     script = (UI / "tendero.js").read_text(encoding="utf-8")
     assert not re.search(r"<script>(?!\s*</script>)|\son\w+=|style=", html)
     assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
+
+
+def test_inventory_releases_the_database_file(tmp_path):
+    # Abrir el inventario dejaba una conexión sin cerrar: en Windows la copia de la evaluación no se podía borrar.
+    copy = tmp_path / "copia.sqlite3"
+    shutil.copy(create_mock_db(tmp_path / "catalog.sqlite3"), copy)
+    Inventory(copy).products()
+    copy.unlink()
+    assert not copy.exists()

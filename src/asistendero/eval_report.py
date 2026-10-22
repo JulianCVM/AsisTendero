@@ -7,7 +7,7 @@ costo conocido y lo dice (``cost_complete``): un dato ausente nunca se cuenta co
 from decimal import Decimal
 
 
-def _cost(record: dict) -> Decimal | None:
+def record_cost(record: dict) -> Decimal | None:
     cost = record.get("cost")
     if cost:
         return Decimal(cost["usd"])
@@ -31,7 +31,7 @@ def _per_task(total: Decimal | int, tasks: int, places: str) -> str:
 
 def summarize(report: dict) -> dict:
     records = report["cases"]
-    costs = [_cost(record) for record in records]
+    costs = [record_cost(record) for record in records]
     known = sum((cost for cost in costs if cost is not None), Decimal(0))
     tokens = sum(record.get("total_tokens") or 0 for record in records)
     by_suite: dict[str, dict] = {}
@@ -45,7 +45,7 @@ def summarize(report: dict) -> dict:
         suite["tokens"] += record.get("total_tokens") or 0
         suite["reminders"] += _reminders(record)
     tasks = len(records)
-    failure_costs = [_cost(record) for record in report.get("controlled_failures", [])]
+    failure_costs = [record_cost(record) for record in report.get("controlled_failures", [])]
     return {
         "tasks": tasks,
         "turns": sum(len(record.get("turns", [record])) for record in records),
@@ -62,7 +62,23 @@ def summarize(report: dict) -> dict:
         "by_suite": {
             name: {**values, "cost_usd": format(values["cost_usd"], ".6f")} for name, values in sorted(by_suite.items())
         },
+        "by_model": _by_model(records, report.get("model")),
     }
+
+
+def _by_model(records: list[dict], default: str | None) -> dict:
+    """Aprobados y consumo por modelo; en un caso con clientes cuenta cada cliente con su propio modelo."""
+    by_model: dict[str, dict] = {}
+    for unit in (unit for record in records for unit in record.get("clients", [record])):
+        values = by_model.setdefault(unit.get("model") or default or "?", {
+            "passed": 0, "total": 0, "cost_usd": Decimal(0), "model_calls": 0, "tokens": 0, "elapsed_ms": 0})
+        values["passed"] += unit["passed"]
+        values["total"] += 1
+        values["cost_usd"] += record_cost(unit) or 0
+        values["model_calls"] += unit["model_calls"]
+        values["tokens"] += unit.get("total_tokens") or 0
+        values["elapsed_ms"] += unit["elapsed_ms"]
+    return {name: {**values, "cost_usd": format(values["cost_usd"], ".6f")} for name, values in sorted(by_model.items())}
 
 
 def comparison_markdown(reports: list[dict]) -> str:

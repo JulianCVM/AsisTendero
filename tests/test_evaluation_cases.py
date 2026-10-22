@@ -34,6 +34,7 @@ def quote(*lines):
 PVC_HALF = {"text": "tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}
 CEMENT = {"text": "cemento gris de 50 kg", "product": "cemento", "color": "gris", "measure": "50 kg"}
 
+S3_SUITES = {"catalogo", "tienda", "seguridad", "conversacion"}
 SCRIPTS = {
     "Necesito 10 metros de cable 12 AWG negro": [
         search({"text": "10 metros de cable 12 AWG negro", "product": "cable", "color": "negro", "measure": "12 AWG"}),
@@ -102,13 +103,14 @@ def test_case_file_has_thirty_or_more_cases_in_every_suite():
     cases = json.loads(Path("evaluation/cases.json").read_text(encoding="utf-8"))
     assert len(cases) >= 30
     assert len({case["id"] for case in cases}) == len(cases)
-    assert {case["suite"] for case in cases} == {"s2", "catalogo", "tienda", "seguridad", "conversacion"}
+    assert {case["suite"] for case in cases} == set(evaluate.SUITES)
 
 
 def test_every_s3_case_passes_with_a_scripted_grok(tmp_path):
     catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
+    # Los casos S4 (ruido, pedidos, sesiones largas y concurrencia) tienen su guion en test_eval_sessions.py.
     cases = [case for case in json.loads(Path("evaluation/cases.json").read_text(encoding="utf-8"))
-             if case["suite"] != "s2"]
+             if case["suite"] in S3_SUITES]
     queues = {message: list(steps) for message, steps in SCRIPTS.items()}
 
     def planner(message, observations, remaining, **_):

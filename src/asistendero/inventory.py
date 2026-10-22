@@ -60,8 +60,7 @@ class Inventory:
         self.path = upgrade_db(path)
         self.business_id = business_id
         self.store_id = store_id
-        with self._connect() as connection:
-            connection.executescript(INVENTORY_SCHEMA)
+        self._run(lambda connection: connection.executescript(INVENTORY_SCHEMA))
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
