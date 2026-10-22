@@ -560,6 +560,49 @@ def test_cancel_everything_cancels_every_active_order(chat):
     assert order_action_pending("cancela el del cemento", "", result["tool_calls"][:1], {"pedidos": [
         {"pedido": codes[0], "estado": "pendiente"}, {"pedido": codes[1], "estado": "pendiente"}]}) is None
 
+
+def test_changing_the_product_never_registers_the_cancelled_one_again(chat):
+    # W-03 con Grok real: «mejor que sean blancos, no amarillos» canceló los amarillos, el aviso de cambio le pidió
+    # registrar y Grok volvió a registrar los amarillos; luego los canceló y el cliente quedó sin pedido.
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    yellow = {"text": "casco de seguridad amarillo", "product": "casco", "color": "amarillo"}
+    white = {"text": "casco de seguridad blanco", "product": "casco", "color": "blanco"}
+    code = turn(session, "me llevo 2 cascos de seguridad amarillos", tool("buscar_productos", items=[yellow]),
+                tool("registrar_pedido", lines=[{"sku": "CAS-AMA", "quantity": 2}]), say())["tool_calls"][1]["response"]["data"]["pedido"]
+    result = turn(session, "mejor que sean blancos, no amarillos", tool("cancelar_pedido", pedido=code),
+                  say("¿Confirmas el cambio a blancos? Datos simulados."),
+                  tool("registrar_pedido", lines=[{"sku": "CAS-AMA", "quantity": 2}]),
+                  tool("buscar_productos", items=[white]),
+                  tool("registrar_pedido", lines=[{"sku": "CAS-BLA", "quantity": 2}]), say())
+    hint = result["planner"].seen[2]["observaciones"][-1]["error"]["message"]
+    assert "buscar_productos" in hint
+    assert result["tool_calls"][1]["response"]["error"]["code"] == "ORDER_UNCHANGED"
+    orders = book.session_orders(session)
+    assert {(order["estado"], order["lineas"][0]["sku"]) for order in orders} == {("cancelado", "CAS-AMA"),
+                                                                                  ("pendiente", "CAS-BLA")}
+
+
+def test_answering_which_product_quotes_the_quantity_said_before(chat):
+    # W-02 con Grok real: «necesito 3 metros de tubo pvc», el agente preguntó cuál, el cliente dijo «de media, para
+    # agua» y Grok preguntó de nuevo cuántos metros: nadie le pidió cotizar los 3 que ya había dicho.
+    turn, sessions, _, _, _ = chat
+    session = sessions.create()
+    turn(session, "necesito 3 metros de tubo pvc", tool("buscar_productos", items=[{"text": "tubo PVC", "product": "tubo",
+                                                                                     "material": "PVC"}]), say())
+    result = turn(session, "de media, para agua", tool("buscar_productos", items=[PVC_HALF]),
+                  say("¿Cuántos metros necesitas? Datos simulados."),
+                  tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    assert result["planner"].seen[2]["observaciones"][-1]["error"]["code"] == "QUOTE_REQUIRED"
+    assert result["estado"] == "quoted" and "$25.500" in result["respuesta"]
+    # Otro producto no hereda la cantidad: el cliente no dijo cuántos bultos de cemento.
+    other = sessions.create()
+    turn(other, "necesito 2 brochas", tool("buscar_productos", items=[{"text": "brochas", "product": "brocha"}]), say())
+    cement = {"text": "cemento gris de 50 kg", "product": "cemento", "color": "gris", "measure": "50 kg"}
+    asked = turn(other, "¿y tienen cemento gris de 50 kg?", tool("buscar_productos", items=[cement]), say(),
+                 tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 2}]), say())
+    assert len(asked["planner"].seen) == 2 and "Total informativo" not in asked["respuesta"]
+
 def test_watcher_warns_one_minute_before_and_notifies_expiry_once(chat):
     turn, sessions, book, catalog, clock = chat
     session = sessions.create()

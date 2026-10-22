@@ -201,7 +201,15 @@ def validate_order_request(
     if name == "registrar_pedido":
         if not wants_to_buy(current, context):
             raise Rejected("PURCHASE_NOT_STATED", "El cliente no dijo que lo quiere llevar; pregúntale antes de registrar.")
-        return {"lines": _lines(arguments, reference, calls, context)}
+        lines = _lines(arguments, reference, calls, context)
+        # W-03 con Grok real: con «mejor que sean blancos, no amarillos» canceló los cascos amarillos y volvió a
+        # registrar los mismos; el cliente terminó sin pedido. Lo cancelado en este turno no se registra igual.
+        wanted = sorted((line["sku"], line["quantity"]) for line in lines)
+        if any(tool == "cancelar_pedido" and sorted((line.get("sku"), line.get("cantidad")) for line in order["lineas"]) == wanted
+               for tool, order in order_results(calls)):
+            raise Rejected("ORDER_UNCHANGED", "Es el mismo pedido que se acaba de cancelar: registra lo que el cliente "
+                                              "pidió ahora y, si cambió el producto, búscalo primero.")
+        return {"lines": lines}
     if name == "consultar_pedido":
         if not set(arguments) <= {"pedido"}:
             raise Rejected("INVALID_ARGUMENT", "consultar_pedido acepta solo pedido.")

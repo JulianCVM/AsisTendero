@@ -9,6 +9,7 @@ import re
 from asistendero.grok import Decision
 from asistendero.observations import ToolCall, order_results
 from asistendero.order_rules import mentioned_hours, order_action_pending
+from asistendero.catalog import tokens
 from asistendero.grok import ORDER_TOOLS
 from asistendero.validation import foreign_unit, grounded_products, normalize_text, quantities_in_message, sale_units
 
@@ -55,8 +56,9 @@ ORDER_HINTS = {
     "cancelar_todos": "El cliente pidió cancelar todo: llama a cancelar_pedido con cada pedido activo que queda, uno "
                       "por llamada, sin volver a preguntar.",
     # No es una herramienta: cambiar un pedido es cancelarlo y registrar el nuevo.
-    "cambiar_pedido": "El cliente cambió su pedido: cancela el pedido activo con cancelar_pedido y registra el "
-                      "nuevo con registrar_pedido con lo que dijo ahora; no dejes los dos apartados.",
+    "cambiar_pedido": "El cliente cambió su pedido: cancela el pedido activo con cancelar_pedido; si cambió el "
+                      "producto, búscalo con buscar_productos, y registra el nuevo con registrar_pedido con lo que "
+                      "dijo ahora; no dejes los dos apartados.",
     "consultar_pedido": "El cliente pregunta por su pedido: llama a consultar_pedido; \"pedidos\" no trae precios "
                         "ni el total.",
 }
@@ -115,14 +117,32 @@ def pending_reminder(
     counts = quantities - mentioned_hours(message)
     if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
         units = {remembered[0].get("sku"): f"{remembered[0].get('unidad') or ''} {remembered[0].get('variante') or ''}"}
+    said = message
+    if not quantities:
+        said, quantities = _answered_question(message, context, grounded_products(reference, calls))
     if (
         "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools
         # «un rollo» no es una cantidad de metros: si cada cantidad va en otra unidad, se pregunta, no se cotiza.
-        and any(not foreign_unit(message, quantity, unit) for unit in units.values() for quantity in quantities)
+        and any(not foreign_unit(said, quantity, unit) for unit in units.values() for quantity in quantities)
     ):
         return "QUOTE_REQUIRED"
     return None
+
+
+def _answered_question(message: str, context: dict | None, products: dict) -> tuple[str, set[int]]:
+    """Mensaje y cantidades del turno anterior si este solo contesta qué producto era.
+
+    W-02 con Grok real: «necesito 3 metros de tubo pvc», el agente preguntó cuál y el cliente dijo «de media, para
+    agua»; nadie pidió cotizar los 3 metros. Vale solo si la respuesta anterior preguntó y el cliente ya había
+    nombrado el producto encontrado: tras cotizar 2 brochas, «¿y tienen cemento?» no hereda el 2.
+    """
+    turns = (context or {}).get("turnos") or []
+    if not turns or "?" not in (turns[-1].get("asistente") or ""):
+        return message, set()
+    previous = turns[-1].get("cliente") or ""
+    named = any(tokens(product.name.split()[0], synonyms=False) & tokens(previous) for product in products.values())
+    return (previous, quantities_in_message(previous)) if named else (message, set())
 
 
 def with_reminders(observations: list[dict], sent: list[dict]) -> list[dict]:

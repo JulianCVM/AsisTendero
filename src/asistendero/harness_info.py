@@ -72,6 +72,7 @@ REJECTIONS = {
     "CONFIRMATION_NOT_STATED": "Confirmar sin un «sí» del cliente en este mensaje, o en el mismo turno del registro.",
     "TIME_NOT_GROUNDED": "Agendar una hora o un día que el cliente no dijo.",
     "CANCEL_NOT_STATED": "Cancelar sin que el cliente lo pida.",
+    "ORDER_UNCHANGED": "Registrar igual el pedido que se acaba de cancelar en el mismo turno.",
 }
 
 ERRORS = {

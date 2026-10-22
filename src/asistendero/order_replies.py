@@ -28,6 +28,7 @@ REJECTION_TEXT = {
     "CONFIRMATION_NOT_STATED": "Revisa el resumen del pedido y respóndeme «sí, confirmo» para confirmarlo.",
     "TIME_NOT_GROUNDED": "¿Qué día y a qué hora pasas a recoger? Por ejemplo: «hoy a las 4».",
     "CANCEL_NOT_STATED": "¿Quieres cancelar el pedido? Dímelo y lo cancelo.",
+    "ORDER_UNCHANGED": "¿Qué te llevas en lugar de lo que cancelé? Dime el producto y cuántas unidades.",
     "SESSION_REQUIRED": "Para registrar un pedido abre una conversación; aquí solo puedo cotizar.",
     # Sin estos textos, un código de pedido inventado («P-XXXXXX») terminaba en «No pude verificar ese producto».
     "INVALID_ARGUMENT": "No encuentro ese pedido en esta conversación. Si quieres llevar algo, dime el producto y "
