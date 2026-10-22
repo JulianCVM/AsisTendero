@@ -63,14 +63,18 @@ propio.
 ## Antes de escribir código
 
 1. **Lee `docs/HARNESS.md`**, el `README.md` y, si tocas conversación o seguridad, `docs/CONVERSACION_Y_SEGURIDAD.md`.
-   El alcance y el reparto del corte vigente están en el plan del corte (S2: nota «S2 - Plan 72 horas» del vault
-   PulsoTienda, fuera del repositorio).
+   El alcance del corte vigente está en el plan del corte del vault PulsoTienda, fuera del repositorio (S3: nota
+   «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
    - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
    - `normalize_text`, `is_distinguished`, `grounded_products` y `quantities_in_message` (`validation.py`).
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
    - `format_cop` y `reply_is_grounded` (`answers.py`); `next_node` (`graph.py`).
    - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
+   - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `SessionStore` y `remembered_products`
+     (`sessions.py`); `run_turn` (`chat.py`); `measures` y `contradicts` (`measures.py`).
+   - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
+     (`eval_report.py`).
 
    Duplicar es un error aunque funcione.
 3. **Haz solo lo que pide la tarea.** Nada de refactors, renombres ni reformateos fuera del alcance. Si ves algo mal,
@@ -108,7 +112,10 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |
 | Un dato nuevo de la traza (`run_id`, latencia, tokens, costo) | `tracing.py`; el costo se calcula con `pricing.py` |
-| Un caso de evaluación | `evaluation/cases.json`; los resultados reales, en `evaluation/*.md` |
+| Una pregunta trampa, un tema delicado o un dato personal que filtrar | `guardrails.py` (`SENSITIVE_TOPICS`, `PERSONAL_DATA`), con su prueba en `tests/test_guardrails.py` |
+| Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
+| Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
+| Un caso de evaluación | `evaluation/cases.json` (con su `suite`) y su guion en `tests/test_evaluation_cases.py`; los resultados reales, en `evaluation/*.md` |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` (nunca datos reales); `seed.py` arma `PRODUCTS` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
