@@ -32,6 +32,10 @@ NUMBER_WORDS = {
     "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
     "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "quince": 15, "veinte": 20,
 }
+# En ferretería se pide por grupos: «una docena de brochas» son 12, no 1, y «un ciento de puntillas», 100.
+GROUP_SIZES = {"docena": 12, "decena": 10, "ciento": 100}
+GROUP_COUNT = re.compile(
+    rf"\b(media|medio|\d{{1,2}}|{'|'.join(NUMBER_WORDS)})\s+(docena|decena|ciento)s?\b")
 
 
 class Rejected(Exception):
@@ -113,6 +117,11 @@ def quantities_in_message(message: str) -> set[int]:
     # La ñ se conserva antes de quitar tildes: «martillo de uña» no dice «una» unidad.
     text = MONEY.sub(" ", normalize_text(message.replace("ñ", "nh").replace("Ñ", "NH")))
     text = re.sub(r"\d+\s*/\s*\d+", " ", text)
+    groups = set()
+    for count, group in GROUP_COUNT.findall(text):
+        factor = 0.5 if count in {"media", "medio"} else int(count) if count.isdigit() else NUMBER_WORDS[count]
+        groups.add(int(factor * GROUP_SIZES[group]))
+    text = GROUP_COUNT.sub(" ", text)
     # Con el catálogo ampliado también son medidas «9 W», «12 AWG», «grano 80», «talla 40» o el 2 de «1/4 x 2».
     measure = (r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×|w\b|watts|awg|ml\b|oz\b|lb\b|a\b|amperios|grados"
                r"|dientes|piezas|salidas|polos?\b|pies\b|litros?\b|l\b|g\b))")
@@ -122,7 +131,7 @@ def quantities_in_message(message: str) -> set[int]:
         NUMBER_WORDS[word]
         for word in re.findall(rf"\b({'|'.join(NUMBER_WORDS)})\b{measure}", text)
     }
-    return found
+    return found | groups
 
 
 def sale_units(text: str) -> set[str]:

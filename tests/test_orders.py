@@ -436,6 +436,54 @@ def test_a_question_about_confirming_is_not_a_confirmation(chat):
     assert confirms("sí, ¿a qué hora abren?") and not confirms("¿ya quedó confirmado?")
 
 
+
+def test_changing_the_quantity_cancels_and_registers_again(chat):
+    # «mejor que sean 5 metros» no decía «cancela» ni «me llevo»: el pedido de 3 no se podía corregir.
+    turn, sessions, book, catalog, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    first = turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    code = first["tool_calls"][0]["response"]["data"]["pedido"]
+    lazy = turn(session, "mejor que sean 5 metros", say("Listo. Datos simulados."),
+                tool("cancelar_pedido", pedido=code), tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 5}]),
+                say())
+    reminder = lazy["planner"].seen[1]["observaciones"][-1]["error"]
+    assert reminder["code"] == "ORDER_REQUIRED" and "cancelar_pedido" in reminder["message"]
+    assert [order["estado"] for order in book.session_orders(session)][::-1] == ["cancelado", "pendiente"]
+    assert "$42.500" in lazy["respuesta"]
+    # Solo queda apartado el pedido nuevo: 12 en bodega menos 5 (los 3 del cancelado se liberaron).
+    assert catalog.get("PVC-050").stock == 7
+
+
+def test_a_change_phrase_without_an_active_order_cancels_nothing(chat):
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    first = turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    code = first["tool_calls"][0]["response"]["data"]["pedido"]
+    # Una pregunta de precio no cambia el pedido: cancelar sigue exigiendo la frase del cliente.
+    asked = turn(session, "¿y cuánto valen los codos de 1/2?", tool("cancelar_pedido", pedido=code), say())
+    assert asked["tool_calls"][0]["response"]["error"]["code"] == "CANCEL_NOT_STATED"
+    turn(session, "cancélalo", tool("cancelar_pedido", pedido=code), say())
+    # Ya cancelado, «mejor que sean 5» no tiene pedido activo que cambiar: registrar exige que diga que lo lleva.
+    later = turn(session, "mejor que sean 5 metros", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 5}]),
+                 say())
+    assert later["tool_calls"][0]["response"]["error"]["code"] == "PURCHASE_NOT_STATED"
+    assert [order["estado"] for order in book.session_orders(session)] == ["cancelado"]
+
+
+def test_adding_a_product_registers_it(chat):
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    brush = {"text": "brochas de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas"}
+    added = turn(session, "agrégale 2 brochas de 3 pulgadas", tool("buscar_productos", items=[brush]),
+                 tool("registrar_pedido", lines=[{"sku": "BRO-3", "quantity": 2}]), say())
+    assert added["tool_calls"][1]["executed"] and "$13.800" in added["respuesta"]
+    assert sorted(order["estado"] for order in book.session_orders(session)) == ["pendiente", "pendiente"]
+
+
 def test_watcher_warns_one_minute_before_and_notifies_expiry_once(chat):
     turn, sessions, book, catalog, clock = chat
     session = sessions.create()

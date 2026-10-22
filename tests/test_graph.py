@@ -639,6 +639,20 @@ def test_measures_of_the_large_catalog_are_not_quantities(message, expected):
     assert quantities_in_message(message) == expected
 
 
+@pytest.mark.parametrize("message, expected", [
+    # «una docena» contaba como 1: Grok podía cotizar una brocha y se rechazaban las 12 que pidió el cliente.
+    ("Necesito una docena de brochas de 3 pulgadas", {12}),
+    ("media docena de lijas grano 100", {6}),
+    ("2 docenas de chazos de 1/4", {24}),
+    ("un ciento de puntillas", {100}),
+    ("tres docenas y 2 brochas", {36, 2}),
+])
+def test_dozens_and_hundreds_are_quantities(message, expected):
+    from asistendero.validation import quantities_in_message
+
+    assert quantities_in_message(message) == expected
+
+
 def test_enie_words_are_not_number_words():
     from asistendero.validation import quantities_in_message
 

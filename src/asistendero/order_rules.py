@@ -27,7 +27,14 @@ PURCHASE_INTENT = re.compile(
     r"\b(?:(?:me\s+)?(?:lo|la|los|las)\s+(?:llevo|compro|pido|aparta\w*|separa\w*)|(?:me\s+)?llev(?:o|amos|aria|ariamos)\b"
     r"|quiero\s+(?:comprar|pedir|llevar|encargar)|vo(?:y|i)\s+a\s+(?:llevar|comprar)|compr(?:o|amos|aria)\b"
     r"|(?:haga|hagame|hazme|has|haz|hagan|montame|registr\w*)\s+(?:el\s+|un\s+)?pedido|apart\w*|separ(?:a|e|ar|ame|amelo|en)\b"
-    r"|reserv\w*|encarg\w*|alist\w*|vend(?:a|e)me\w*|me\s+(?:lo|la|los|las)\s+(?:guarda|guarde|deja|dejan))"
+    r"|reserv\w*|encarg\w*|alist\w*|vend(?:a|e)me\w*|me\s+(?:lo|la|los|las)\s+(?:guarda|guarde|deja|dejan)"
+    r"|agreg\w*|anad\w*|sumale\w*|ponme\s+tambien)"
+)
+# Cambiar un pedido activo («mejor que sean 5 metros», «no son 3 sino 5»): no hay herramienta para editarlo, así
+# que se cancela y se registra de nuevo; esta frase autoriza las dos cosas aunque no diga «cancela» ni «me llevo».
+CHANGE_INTENT = re.compile(
+    r"\b(?:mejor\s+(?:que\s+)?(?:sean|seria|dame|deme|ponme|ponle|son|solo)|cambi\w+|en\s+(?:vez|lugar)\s+de"
+    r"|corrig\w+|no\s+(?:son|eran|serian)\s+\w+\s+sino|sino\s+\w+)\b"
 )
 CONFIRMATION = re.compile(
     r"^\W*(?:si+|sip|claro|ok(?:ey|ay)?|vale|va|listo|dale|correcto|perfecto|exacto)\b"
@@ -82,9 +89,17 @@ def confirms(message: str) -> bool:
     return bool(CONFIRMATION.search(text))
 
 
+def changes_order(message: str, context: dict | None) -> bool:
+    """El cliente cambia un pedido que sigue activo en su conversación."""
+    active = any(order.get("estado") in {"pendiente", "confirmado"} for order in (context or {}).get("pedidos") or [])
+    return active and bool(CHANGE_INTENT.search(normalize_text(message)))
+
+
 def wants_to_buy(message: str, context: dict | None) -> bool:
     text = normalize_text(message)
     if PURCHASE_INTENT.search(text) and not re.search(r"\bno\s+(?:lo|la|los|las)?\s*(?:llevo|compro)\b", text):
+        return True
+    if changes_order(message, context):
         return True
     turns = (context or {}).get("turnos") or []
     return bool(turns) and confirms(message) and bool(ORDER_OFFER.search(normalize_text(turns[-1].get("asistente", ""))))
@@ -190,7 +205,7 @@ def validate_order_request(
         if any(tool == "registrar_pedido" and order["pedido"] == order_id for tool, order in order_results(calls)):
             raise Rejected("CONFIRMATION_NOT_STATED", "El pedido se acaba de registrar: muéstrale el resumen y "
                                                       "espera su confirmación.")
-    elif not CANCEL_INTENT.search(normalize_text(current)):
+    elif not CANCEL_INTENT.search(normalize_text(current)) and not changes_order(current, context):
         raise Rejected("CANCEL_NOT_STATED", "El cliente no pidió cancelar ese pedido.")
     return {"pedido": order_id}
 
@@ -206,6 +221,8 @@ def order_action_pending(current: str, reference: str, calls: list[ToolCall], co
     text = normalize_text(current)
     if CANCEL_INTENT.search(text):
         return "cancelar_pedido" if active and "cancelar_pedido" not in tools else None
+    if changes_order(current, context) and not {"cancelar_pedido", "registrar_pedido"} <= tools:
+        return "cambiar_pedido"
     if pending and confirms(current) and "confirmar_pedido" not in tools and "registrar_pedido" not in tools:
         return "confirmar_pedido"
     if active and mentioned_hours(current) and "agendar_recogida" not in tools:
