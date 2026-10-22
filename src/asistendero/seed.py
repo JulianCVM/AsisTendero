@@ -1,5 +1,6 @@
 """Crea un catálogo SQLite 100 % ficticio para las pruebas locales."""
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -112,7 +113,9 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
         raise FileExistsError(f"La base ya existe: {path}. Bórrala manualmente para regenerar datos ficticios.")
 
     try:
-        with sqlite3.connect(path) as connection:
+        # «with connect()» solo confirma: closing() suelta el archivo, que en Windows quedaba tomado y hacía
+        # fallar el borrado de una base a medio crear.
+        with closing(sqlite3.connect(path)) as connection, connection:
             connection.execute(
                 """CREATE TABLE products (
                     business_id TEXT NOT NULL,

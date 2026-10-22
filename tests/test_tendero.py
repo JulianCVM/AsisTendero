@@ -183,3 +183,30 @@ def test_inventory_releases_the_database_file(tmp_path):
     Inventory(copy).products()
     copy.unlink()
     assert not copy.exists()
+
+
+def test_creating_the_catalog_closes_its_connection(tmp_path):
+    # create_mock_db dejaba la conexión abierta hasta que Python la liberaba (ResourceWarning en 3.13+).
+    import gc
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        path = create_mock_db(tmp_path / "catalog.sqlite3")
+        gc.collect()
+    assert not [item for item in caught if issubclass(item.category, ResourceWarning)]
+    path.unlink()
+
+
+def test_a_failed_catalog_creation_leaves_no_half_built_file(tmp_path, monkeypatch):
+    # Con la conexión abierta, en Windows borrar la base a medio crear fallaba y tapaba el error original.
+    import sqlite3
+
+    from asistendero import seed
+
+    broken = [(*seed.PRODUCTS[0][:5], -1, *seed.PRODUCTS[0][6:])]  # existencias negativas: las rechaza el CHECK
+    monkeypatch.setattr(seed, "PRODUCTS", broken)
+    with pytest.raises(sqlite3.IntegrityError):
+        seed.create_mock_db(tmp_path / "catalog.sqlite3")
+    assert not (tmp_path / "catalog.sqlite3").exists()
+
