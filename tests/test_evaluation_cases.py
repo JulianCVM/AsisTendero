@@ -127,3 +127,22 @@ def test_every_s3_case_passes_with_a_scripted_grok(tmp_path):
     # Esos rechazos cuestan cero; no dejan el total como desconocido (pasó en la primera corrida S3).
     assert summary["cost_complete"] and report["cost"] is not None
     assert summary["tasks"] == len(cases) and summary["turns"] == len(cases) + 5
+
+
+def test_each_case_is_reported_as_soon_as_it_ends(tmp_path):
+    # Si la corrida se corta, lo ya consumido queda registrado caso por caso.
+    catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
+    cases = [case for case in json.loads(Path("evaluation/cases.json").read_text(encoding="utf-8"))
+             if case["id"] in {"T-01", "G-01", "T-02"}]
+    queues = {message: list(steps) for message, steps in SCRIPTS.items()}
+    seen = []
+
+    def planner(message, observations, remaining, **_):
+        if len(seen) == 1:
+            raise KeyboardInterrupt  # la corrida se corta en el segundo caso (T-02)
+        return queues[message].pop(0)
+
+    with pytest.raises(KeyboardInterrupt):
+        evaluate.evaluate_cases(cases, catalog=catalog, planner=planner, on_record=seen.append)
+    assert [record["id"] for record in seen] == ["T-01"]
+    assert seen[0]["model_calls"] == 2

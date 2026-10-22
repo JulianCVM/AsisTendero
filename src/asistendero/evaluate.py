@@ -1,6 +1,7 @@
 """Evaluación con casos sintéticos de uno o varios turnos; las llamadas pagadas exigen --live."""
 
 import argparse
+from collections.abc import Callable
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -242,15 +243,19 @@ def evaluate_cases(
     planner: Planner = decide_with_grok,
     skip_ids: set[str] | None = None,
     include_failures: bool = False,
+    on_record: Callable[[dict], None] = lambda record: None,
 ) -> dict:
-    """Ejecuta una lista de casos sobre el grafo trazado y construye el reporte de métricas."""
+    """Ejecuta una lista de casos sobre el grafo trazado y construye el reporte de métricas.
+
+    ``on_record`` recibe cada caso apenas termina: si la corrida se interrumpe, lo ya gastado queda registrado.
+    """
     skipped = skip_ids or set()
     selected_cases = [case for case in cases if case["id"] not in skipped]
     executor = catalog_executor(catalog)
-    records = [
-        (_run_conversation if "turns" in case else _run_record)(case, executor=executor, planner=planner)
-        for case in selected_cases
-    ]
+    records = []
+    for case in selected_cases:
+        records.append((_run_conversation if "turns" in case else _run_record)(case, executor=executor, planner=planner))
+        on_record(records[-1])
     failures = run_controlled_failures(catalog=catalog, planner=planner) if include_failures else []
 
     report = {
@@ -313,11 +318,24 @@ def main() -> int:
     limit = args.limit or len(all_cases)
     if not 1 <= limit <= len(all_cases):
         parser.error(f"--limit debe estar entre 1 y {len(all_cases)}")
+    started = datetime.now(timezone.utc)
+    # Bitácora parcial, un renglón por caso: en S3 cinco corridas se cortaron por falta de memoria del equipo
+    # sin dejar reporte, y su consumo no se pudo registrar.
+    partial_path = Path(".local") / f"eval-{started:%Y%m%dT%H%M%S%fZ}.partial.jsonl"
+
+    def log_partial(record: dict) -> None:
+        line = {"id": record["id"], "model": current_model(), "prompt_version": PROMPT_VERSION, **state,
+                "passed": record["passed"], "model_calls": record["model_calls"],
+                "total_tokens": record.get("total_tokens"), "cost": record.get("cost")}
+        with partial_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+
     report = evaluate_cases(
         all_cases[:limit],
         catalog=catalog,
         skip_ids=_parse_skip(args.skip),
         include_failures=args.include_failures,
+        on_record=log_partial,
     )
     report.update(state)
     for record in report["cases"]:
@@ -325,7 +343,7 @@ def main() -> int:
         print(f"{record['id']}: {'PASS' if record['passed'] else 'FAIL'} ({record['actual_status']}){detail}")
     for failure in report["controlled_failures"]:
         print(f"{failure['id']}: {'PASS' if failure['passed'] else 'FAIL'} ({failure['actual_status']})")
-    report_path = Path(".local") / f"eval-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}.json"
+    report_path = Path(".local") / f"eval-{started:%Y%m%dT%H%M%S%fZ}.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = report["summary"]
     print(f"Resultado: {report['passed']}/{report['total']} con {report['model']}. Costo: {summary['cost_usd']} USD "
