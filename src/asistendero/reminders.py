@@ -8,7 +8,7 @@ import re
 
 from asistendero.grok import Decision
 from asistendero.observations import ToolCall, order_results
-from asistendero.order_rules import order_action_pending
+from asistendero.order_rules import mentioned_hours, order_action_pending
 from asistendero.grok import ORDER_TOOLS
 from asistendero.validation import foreign_unit, grounded_products, normalize_text, quantities_in_message, sale_units
 
@@ -106,12 +106,18 @@ def pending_reminder(
         return "SEARCH_REQUIRED"
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
+    units = {sku: product.unit for sku, product in grounded_products(reference, calls).items()}
+    remembered = (context or {}).get("productos") or []
+    # Q-11: tras «¿tienen silicona transparente?», «dame 2» no se cotizaba porque el turno no volvió a buscar. Con un
+    # solo producto recordado no hay duda de cuál es; una hora («paso a las 10») no es una cantidad que cotizar.
+    counts = quantities - mentioned_hours(message)
+    if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
+        units = {remembered[0].get("sku"): remembered[0].get("unidad") or ""}
     if (
         "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools
         # «un rollo» no es una cantidad de metros: si cada cantidad va en otra unidad, se pregunta, no se cotiza.
-        and any(not foreign_unit(message, quantity, product.unit)
-                for product in grounded_products(reference, calls).values() for quantity in quantities)
+        and any(not foreign_unit(message, quantity, unit) for unit in units.values() for quantity in quantities)
     ):
         return "QUOTE_REQUIRED"
     return None

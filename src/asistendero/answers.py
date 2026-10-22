@@ -110,7 +110,7 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
         answer = "\n".join([*store, _quote_text(quote, {}), *([orders[1]] if orders else [])])
         return (orders and orders[0]) or "quoted", answer + "\nSon datos de demostración."
     if not findings and (store or orders):
-        return (orders and orders[0]) or "informed", "\n".join([*store, *([orders[1]] if orders else [])]) + "\nSon datos de demostración."
+        return (orders and (orders[0] or "order_issue")) or "informed", "\n".join([*store, *([orders[1]] if orders else [])]) + "\nSon datos de demostración."
     if not findings:
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
             return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
