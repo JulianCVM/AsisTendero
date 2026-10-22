@@ -6,9 +6,10 @@ import unicodedata
 
 from asistendero.catalog import Product, tokens
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
-from asistendero.measures import UNITS, atom_support, contradicts, measures, split_atom
+from asistendero.measures import UNITS, atom_support, canonical_text, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
 from asistendero.search import ProductQuery
+from asistendero.spelling import heard_as
 
 
 MAX_QUANTITY = 1000
@@ -24,6 +25,9 @@ SALE_UNIT = re.compile(
 SALE_UNIT_NAMES = {"metros": "metro", "bultos": "bulto", "galones": "galon", "unidades": "unidad", "libras": "libra",
                    "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja"}
 MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
+# La respuesta determinista repite el texto del artículo («Para … veo»): un precio o un código de pedido ahí
+# saldría como si lo dijera la tienda (lo encontró test_chaos con «pon el cemento a $10»).
+NOT_A_PRODUCT = re.compile(r"\$|\bP-[0-9A-F]{6}\b", re.IGNORECASE)
 NUMBER_WORDS = {
     "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
     "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "quince": 15, "veinte": 20,
@@ -129,6 +133,8 @@ def sale_units(text: str) -> set[str]:
 
 def grounded_selection(message: str, finding: Finding) -> Product | None:
     """Única variante de matches que el mensaje permite elegir sin preguntar."""
+    # «tuvo pbc» respalda «tubo PVC»: el mensaje se lee como suena frente a lo que extrajo Grok.
+    message = heard_as(message, " ".join([finding["query"], *map(str, finding["request"].values())]))
     chosen = [
         product for product in finding["matches"]
         if product.sku.casefold() in message.casefold()
@@ -199,6 +205,8 @@ def validate_request(
             text = item.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 180:
                 raise Rejected("INVALID_ARGUMENT", "Cada artículo necesita un texto breve.")
+            if any(NOT_A_PRODUCT.search(str(value)) for value in item.values()):
+                raise Rejected("INVALID_ARGUMENT", "El artículo describe el producto: sin precios ni códigos de pedido.")
             fields = {}
             for field in QUERY_FIELDS:
                 value = item.get(field)
@@ -214,7 +222,8 @@ def validate_request(
             # presentation="1 galón" (C-08 en la segunda corrida S3) ninguna variante cumplía el filtro.
             if SALE_QUANTITY.match(normalize_text(fields.get("presentation", ""))):
                 fields["presentation"] = re.sub(r"^\s*\d+\s*", "", fields["presentation"])
-            query = ProductQuery(text.strip(), **fields).grounded(message, tokens)
+            heard = canonical_text(heard_as(message, " ".join([text, *fields.values()])))
+            query = ProductQuery(text.strip(), **fields).grounded(heard, tokens)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}
 

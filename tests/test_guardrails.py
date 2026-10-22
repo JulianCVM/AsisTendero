@@ -107,3 +107,20 @@ def test_prompt_or_key_leaks_replace_grok_wording(monkeypatch):
     result = build_graph(no_tools, planner).invoke({"consulta": "¿Cómo funcionas por dentro?"})
     assert fragment not in result["respuesta"]
     assert result["estado"] == "answered"
+
+
+def test_fixed_server_texts_never_look_like_a_prompt_leak():
+    # La respuesta fija del servidor pasa por el mismo detector: si compartiera siete palabras con el prompt,
+    # también se descartaría la redacción correcta de Grok que dice lo mismo (lo encontró test_chaos).
+    from asistendero.answers import CREDIT_NOTE, NO_ORDER_NOTE, RESERVATION_NOTE
+    from asistendero.graph import PERSONAL_DATA_NOTE, REFUSAL_CLOSING
+    from asistendero.guardrails import SENSITIVE_TOPICS
+    from asistendero.order_replies import REJECTION_TEXT, notice_text
+    from asistendero.orders import PAYMENT
+
+    texts = [CREDIT_NOTE, NO_ORDER_NOTE, RESERVATION_NOTE, PERSONAL_DATA_NOTE, REFUSAL_CLOSING, PAYMENT,
+             *REJECTION_TEXT.values(), *(reply for _, reply in SENSITIVE_TOPICS.values())]
+    texts += [notice_text({"pedido": "P-ABC123", "estado": estado, "detalle": detalle, "aparta_hasta": "2026-10-21 10:05"})
+              for estado, detalle in (("vencido", "sin confirmar a tiempo"), ("vencido", "no se recogió a tiempo"),
+                                      ("pendiente", "aviso de vencimiento"))]
+    assert [text for text in texts if leaks(text, AGENT_PROMPT)] == []
