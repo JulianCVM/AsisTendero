@@ -32,6 +32,8 @@
 
 **Reporte fuente:** `.local/eval-20261020T195908540327Z.json` (`created_at: 2026-10-20T19:59:08.535838+00:00`, commit `a1456cf`, `PROMPT_VERSION = s2-tools-v1`).
 
+> **Corrección del 21-10-2026:** el lote usó `--include-failures`, que entró en `a9c110f` (20:43 UTC), así que corrió sobre `a1456cf` **con cambios sin commit** en `src/`. El reporte de entonces no guardaba el commit; desde la sección 12, `evaluate.py` guarda `commit` y `src_dirty` en cada reporte.
+
 | Caso | `run_id` | Entrada (`query`) | Esperado (estado / SKU) | Obtenido (estado / SKU) | Resultado | Herramientas ejecutadas | Llamadas Grok | Tokens (in / caché / out / total) | Latencia (`ms`) | Costo (`USD`) |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `S2-01` | `d9fb0b5dc11f` | `Necesito 2 metros de tubo PVC de 1/2 para agua` | `quoted` (`PVC-050`) | `found` (`PVC-050`) | **FAIL** | `buscar_productos` | `2` | `2.260` / `256` / `131` / `2.391` | `7.662` | `$0.0028837000` |
@@ -106,7 +108,7 @@ Los tres casos fallaron por la **misma causa raíz**: tras ejecutar `buscar_prod
 
 1. **La observación de `buscar_productos` ya entrega `price_cop` y `stock` al modelo (`observations.py:148`):**
    - En `observation_for_model` (`src/asistendero/observations.py`, línea 148), cada coincidencia de `matches` se serializa con `vars(p)`, lo que incluye `"price_cop": 8500` y `"stock": 12`.
-   - Aunque `Product.facts_for_model()` en `src/asistendero/catalog.py` (líneas 91-93) fue diseñado precisamente para exponer solo `(sku, name, variant, unit, stock)` sin precio, `observation_for_model` no lo usa y envía el diccionario completo con `price_cop` y `stock`.
+   - Aunque `Product.facts_for_model()` en `src/asistendero/catalog.py` (líneas 91-93) expone solo `(sku, name, variant, unit)`, sin precio **ni existencias** (corregido el 21-10-2026: antes decía que incluía `stock`), `observation_for_model` no lo usa y envía el diccionario completo con `price_cop` y `stock`.
 2. **En `S2-01` (`run_id: d9fb0b5dc11f`) y `S2-10` (`run_id: 7d3d9c3d414d`):**
    - El cliente pide un solo producto con cantidad (`"Necesito 2 metros de tubo PVC de 1/2 para agua"`), sin decir explícitamente `"cotiza"` ni pedir dos artículos distintos que obliguen a sumar (`S2-02`).
    - Al recibir `"price_cop": 8500` y `"stock": 12` en la observación del paso 1, Grok considera que ya tiene los datos para responder y genera:

@@ -178,10 +178,15 @@ def decide_with_grok(message: str, observations: list[dict], remaining_calls: in
         "llamadas_disponibles": remaining_calls,
     }
     raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(AGENT_PROMPT, payload)
-    usage = dict(
-        model=model, input_tokens=in_tokens, output_tokens=out_tokens, raw_response=raw,
+    return decision_from_raw(
+        raw, model=model, input_tokens=in_tokens, output_tokens=out_tokens,
         cached_input_tokens=cached_tokens, reported_cost_usd_ticks=cost_ticks,
     )
+
+
+def decision_from_raw(raw: str, **usage: object) -> Decision:
+    """Convierte el texto de Grok en una decisión; un texto inválido da ``valid_json=False``."""
+    usage = {**usage, "raw_response": raw}
     try:
         action, intent, tool, arguments, reply = parse_decision(raw)
     except (ValueError, KeyError, TypeError):

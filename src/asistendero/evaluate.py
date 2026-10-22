@@ -6,13 +6,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 
 from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
 from asistendero.executor import catalog_executor
 from asistendero.graph import Planner, ToolExecutor
-from asistendero.grok import DEFAULT_MODEL, PROMPT_VERSION, decide_with_grok
+from asistendero.grok import DEFAULT_MODEL, PROMPT_VERSION, decide_with_grok, decision_from_raw
 from asistendero.pricing import run_cost
 from asistendero.tracing import run_traced
 from asistendero.validation import grounded_products
@@ -21,6 +22,20 @@ from asistendero.validation import grounded_products
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
 INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"
 FAILURE_QUERY = "Necesito 2 metros de tubo PVC de 1/2 para agua"
+# Texto que no es una decisión JSON; recorre el mismo parse_decision que una respuesta real de Grok.
+INVALID_MODEL_OUTPUT = "Claro, el tubo cuesta $1.000 y ya te lo aparté."
+
+
+def git_state() -> dict:
+    """Commit evaluado y si src/ tenía cambios sin commit: sin esto la evidencia no se puede reproducir."""
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                                check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "src"], capture_output=True, text=True,
+                               check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "src_dirty": None}
+    return {"commit": commit, "src_dirty": bool(dirty)}
 
 
 def _selected_skus(query: str, tool_calls: list[dict]) -> list[str]:
@@ -105,7 +120,10 @@ def run_controlled_failures(
     catalog: MockCatalog,
     planner: Planner = decide_with_grok,
 ) -> list[dict]:
-    """Ejecuta los dos fallos controlados de S2: catálogo ausente y modelo inaccesible."""
+    """Fallos controlados: catálogo ausente, modelo inaccesible y salida inválida del modelo.
+
+    Solo F-01 llama a Grok; F-02 apunta a un puerto local cerrado y F-03 no sale a la red.
+    """
     missing_catalog = MockCatalog(catalog.path.parent / "missing_catalog_s2_failure.sqlite3")
     catalog_failure = _run_record(
         {
@@ -142,7 +160,17 @@ def run_controlled_failures(
             os.environ.pop("GROK_API_KEY", None)
         else:
             os.environ["GROK_API_KEY"] = previous_key
-    return [catalog_failure, model_failure]
+    invalid_output = _run_record(
+        {
+            "id": "F-03-MODEL_INVALID_OUTPUT",
+            "query": FAILURE_QUERY,
+            "expected_status": "model_invalid",
+            "expected_error_code": "MODEL_INVALID_OUTPUT",
+        },
+        executor=catalog_executor(catalog),
+        planner=lambda *_: decision_from_raw(INVALID_MODEL_OUTPUT, model=DEFAULT_MODEL),
+    )
+    return [catalog_failure, model_failure, invalid_output]
 
 
 def _parse_skip(raw_skip: list[str] | None) -> set[str]:
@@ -195,7 +223,7 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="Hacer llamadas reales al modelo (consume cupo)")
     parser.add_argument("--limit", type=int, default=10, help="Máximo de casos; predeterminado: 10")
     parser.add_argument("--skip", nargs="*", default=[], help="IDs de casos a omitir (ej. --skip S2-02)")
-    parser.add_argument("--include-failures", action="store_true", help="Ejecutar también los 2 fallos controlados")
+    parser.add_argument("--include-failures", action="store_true", help="Ejecutar también los 3 fallos controlados")
     args = parser.parse_args()
     if not args.live:
         print("Sin llamadas al modelo. Usa --live para ejecutar los casos sintéticos.")
@@ -213,6 +241,7 @@ def main() -> int:
         skip_ids=_parse_skip(args.skip),
         include_failures=args.include_failures,
     )
+    report.update(git_state())
     for record in report["cases"]:
         print(f"{record['id']}: {'PASS' if record['passed'] else 'FAIL'} ({record['actual_status']})")
     for failure in report["controlled_failures"]:

@@ -1,6 +1,6 @@
 # Harness experimental de AsisTendero
 
-**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v2`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok está en `evaluation/S2_EVIDENCIA.md`: con `s2-tools-v1` se aprobaron `7/10` casos oficiales y `2/2` fallos controlados; con `s2-tools-v2` (commit `ffcdde4`) pasaron `10/10` casos y `2/2` fallos controlados en una sola corrida.
+**Estado:** prototipo local del corte S2 (herramientas reales). No representa la plataforma comercial completa ni cierra las issues PT-006, PT-031, PT-032 o PT-038. Usa `PROMPT_VERSION=s2-tools-v2`, datos ficticios y las tres herramientas reales del servidor (`tools.py`). La evidencia de ejecución real sobre Grok está en `evaluation/S2_EVIDENCIA.md`: con `s2-tools-v1` se aprobaron `7/10` casos oficiales y `2/2` fallos controlados; con `s2-tools-v2` (commit `ffcdde4`) pasaron `10/10` casos y `2/2` fallos controlados en una sola corrida. La corrida vigente, con el tercer fallo controlado, está en la sección 13 de esa evidencia.
 
 ## Contrato del flujo
 
@@ -26,13 +26,13 @@ La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)` en `to
 - Rechazos sin ejecución: `UNKNOWN_TOOL`, `INVALID_ARGUMENT`, `INVALID_QUANTITY` (entero de 1 a 1.000) y `DUPLICATE_CALL`.
 - `TOO_MANY_ITEMS`: una búsqueda de más de 5 artículos se rechaza, y desde ese rechazo también cualquier búsqueda posterior de la misma ejecución, para que Grok no recorte la lista en silencio (en X-09 quitó el martillo). La respuesta pide al cliente dividir la lista (estado `clarify`).
 - `SKU_NOT_GROUNDED`: un SKU solo se consulta o cotiza si fue coincidencia de una búsqueda previa y el mensaje distingue su variante. Con medida ambigua se pregunta; una opción cercana nunca se acepta como equivalente.
-- `QUANTITY_NOT_GROUNDED`: solo se cotizan cantidades que el cliente dijo. Medidas como 1/2, 50 kg o 2 pulgadas no cuentan como cantidad.
+- `QUANTITY_NOT_GROUNDED`: solo se cotizan cantidades que el cliente dijo. Medidas como 1/2, 50 kg o 2 pulgadas no cuentan como cantidad, y tampoco los precios («$10», «$1.000», «5000 pesos»): antes, una cifra inyectada como «el cemento cuesta $10» quedaba como cantidad dicha.
 - Los filtros de búsqueda que el mensaje no respalda se descartan (`ProductQuery.grounded`). Una `measure` que solo es cantidad de venta («2 metros», «1 bulto») también se descarta: en X-03 hizo que la búsqueda devolviera opciones cercanas en vez de preguntar el diámetro.
 - Como máximo hay 6 llamadas a herramientas por ejecución (`MAX_TOOL_CALLS`). Al alcanzarlo, la ejecución termina con `TOOL_CALL_LIMIT` y muestra solo lo ya consultado.
 
 ## Fallos
 
-- Del modelo: `MODEL_NOT_CONFIGURED`, `MODEL_AUTH`, `MODEL_QUOTA`, `MODEL_TIMEOUT` y `MODEL_UNAVAILABLE`, sin el texto del SDK, que podría traer datos de la solicitud. Una decisión inválida termina en `MODEL_INVALID_OUTPUT`.
+- Del modelo: `MODEL_NOT_CONFIGURED`, `MODEL_AUTH`, `MODEL_QUOTA`, `MODEL_TIMEOUT` y `MODEL_UNAVAILABLE`, sin el texto del SDK, que podría traer datos de la solicitud. Una decisión inválida termina en `MODEL_INVALID_OUTPUT`. Si el texto de Grok no es una decisión válida, `grok.decision_from_raw` la marca con `valid_json=False` y el grafo no ejecuta nada.
 - De las herramientas: los códigos de negocio del ejecutor (`NOT_FOUND`, `INSUFFICIENT_STOCK`, `CATALOG_UNAVAILABLE`…). Si el ejecutor lanza una excepción o devuelve un sobre mal formado, el código es `TOOL_FAILURE`.
 - Cada fallo termina en un `estado` seguro (`model_error`, `model_invalid`, `limit_reached`, `tool_error`, `insufficient_stock`, `quote_error`) y en una respuesta que no inventa precio ni existencias.
 
@@ -60,7 +60,13 @@ El visor muestra el costo **por ejecución** y por llamada, en USD. Primero usa 
 - los fallos del catálogo y del modelo, el límite de llamadas y la inyección de precio;
 - la ausencia de la clave en la traza y el registro de `run_id`, latencia, tokens y costos.
 
-`python -m asistendero.evaluate --live --limit 10 --include-failures` (con `--skip` opcional para omitir IDs ya verificados) usa Grok real y las herramientas integradas sobre los diez casos `S2-01` a `S2-10` de `evaluation/cases.json` y los dos fallos controlados, guardando los eventos completos, `run_id`, versión del prompt, herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia en `.local/`. Los resultados reales verificados y las trazas de entrega se encuentran en `evaluation/S2_EVIDENCIA.md`.
+`python -m asistendero.evaluate --live --include-failures` (con `--skip` opcional para omitir IDs ya verificados) usa Grok real y las herramientas integradas sobre los casos de `evaluation/cases.json` y tres fallos controlados:
+
+- `F-01-CATALOG_UNAVAILABLE`: Grok real con un catálogo que no existe.
+- `F-02-MODEL_UNAVAILABLE`: la pasarela apunta a un puerto local cerrado; no sale a la red ni gasta créditos.
+- `F-03-MODEL_INVALID_OUTPUT`: un texto que no es JSON («el tubo cuesta $1.000 y ya te lo aparté») recorre el mismo `decision_from_raw` que una respuesta real; no sale a la red. Debe terminar en `model_invalid`, sin herramientas y sin repetir la cifra.
+
+El reporte guarda en `.local/` los eventos completos, `run_id`, versión del prompt, modelo, **commit evaluado y si `src/` tenía cambios sin commit** (`commit`, `src_dirty`), herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia. Un caso pasa si el estado coincide y cada SKU esperado aparece en lo que el servidor consultó, cotizó **o respaldó en la búsqueda** (`grounded_products`): un caso `found` no necesita llamar a `consultar_disponibilidad`, porque el SKU ya lo respalda el servidor. Los resultados reales verificados y las trazas de entrega se encuentran en `evaluation/S2_EVIDENCIA.md`.
 
 Las mediciones de `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
 

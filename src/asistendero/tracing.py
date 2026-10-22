@@ -146,7 +146,13 @@ def run_traced(
                 start_node("interpret")
             elif node == "interpret":
                 following = next_node(state)
-                if following == "respond" and not state.get("tool_calls"):
+                if following == "interpret":
+                    # El código del aviso llega en las observaciones del siguiente model_request.
+                    push("route", details={
+                        "motivo": "Grok respondió sin un paso que el mensaje exige; el servidor le envía un aviso.",
+                        "aviso": True,
+                    })
+                elif following == "respond" and not state.get("tool_calls"):
                     push("route", details={
                         "motivo": "Grok decidió responder sin herramientas."
                         if not state.get("error")

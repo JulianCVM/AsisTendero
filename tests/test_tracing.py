@@ -112,6 +112,31 @@ def test_trace_records_model_failure_with_code_and_unknown_cost():
     assert response["details"]["error"]["code"] == "MODEL_TIMEOUT"
 
 
+def test_trace_shows_server_reminders_when_grok_answers_without_required_steps():
+    events = []
+    steps = iter([
+        Decision("respond", "productos", None, None, "El PVC está a $1.000."),
+        Decision("call_tool", "productos", "buscar_productos",
+                 {"items": [{"text": "2 metros de PVC de 1/2 para agua", "product": "tubo", "material": "PVC",
+                             "measure": "1/2 pulgada", "use": "agua"}]}, ""),
+        Decision("respond", "productos", None, None, ""),
+        Decision("respond", "productos", None, None, ""),
+    ])
+    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, executor, lambda *_: next(steps))
+
+    reminders = [event for event in events if event["type"] == "route" and event["details"].get("aviso")]
+    assert len(reminders) == 2
+    requests = [event["details"]["observaciones"] for event in events if event["type"] == "model_request"]
+    assert requests[1][0]["error"]["code"] == "SEARCH_REQUIRED"
+    assert [item.get("error", {}).get("code") for item in requests[3] if item["estado"] == "aviso"] == [
+        "SEARCH_REQUIRED", "QUOTE_REQUIRED",
+    ]
+    # Cada aviso se envía una vez: tras el segundo «respond» el servidor no insiste ni cotiza por su cuenta.
+    assert events[-1]["details"]["tools_executed"] == ["buscar_productos"]
+    assert events[-1]["details"]["model_calls"] == 4
+    assert "$1.000" not in result["respuesta"]
+
+
 def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
     catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
     cases = json.loads(Path("evaluation/cases.json").read_text(encoding="utf-8"))
@@ -223,7 +248,7 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
     assert [item["id"] for item in report["cases"]] == ["S2-01"]
     assert report["passed"] == 1 and report["total"] == 1
 
-    f_catalog, f_model = report["controlled_failures"]
+    f_catalog, f_model, _ = report["controlled_failures"]
     assert f_catalog["id"] == "F-01-CATALOG_UNAVAILABLE"
     assert f_catalog["passed"]
     assert f_catalog["actual_status"] == "tool_error"
@@ -238,6 +263,13 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
     model_req = next(event for event in f_model["events"] if event["type"] == "model_request")
     assert model_req["details"]["endpoint"] == "http://127.0.0.1:9/v1"
     assert "clave-local-no-publicar" not in json.dumps(report)
+
+    f_invalid = report["controlled_failures"][2]
+    assert f_invalid["id"] == "F-03-MODEL_INVALID_OUTPUT"
+    assert f_invalid["passed"]
+    assert f_invalid["actual_status"] == "model_invalid"
+    assert f_invalid["tools_executed"] == []
+    assert "$1.000" not in f_invalid["response"] and "apart" not in f_invalid["response"]
 
 
 def test_evaluate_cli_exits_without_calling_grok_when_live_flag_is_absent(monkeypatch, capsys):
