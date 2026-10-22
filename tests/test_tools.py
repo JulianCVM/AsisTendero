@@ -151,10 +151,12 @@ def test_execute_tool_validates_names_arguments_and_quantities(catalog, name, ar
 def test_execute_tool_enforces_server_business_and_store_scope(catalog):
     with sqlite3.connect(catalog.path) as connection:
         connection.execute(
-            "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("otro-negocio", "otra-sede", "EXT-900", "Llave inglesa", "10 pulgadas", "unidad", 25000, 5, "llave", "2026-10-15T00:00:00-05:00"),
+            "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("otro-negocio", "otra-sede", "EXT-900", "Taladro inalámbrico", "18 V", "unidad", 25000, 5, "taladro",
+             "2026-10-15T00:00:00-05:00", "Herramientas eléctricas"),
         )
-    search_res = execute_tool("buscar_productos", {"items": [{"text": "llave inglesa 10 pulgadas", "product": "llave"}]}, catalog=catalog)
+    # El taladro solo existe en otro negocio: la sede de demostración no lo ve.
+    search_res = execute_tool("buscar_productos", {"items": [{"text": "taladro inalámbrico 18 V", "product": "taladro"}]}, catalog=catalog)
     assert search_res["data"]["results"] == [{"matches": [], "nearby": []}]
 
     avail_res = execute_tool("consultar_disponibilidad", {"sku": "EXT-900"}, catalog=catalog)

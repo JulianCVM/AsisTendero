@@ -26,7 +26,8 @@ class ProductQuery:
                 value_words = tokenize(value)
                 if field == "measure":
                     numbers = {word for word in value_words if any(char.isdigit() for char in word)}
-                    units = {"pulgada", "kg", "cm", "mm", "metro", "litro", "galon"}
+                    # metro y galón no cuentan: también son unidades de venta («2 metros de PVC de 1/2»).
+                    units = {"pulgada", "kg", "cm", "mm", "litro"}
                     explicit_units = phrase_words & units
                     grounded = bool(numbers and numbers <= message_words and numbers <= phrase_words)
                     if explicit_units and not (value_words & explicit_units):

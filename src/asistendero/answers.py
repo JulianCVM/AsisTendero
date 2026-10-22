@@ -8,7 +8,8 @@ from asistendero.observations import ToolCall, availability_by_sku, latest_quote
 from asistendero.validation import grounded_products, grounded_selection, normalize_text
 
 
-PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones"}
+PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones", "libra": "libras",
+          "rollo": "rollos", "par": "pares", "pliego": "pliegos", "bolsa": "bolsas", "caja": "cajas"}
 # Una afirmación de acción ejecutada, descuento o equivalencia invalida la redacción de Grok, y también
 # ofrecer apartar o reservar (en S2-02 Grok preguntó «¿Quieres apartar…?»): la demo no lo hace.
 FORBIDDEN_CLAIMS = re.compile(
@@ -170,7 +171,7 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall]) -> bool:
         return False
     if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:
         return False
-    counts = re.findall(r"\b(\d+)\s+(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\b", normalized)
+    counts = re.findall(r"\b(\d+)\s+(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?|libras?|rollos?|par(?:es)?|pliegos?|bolsas?|cajas?)\b", normalized)
     if any(int(count) not in allowed_counts for count in counts):
         return False
     # «Agotado» solo vale si algún producto elegido tiene stock 0 (en S2-07 Grok escribió «agotado para 20»

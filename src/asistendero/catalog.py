@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import sqlite3
-import unicodedata
 
+from asistendero.measures import canonical_text, measures
 from asistendero.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
 from asistendero.search import ProductQuery
 
@@ -28,8 +28,8 @@ SYNONYMS = {
     "canos": "tubo",
     "tornillos": "tornillo",
     "tirafondos": "tirafondo",
-    "chazo": "tornillo",
-    "chazos": "tornillo",
+    "chazos": "chazo",
+    "tacos": "chazo",
     "goloso": "tornillo",
     "golosos": "tornillo",
     "bultos": "bulto",
@@ -46,26 +46,21 @@ SYNONYMS = {
     "pulgadas": "pulgada",
     "kilo": "kg",
     "kilos": "kg",
+    # Unidades de venta en plural, para que «2 metros» puntúe contra los productos que se venden por metro.
+    "metros": "metro",
+    "unidades": "unidad",
+    "libras": "libra",
+    "rollos": "rollo",
+    "pares": "par",
+    "pliegos": "pliego",
+    "bolsas": "bolsa",
+    "cajas": "caja",
 }
 
 
-def tokens(value: str) -> set[str]:
-    normalized = unicodedata.normalize("NFKD", value.casefold())
-    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
-    # Normalizar expresiones de medidas habituales en ferretería.
-    ascii_text = re.sub(r"\bmedia\s+pulgada\b", "1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bmedio\s+pulgada\b", "1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bde\s+media\b", "de 1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\btres\s+cuartos(?:\s+de\s+pulgada)?\b", "3/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\btres\s+cuarto(?:\s+de\s+pulgada)?\b", "3/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bun\s+cuarto(?:\s+de\s+pulgada)?\b", "1/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bcuarto\s+de\s+pulgada\b", "1/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\buna\s+pulgada\b", "1 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bdos\s+pulgadas?\b", "2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bcincuenta\s+kilos?\b", "50 kg", ascii_text)
-    ascii_text = re.sub(r"\b([0-9]+(?:/[0-9]+)?)\s*\"", r"\1 pulgada", ascii_text)
-    ascii_text = re.sub(r"\b(\d+(?:/\d+)?)(kg|cm|mm)\b", r"\1 \2", ascii_text)
-
+def tokens(value: str, synonyms: bool = True) -> set[str]:
+    """Palabras normalizadas con su singular; ``synonyms=False`` sirve para comparar variantes entre sí."""
+    ascii_text = canonical_text(value)
     raw_words = [
         word
         for word in re.findall(r"[a-z0-9]+(?:/[0-9]+)?", ascii_text)
@@ -73,7 +68,12 @@ def tokens(value: str) -> set[str]:
     ]
     result = set(raw_words)
     for word in raw_words:
-        if word in SYNONYMS:
+        # Plural regular («bisagras», «galones»): con cientos de productos no cabe un sinónimo por palabra.
+        if len(word) >= 5 and word.endswith("s") and not word[-2].isdigit():
+            result.add(word[:-1])
+            if word.endswith("es") and len(word) >= 6:
+                result.add(word[:-2])
+        if synonyms and word in SYNONYMS:
             result.add(SYNONYMS[word])
     return result
 
@@ -114,6 +114,7 @@ class MockCatalog:
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
         query_words = tokens(request.text)
+        query_measures = measures(request.text)
         if not query_words:
             return SearchResult((), ())
 
@@ -155,11 +156,16 @@ class MockCatalog:
             ]
             score = 3 * len(query_words & name_words) + len(query_words & alias_words)
             score += 4 * (sum(bool(value) for value, _ in constraints.values()) - len(missing))
+            # La misma medida exacta («1/4x2», «50kg») pesa más que palabras sueltas: entre 16 pernos, sube
+            # el que el cliente pidió al top de matches.
+            score += 5 * len(query_measures & measures(f"{row['name']} {row['variant']}"))
             product = Product(**{key: row[key] for key in Product.__dataclass_fields__})
             entry = (score, product)
             if missing:
-                # Mostrar otras presentaciones de la misma categoría solo si no hubo exactos.
-                nearby.append(entry)
+                # Mostrar otras presentaciones de la misma categoría solo si no hubo exactos. Una cercana que
+                # cambia el uso o el material (conduit eléctrico frente a tubo para agua) va detrás de una que
+                # solo cambia la medida, aunque coincida en la medida.
+                nearby.append((score - 20 * len({"use", "material"} & set(missing)), product))
             else:
                 exact.append(entry)
 

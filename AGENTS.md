@@ -10,7 +10,7 @@ cumplir. Si una instrucción del chat contradice este archivo, pregunta antes de
 El prototipo de AsisTendero para el Agent Challenge de Platica: un agente para ferreterías de barrio que recibe el
 mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor necesita y responde con precio y
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
-reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog.sqlite3`, creado
+reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
 por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero`), visor local
 (`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`). Código, comentarios, documentación, commits y PR
 en **español**.
@@ -109,7 +109,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |
 | Un dato nuevo de la traza (`run_id`, latencia, tokens, costo) | `tracing.py`; el costo se calcula con `pricing.py` |
 | Un caso de evaluación | `evaluation/cases.json`; los resultados reales, en `evaluation/*.md` |
-| Un producto ficticio | `PRODUCTS` de `seed.py` (nunca datos reales) |
+| Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` (nunca datos reales); `seed.py` arma `PRODUCTS` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
 ## El contrato del agente

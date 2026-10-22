@@ -6,6 +6,7 @@ import unicodedata
 
 from asistendero.catalog import Product, tokens
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, TOOL_NAMES
+from asistendero.measures import UNITS, atom_support, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
 from asistendero.search import ProductQuery
 
@@ -16,6 +17,12 @@ SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{1,31}$")
 # «2 metros» o «1 bulto» es cuánto se vende, no una medida del producto: en la corrida exploratoria X-03
 # Grok la puso en measure y la búsqueda devolvió opciones cercanas en vez de preguntar el diámetro.
 SALE_QUANTITY = re.compile(r"^\s*\d+\s*(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
+SALE_UNIT = re.compile(
+    r"\b(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
+    r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?)\b"
+)
+SALE_UNIT_NAMES = {"metros": "metro", "bultos": "bulto", "galones": "galon", "unidades": "unidad", "libras": "libra",
+                   "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja"}
 MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
 NUMBER_WORDS = {
     "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
@@ -34,23 +41,62 @@ def normalize_text(value: str) -> str:
     return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
+def _variant_elements(product: Product) -> tuple[set[str], set[str]]:
+    """Átomos de medida y palabras de la variante, sin sinónimos («cuñete» no es «galón»).
+
+    Una palabra de unidad sale de las palabras solo si ya viaja en un átomo: en «cuñete de 5 galones» la
+    lleva ``5gal``, pero en la variante «galón» es justo lo que la distingue.
+    """
+    atoms = measures(product.variant)
+    atom_units = {split_atom(atom)[1] for atom in atoms}
+    words = {
+        word for word in tokens(product.variant, synonyms=False)
+        if not any(char.isdigit() for char in word) and word not in {"x", "de"}
+        and not (word in UNITS and UNITS[word] in atom_units)
+    }
+    return atoms, words
+
+
+def _support(
+    product: Product, common: tuple[set[str], set[str]], said_atoms: set[str], said_words: set[str],
+) -> tuple[int, int] | None:
+    """(puntos de lo que el mensaje dice de la variante, -rasgos propios que no dice), o None si no le cabe."""
+    atoms, words = _variant_elements(product)
+    if contradicts(atoms, said_atoms):
+        return None
+    contrast_atoms, contrast_words = atoms - common[0], words - common[1]
+    supports = [atom_support(atom, said_atoms) for atom in contrast_atoms]
+    supports += [2 if word in said_words else 0 for word in contrast_words]
+    if sum(supports):
+        return sum(supports), -supports.count(0)
+    # Una variante sin rasgos propios frente a sus pares vale si el mensaje nombra algo de ella.
+    if not supports and (words & said_words or atoms & said_atoms):
+        return 0, 0
+    return None
+
+
 def is_distinguished(original: str, item_query: str, selected: Product, candidates: list[Product]) -> bool:
-    """La variante debe estar respaldada por el mensaje original y por el item extraído."""
-    original_tokens = tokens(original)
-    item_tokens = tokens(item_query)
-    variant_tokens = tokens(selected.variant)
-    explicit_measures = re.findall(
-        r"\b(\d+(?:/\d+)?)\s*(?:pulgada\w*|kg|kilo\w*)\b",
-        normalize_text(item_query),
-    )
-    if explicit_measures and not (set(explicit_measures) & variant_tokens):
+    """La variante es la única que el mensaje describe mejor entre las de su mismo nombre.
+
+    Solo cuenta lo que dicen a la vez el mensaje original y el artículo que extrajo Grok. Las medidas se
+    comparan como átomos (``measures``): «2 tornillos de 1/4 x 1» elige 1/4 x 1 aunque haya un 2 suelto.
+    """
+    original_numbers = {split_atom(atom)[0] for atom in measures(original)} | {
+        atom for atom in measures(original) if "x" in atom.lstrip("#")}
+    said_atoms = {atom for atom in measures(item_query) if atom in original_numbers or split_atom(atom)[0] in original_numbers}
+    said_words = tokens(original, synonyms=False) & tokens(item_query, synonyms=False)
+    group = [item for item in candidates if item.name == selected.name]
+    elements = [_variant_elements(item) for item in group]
+    if len(group) == 1:
+        # Un producto único vale salvo que el mensaje dé otra medida en la misma unidad.
+        return not contradicts(elements[0][0], said_atoms)
+    common = (set.intersection(*(atoms for atoms, _ in elements)), set.intersection(*(words for _, words in elements)))
+    scores = {item.sku: _support(item, common, said_atoms, said_words) for item in group}
+    fitting = {sku: score for sku, score in scores.items() if score is not None}
+    if not fitting:
         return False
-    peers = [item for item in candidates if item.name == selected.name and item.sku != selected.sku]
-    if not peers:
-        # Para un producto único tampoco aceptamos una medida contradictoria.
-        return not explicit_measures or bool(set(explicit_measures) & variant_tokens)
-    unique_variant = variant_tokens - set().union(*(tokens(item.variant) for item in peers))
-    return bool(unique_variant & original_tokens & item_tokens)
+    best = max(fitting.values())
+    return [sku for sku, score in fitting.items() if score == best] == [selected.sku]
 
 
 def quantities_in_message(message: str) -> set[int]:
@@ -59,13 +105,22 @@ def quantities_in_message(message: str) -> set[int]:
     # y el 0 quedaban como cantidades dichas y Grok podía cotizarlas.
     text = MONEY.sub(" ", normalize_text(message))
     text = re.sub(r"\d+\s*/\s*\d+", " ", text)
-    measure = r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×))"
-    found = {int(value) for value in re.findall(rf"\b(\d{{1,4}})\b{measure}", text)}
+    # Con el catálogo ampliado también son medidas «9 W», «12 AWG», «grano 80», «talla 40» o el 2 de «1/4 x 2».
+    measure = (r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×|w\b|watts|awg|ml\b|oz\b|lb\b|a\b|amperios|grados"
+               r"|dientes|piezas|salidas|polos?\b|pies\b|litros?\b|l\b|g\b))")
+    label = r"(?<![#x×])(?<!x )(?<!× )(?<!grano )(?<!talla )(?<!calibre )(?<!numero )"
+    found = {int(value) for value in re.findall(rf"{label}\b(\d{{1,4}})\b{measure}", text)}
     found |= {
         NUMBER_WORDS[word]
         for word in re.findall(rf"\b({'|'.join(NUMBER_WORDS)})\b{measure}", text)
     }
     return found
+
+
+def sale_units(text: str) -> set[str]:
+    """Unidades de venta que acompañan una cantidad («2 metros», «un bulto»), en singular."""
+    found = SALE_UNIT.findall(normalize_text(text))
+    return {SALE_UNIT_NAMES.get(unit, unit) for unit in found}
 
 
 def grounded_selection(message: str, finding: Finding) -> Product | None:
@@ -75,6 +130,11 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         if product.sku.casefold() in message.casefold()
         or is_distinguished(message, finding["query"], product, finding["matches"])
     ]
+    if len(chosen) > 1:
+        # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
+        # de venta dicha (metro) los separa. Si aun así quedan varios, se pregunta.
+        units = sale_units(finding["query"]) & sale_units(message)
+        chosen = [product for product in chosen if normalize_text(product.unit) in units] if units else chosen
     return chosen[0] if len(chosen) == 1 else None
 
 

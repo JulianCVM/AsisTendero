@@ -112,7 +112,7 @@ GROK_BASE_URL=https://api.reto.pltk.mx/v1
 .\.venv\Scripts\python.exe -m asistendero.seed
 ```
 
-En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes. La base se crea en `.local/mock_catalog.sqlite3`; el comando de carga se detiene si ya existe para no sobrescribirla.
+En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes. La base se crea en `.local/mock_catalog_s3.sqlite3`, con 384 variantes ficticias; el comando de carga se detiene si ya existe para no sobrescribirla.
 
 ## Uso
 

@@ -1,22 +1,45 @@
 """Crea un catálogo SQLite 100 % ficticio para las pruebas locales."""
 
+import json
 from pathlib import Path
 import sqlite3
+
+from asistendero.catalog_data import build_products
 
 
 DEMO_BUSINESS_ID = "demo-ferreteria"
 DEMO_STORE_ID = "sede-unica"
-DEFAULT_DB_PATH = Path(".local/mock_catalog.sqlite3")
+# Ruta nueva para el catálogo ampliado de S3: la base de seis productos de S2 (.local/mock_catalog.sqlite3)
+# se conserva para poder repetir la evidencia de ese corte con los mismos datos.
+DEFAULT_DB_PATH = Path(".local/mock_catalog_s3.sqlite3")
+UPDATED_AT = "2026-10-15T00:00:00-05:00"
 
+_ROWS = build_products()
 # SKU, nombre, variante, unidad, precio COP, stock, términos de búsqueda.
-PRODUCTS = [
-    ("PVC-050", "Tubo PVC presión para agua", "1/2 pulgada", "metro", 8500, 12, "tubo|tuberia|pvc|agua|media pulgada"),
-    ("PVC-075", "Tubo PVC presión para agua", "3/4 pulgada", "metro", 11500, 7, "tubo|tuberia|pvc|agua|tres cuartos"),
-    ("TOR-025-1", "Tornillo para madera", "1/4 x 1 pulgada", "unidad", 350, 80, "tornillo|madera|tirafondo"),
-    ("TOR-025-2", "Tornillo para madera", "1/4 x 2 pulgadas", "unidad", 520, 0, "tornillo|madera|tirafondo"),
-    ("CEM-050", "Cemento gris", "bulto de 50 kg", "bulto", 39500, 9, "cemento|gris|mezcla|bulto"),
-    ("PIN-BLA", "Pintura blanca vinilo", "galón", "galón", 56000, 4, "pintura|blanca|vinilo|galon"),
-]
+PRODUCTS = [row[:7] for row in _ROWS]
+CATEGORIES = {row[0]: row[7] for row in _ROWS}
+
+# Información de la tienda de demostración que lee consultar_info_tienda. Todo es ficticio.
+STORE_INFO = {
+    "nombre": {"texto": "Ferretería La Esquina (tienda de demostración)"},
+    "horario": {
+        "zona_horaria": "America/Bogota",
+        "dias": {
+            "lunes": ["07:00", "18:00"], "martes": ["07:00", "18:00"], "miercoles": ["07:00", "18:00"],
+            "jueves": ["07:00", "18:00"], "viernes": ["07:00", "18:00"], "sabado": ["07:00", "14:00"],
+            "domingo": None,
+        },
+        "festivos": "Cerrado los festivos.",
+    },
+    "ubicacion": {"texto": "Calle 10 # 5-23, barrio Centro (dirección ficticia de demostración)."},
+    "medios_pago": {"texto": "En el mostrador se recibe efectivo, transferencia y tarjeta débito o crédito. "
+                             "Este asistente no cobra ni recibe pagos."},
+    "domicilios": {"texto": "Domicilio en el barrio por $5.000 COP para compras desde $50.000 COP, "
+                            "coordinado por el mostrador. Este asistente no programa entregas."},
+    "garantias": {"texto": "Cambios con factura dentro de los 30 días siguientes, con el producto sin uso y en su "
+                           "empaque. Los materiales cortados a la medida (tubo, cable, cadena) no tienen cambio."},
+    "contacto": {"texto": "Para pedidos, reservas o reclamos atiende el personal del mostrador en el horario de la tienda."},
+}
 
 
 def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
@@ -40,14 +63,31 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
                     stock INTEGER NOT NULL CHECK (stock >= 0),
                     search_terms TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    category TEXT NOT NULL,
                     PRIMARY KEY (business_id, store_id, sku)
                 )"""
             )
+            connection.execute(
+                """CREATE TABLE store_info (
+                    business_id TEXT NOT NULL,
+                    store_id TEXT NOT NULL,
+                    topic TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    PRIMARY KEY (business_id, store_id, topic)
+                )"""
+            )
             connection.executemany(
-                "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (DEMO_BUSINESS_ID, DEMO_STORE_ID, *product, "2026-10-15T00:00:00-05:00")
+                    (DEMO_BUSINESS_ID, DEMO_STORE_ID, *product, UPDATED_AT, CATEGORIES[product[0]])
                     for product in PRODUCTS
+                ],
+            )
+            connection.executemany(
+                "INSERT INTO store_info VALUES (?, ?, ?, ?)",
+                [
+                    (DEMO_BUSINESS_ID, DEMO_STORE_ID, topic, json.dumps(content, ensure_ascii=False))
+                    for topic, content in STORE_INFO.items()
                 ],
             )
     except Exception:
@@ -57,7 +97,7 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
 
 
 def main() -> None:
-    print(f"Catálogo ficticio creado en {create_mock_db()}")
+    print(f"Catálogo ficticio de {len(PRODUCTS)} variantes creado en {create_mock_db()}")
 
 
 if __name__ == "__main__":

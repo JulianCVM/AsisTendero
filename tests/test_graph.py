@@ -566,3 +566,17 @@ def test_prices_in_the_message_are_not_quantities_grok_can_quote():
     assert result["tool_calls"][1]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
     assert [name for name, _ in executor.calls] == ["buscar_productos"]
     assert "$10" not in result["respuesta"]
+
+
+@pytest.mark.parametrize("message, expected", [
+    ("Necesito tornillo para madera 1/4 x 2 pulgadas", set()),
+    ("3 bombillos LED de 9 W", {3}),
+    ("10 metros de cable 12 AWG", {10}),
+    ("2 pliegos de lija grano 80", {2}),
+    ("un breaker 2 polos 40 A", {1}),
+    ("tornillo drywall #6 x 1", set()),
+])
+def test_measures_of_the_large_catalog_are_not_quantities(message, expected):
+    from asistendero.validation import quantities_in_message
+
+    assert quantities_in_message(message) == expected
