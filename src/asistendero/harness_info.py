@@ -59,6 +59,7 @@ ERRORS = {
     },
     "model": {
         "MODEL_NOT_CONFIGURED": "Falta la llave de Grok.",
+        "MODEL_NOT_ALLOWED": "Modelo fuera de los que permite el reto (Grok 4.7, 4.6, 4.5 o 4.20).",
         "MODEL_AUTH": "La pasarela rechazó la llave.",
         "MODEL_QUOTA": "Sin cuota o créditos.",
         "MODEL_TIMEOUT": "Grok no respondió a tiempo.",

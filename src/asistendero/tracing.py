@@ -10,10 +10,11 @@ from uuid import uuid4
 
 from asistendero.catalog import MockCatalog, tokens
 from asistendero.executor import catalog_executor
-from asistendero.graph import Planner, ToolExecutor, build_graph, next_node
+from asistendero.graph import Planner, ToolExecutor, after_validate, build_graph, next_node
 from asistendero.grok import (
     AGENT_PROMPT, DEFAULT_BASE_URL, DEFAULT_MODEL, PROMPT_VERSION, Decision, ModelError, decide_with_grok,
 )
+from asistendero.guardrails import redact_personal_data
 from asistendero.pricing import call_cost, run_cost
 
 
@@ -38,7 +39,9 @@ def run_traced(
     emit: Callable[[dict], None],
     tool_executor: ToolExecutor | None = None,
     planner: Planner = decide_with_grok,
+    context: dict | None = None,
 ) -> dict:
+    """Ejecuta el grafo y emite cada evento; ``context`` es la conversación previa de una sesión."""
     tool_executor = tool_executor or catalog_executor(MockCatalog())
     run_id = uuid4().hex[:12]
     started = perf_counter()
@@ -60,7 +63,7 @@ def run_traced(
         node_started = perf_counter()
         push("node", node=name, status="running", details={"run_id": run_id})
 
-    def traced_planner(message: str, observations: list[dict], remaining: int) -> Decision:
+    def traced_planner(message: str, observations: list[dict], remaining: int, **extra: object) -> Decision:
         phase = "resolve" if observations else "interpret"
         step_number = len(call_costs) + 1
         call_started = perf_counter()
@@ -74,10 +77,11 @@ def run_traced(
             "mensaje": message,
             "observaciones": observations,
             "llamadas_disponibles": remaining,
+            "conversacion": extra.get("context"),
             "api_key": "[omitida]",
         })
         try:
-            decision = planner(message, observations, remaining)
+            decision = planner(message, observations, remaining, **extra)
         except ModelError as exc:
             call_costs.append(None)
             push("model_response", details={
@@ -107,14 +111,17 @@ def run_traced(
         })
         return decision
 
-    push("input", details={"run_id": run_id, "consulta": query, "prompt_version": PROMPT_VERSION})
+    # Los datos personales no quedan en la traza ni en los reportes del evaluador.
+    push("input", details={"run_id": run_id, "consulta": redact_personal_data(query)[0],
+                           "prompt_version": PROMPT_VERSION, "sesion": bool(context)})
     start_node("validate")
     graph = build_graph(tool_executor, traced_planner)
-    for chunk in graph.stream({"consulta": query}, stream_mode="updates"):
+    for chunk in graph.stream({"consulta": query, "contexto": context}, stream_mode="updates"):
         for node, update in chunk.items():
             state.update(update)
             if node == "validate":
-                details = {"consulta_normalizada": update["consulta"], "longitud": len(update["consulta"])}
+                details = {"consulta_normalizada": update["consulta"], "longitud": len(update["consulta"]),
+                           "barreras": update["filtro"]["codes"], "datos_personales_omitidos": update["filtro"]["redacted"]}
             elif node == "interpret":
                 decision = update.get("decisiones", [None])[-1] if update.get("decisiones") else None
                 details = {
@@ -142,7 +149,11 @@ def run_traced(
                 duration_ms=round((perf_counter() - node_started) * 1000),
                 details=details,
             )
-            if node in {"validate", "retrieve"}:
+            if node == "validate" and after_validate(state) == "respond":
+                push("route", details={"motivo": "El mensaje solo pedía información que no se entrega; "
+                                                 "se responde sin llamar a Grok."})
+                start_node("respond")
+            elif node in {"validate", "retrieve"}:
                 start_node("interpret")
             elif node == "interpret":
                 following = next_node(state)
@@ -181,6 +192,7 @@ def run_traced(
         "error": state.get("error"),
         "model_called": state["model_called"],
         "model_calls": state["model_calls"],
+        "barreras": (state.get("filtro") or {}).get("codes", []),
         "tool_calls": len(tool_calls),
         "tools_requested": [call["requested_tool"] for call in tool_calls],
         "tools_executed": [call["requested_tool"] for call in tool_calls if call["executed"]],

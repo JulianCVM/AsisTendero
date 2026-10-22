@@ -7,7 +7,9 @@ import json
 
 from dotenv import load_dotenv
 
+from asistendero.chat import run_turn
 from asistendero.harness_info import describe_harness
+from asistendero.sessions import SessionError, SessionStore
 from asistendero.tracing import run_traced
 
 
@@ -81,6 +83,10 @@ class TraceHandler(BaseHTTPRequestHandler):
             query = request["consulta"]
             if not isinstance(query, str) or len(query) > 2000:
                 raise ValueError
+            in_session = request.get("sesion") is True
+            session_id = request.get("session_id")
+            if session_id is not None and not isinstance(session_id, str):
+                raise ValueError
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres.")
             return
@@ -93,7 +99,13 @@ class TraceHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            run_traced(query, emit)
+            if in_session:
+                store = self.server.sessions
+                run_turn(store, session_id or store.create(), query, emit)
+            else:
+                run_traced(query, emit)
+        except SessionError as exc:
+            emit({"type": "error", "code": exc.code, "message": str(exc)})
         except (ValueError, RuntimeError, FileNotFoundError) as exc:
             emit({"type": "error", "message": str(exc)})
         except (BrokenPipeError, ConnectionResetError):
@@ -107,8 +119,11 @@ class TraceHandler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port: int) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(("127.0.0.1", port), TraceHandler)
+def make_server(port: int, sessions: SessionStore | None = None) -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer(("127.0.0.1", port), TraceHandler)
+    # La sesión vive en el servidor; el visor solo guarda el identificador que este le entrega.
+    server.sessions = sessions or SessionStore()
+    return server
 
 
 def main() -> None:

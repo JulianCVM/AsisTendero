@@ -128,7 +128,15 @@ También puedes probar una pregunta sin búsqueda de productos:
 .\.venv\Scripts\python.exe -m asistendero "Hola, ¿están atendiendo en este momento?"
 ```
 
-La redacción puede variar entre llamadas. El agente debe distinguir los datos ficticios de los reales y no afirmar un horario que no se le ha proporcionado.
+La redacción puede variar entre llamadas. Desde S3 el horario es un dato ficticio de la tienda que el agente consulta con `consultar_info_tienda`; el servidor decide si está abierta según su reloj.
+
+Para una conversación de varios turnos con memoria de sesión (por ejemplo, «Busco tubo PVC de 1/2 para agua» y luego «dame 3 metros de ese»):
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero --chat
+```
+
+`--model grok-4.20-0309-reasoning` (u otro modelo de las familias 4.7, 4.6, 4.5 o 4.20) reemplaza `GROK_MODEL` para esa ejecución; un modelo fuera del reglamento se rechaza antes de llamar a la pasarela.
 
 ### Visor local
 
@@ -136,7 +144,7 @@ La redacción puede variar entre llamadas. El agente debe distinguir los datos f
 .\.venv\Scripts\python.exe -m asistendero.visual
 ```
 
-Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
+Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
 
 ### Docker
 

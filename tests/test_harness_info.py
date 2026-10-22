@@ -12,6 +12,7 @@ from asistendero import visual
 from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
 from asistendero.grok import AGENT_PROMPT, PROMPT_VERSION, TOOL_NAMES
 from asistendero.harness_info import describe_harness
+from asistendero.sessions import SessionStore
 
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "asistendero"
@@ -63,9 +64,9 @@ def test_description_never_includes_the_key_or_gateway(monkeypatch):
     assert "pasarela.example" not in serialized
 
 
-def test_visual_server_serves_harness_map_only_to_local_host(monkeypatch):
+def test_visual_server_serves_harness_map_only_to_local_host(monkeypatch, tmp_path):
     monkeypatch.setenv("GROK_API_KEY", "xai-clave-que-no-debe-salir")
-    server = visual.make_server(0)
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

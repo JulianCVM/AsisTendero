@@ -110,3 +110,36 @@ def test_missing_key_is_a_model_error(monkeypatch):
     with pytest.raises(grok.ModelError) as raised:
         grok.decide_with_grok("Hola", [], 6)
     assert raised.value.code == "MODEL_NOT_CONFIGURED"
+
+
+@pytest.mark.parametrize("model", ["grok-3", "grok-4.3", "gpt-4o"])
+def test_models_outside_the_challenge_rules_are_rejected_before_the_gateway(monkeypatch, model):
+    monkeypatch.setenv("GROK_API_KEY", "clave-de-prueba")
+    monkeypatch.setenv("GROK_MODEL", model)
+    monkeypatch.setattr(grok, "OpenAI", lambda **_: pytest.fail("No debía crear el cliente"))
+    with pytest.raises(grok.ModelError) as raised:
+        grok.decide_with_grok("Hola", [], 6)
+    assert raised.value.code == "MODEL_NOT_ALLOWED"
+
+
+def test_conversation_context_is_sent_only_in_a_session(monkeypatch):
+    seen = {}
+
+    def complete(system, payload):
+        seen.clear()
+        seen.update(payload)
+        return json.dumps({"action": "respond", "intent": "otro", "reply": "ok"}), "m", 1, 1, None, None
+
+    monkeypatch.setattr(grok, "_complete", complete)
+    context = {"turnos": [{"cliente": "Busco tubo PVC de 1/2", "asistente": "Cuesta [precio]"}], "productos": []}
+    grok.decide_with_grok("Dame 3", [], 6, context=context)
+    assert seen["conversacion"] == context
+    grok.decide_with_grok("Hola", [], 6)
+    assert "conversacion" not in seen
+
+
+def test_s2_hours_intent_is_still_accepted_as_store_intent(monkeypatch):
+    payload = {"action": "respond", "intent": "horario", "tool": None, "arguments": None, "reply": "Consulto."}
+    monkeypatch.setattr(grok, "_complete", fake_complete(payload))
+    decision = grok.decide_with_grok("¿Abren hoy?", [], 6)
+    assert decision.valid_json and decision.intent == "tienda"

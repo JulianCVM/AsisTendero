@@ -44,6 +44,15 @@ El prompt (`s3-conversacion-v1`) le dice a Grok qué nunca revela, pero la defen
 
 Es un filtro por reglas: reduce el riesgo, pero no es un detector general de inyección. Por eso la regla que importa sigue siendo que precio, existencias y horario solo salen de las herramientas.
 
+## Sesiones de chat y memoria
+
+Una conversación de varios turnos (`asistendero --chat` o el modo «Conversación con memoria» del visor) corre **el mismo grafo** en cada turno; `chat.run_turn` le agrega el contexto de la sesión y guarda el turno al terminar. `sessions.SessionStore` guarda en `.local/sessions.sqlite3` (ignorado por git):
+
+- **Qué ve Grok** (`conversacion` en su payload): los últimos 4 turnos, con el texto del cliente ya filtrado por las barreras y la respuesta con los montos reemplazados por `[precio]`, y hasta 8 productos identificados con SKU, nombre, variante y unidad. Nunca precio ni existencias: se releen del catálogo en cada turno, porque pudieron cambiar.
+- **Referencias entre turnos:** para elegir variante y respaldar un SKU, «lo que dijo el cliente» son sus últimos 3 turnos más el mensaje actual (`graph.reference_text`). Así, «Busco tubo PVC de 1/2 para agua» y luego «dame 3 metros de ese» permiten volver a buscar el tubo y cotizar 3 metros; el mismo «dame 3 metros de ese» sin sesión termina en `SKU_NOT_GROUNDED`. Las cantidades salen del turno actual y, solo si el turno no dice ninguna («cotízalo»), de la conversación. Los avisos `QUOTE_REQUIRED` usan solo las cantidades del turno, para no forzar una cotización con una cifra vieja.
+- **Límites:** el identificador lo crea el servidor (32 caracteres hexadecimales) y cualquier otro valor da `SESSION_NOT_FOUND`; la sesión vence tras 12 horas sin actividad (`SESSION_EXPIRED`) y se borra al crear la siguiente; una conversación admite 40 turnos (`SESSION_FULL`).
+- **Lo que nunca se guarda:** las frases que pedían información delicada, los datos personales (ya reemplazados) y el texto de un turno rechazado.
+
 ## Fallos
 
 - Del modelo: `MODEL_NOT_CONFIGURED`, `MODEL_AUTH`, `MODEL_QUOTA`, `MODEL_TIMEOUT` y `MODEL_UNAVAILABLE`, sin el texto del SDK, que podría traer datos de la solicitud. Una decisión inválida termina en `MODEL_INVALID_OUTPUT`. Si el texto de Grok no es una decisión válida, `grok.decision_from_raw` la marca con `valid_json=False` y el grafo no ejecuta nada.

@@ -1,22 +1,64 @@
-"""Interfaz local del flujo de AsisTendero."""
+"""Interfaz local del flujo de AsisTendero: un mensaje suelto o una conversación con sesión."""
 
 import argparse
+import os
 import sys
 
 from dotenv import load_dotenv
 
 from asistendero.catalog import MockCatalog
+from asistendero.chat import run_turn
 from asistendero.executor import catalog_executor
 from asistendero.graph import build_graph
 from asistendero.grok import decide_with_grok
+from asistendero.sessions import SessionError, SessionStore
+
+
+EXIT_WORDS = {"salir", "exit", "chao"}
+
+
+def _chat() -> int:
+    store = SessionStore()
+    session_id = store.create()
+    executor = catalog_executor(MockCatalog())
+    print("Conversación nueva con AsisTendero (datos de demostración). Escribe «salir» para terminar.")
+    while True:
+        try:
+            message = input("Cliente: ").strip()
+        except EOFError:
+            break
+        if message.casefold() in EXIT_WORDS:
+            break
+        if not message:
+            continue
+        try:
+            result = run_turn(store, session_id, message, tool_executor=executor)
+        except SessionError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        except (ValueError, RuntimeError, FileNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            continue
+        except Exception as exc:
+            # No mostrar mensajes de SDK/HTTP: podrían contener datos de la solicitud.
+            print(f"Error al consultar Grok ({type(exc).__name__}). Revisa clave, modelo, red y créditos.", file=sys.stderr)
+            continue
+        print(f"AsisTendero: {result['respuesta']}\n")
+    return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="AsisTendero: Grok decide → herramientas del servidor → respuesta")
     parser.add_argument("mensaje", nargs="*", help="Mensaje de un cliente de ferretería")
+    parser.add_argument("--chat", action="store_true", help="Conversación de varios turnos con memoria de sesión")
+    parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
     args = parser.parse_args()
 
     load_dotenv()
+    if args.model:
+        os.environ["GROK_MODEL"] = args.model
+    if args.chat:
+        return _chat()
     consulta = " ".join(args.mensaje).strip()
     if not consulta:
         if not sys.stdin.isatty():

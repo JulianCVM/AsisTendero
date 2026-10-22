@@ -9,6 +9,7 @@ from asistendero import evaluate, visual
 from asistendero.catalog import MockCatalog
 from asistendero.grok import Decision, ModelError
 from asistendero.seed import create_mock_db
+from asistendero.sessions import SessionStore
 from asistendero.tracing import run_traced
 
 
@@ -278,13 +279,13 @@ def test_evaluate_cli_exits_without_calling_grok_when_live_flag_is_absent(monkey
     assert "Usa --live" in capsys.readouterr().out
 
 
-def test_visual_server_streams_local_events_and_rejects_other_origins(monkeypatch):
+def test_visual_server_streams_local_events_and_rejects_other_origins(monkeypatch, tmp_path):
     def fake_run(query, emit):
         emit({"type": "input", "details": {"consulta": query}})
         emit({"type": "final", "details": {"estado": "ok", "respuesta": "Prueba", "model_called": False}})
 
     monkeypatch.setattr(visual, "run_traced", fake_run)
-    server = visual.make_server(0)
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -310,6 +311,45 @@ def test_visual_server_streams_local_events_and_rejects_other_origins(monkeypatc
         events = [json.loads(line) for line in response.read().decode("utf-8").splitlines()]
         assert [event["type"] for event in events] == ["input", "final"]
         connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_visual_server_keeps_the_session_on_the_server(monkeypatch, tmp_path):
+    def fake_turn(store, session_id, query, emit):
+        store.context(session_id)
+        turn = store.record(session_id, query, "Respuesta", "answered", [])
+        emit({"type": "session", "session_id": session_id, "turno": turn})
+
+    monkeypatch.setattr(visual, "run_turn", fake_turn)
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    headers = {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{server.server_port}"}
+
+    def post(body):
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            connection.request("POST", "/api/trace", json.dumps(body), headers)
+        except PermissionError:
+            pytest.skip("Este entorno restringe conexiones a sockets locales")
+        response = connection.getresponse()
+        events = [json.loads(line) for line in response.read().decode("utf-8").splitlines()]
+        connection.close()
+        return response.status, events
+
+    try:
+        status, first = post({"consulta": "Busco tubo PVC de 1/2", "sesion": True, "session_id": None})
+        assert status == 200 and first[-1]["turno"] == 1
+        session_id = first[-1]["session_id"]
+        _, second = post({"consulta": "Dame 3 metros", "sesion": True, "session_id": session_id})
+        assert second[-1] == {"type": "session", "session_id": session_id, "turno": 2}
+        _, foreign = post({"consulta": "Hola", "sesion": True, "session_id": "../../etc/passwd"})
+        assert foreign[-1]["type"] == "error" and foreign[-1]["code"] == "SESSION_NOT_FOUND"
+        status, _ = post({"consulta": "Hola", "sesion": True, "session_id": 123})
+        assert status == 400
     finally:
         server.shutdown()
         server.server_close()

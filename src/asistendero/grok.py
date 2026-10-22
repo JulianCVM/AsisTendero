@@ -11,6 +11,8 @@ from openai import OpenAI
 PROMPT_VERSION = "s3-conversacion-v1"
 DEFAULT_MODEL = "grok-4.20-0309-non-reasoning"
 DEFAULT_BASE_URL = "https://api.reto.pltk.mx/v1"
+# El reglamento del reto permite solo estas familias; otro modelo se rechaza antes de llamar a la pasarela.
+ALLOWED_MODEL_FAMILIES = ("grok-4.7", "grok-4.6", "grok-4.5", "grok-4.20")
 TEMPERATURE = 0
 MAX_OUTPUT_TOKENS = 600
 RESPONSE_FORMAT = {"type": "json_object"}
@@ -120,6 +122,8 @@ def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | N
     if not api_key:
         raise ModelError("MODEL_NOT_CONFIGURED", "Falta GROK_API_KEY. Configúrala en .env o en el entorno.")
     model = current_model()
+    if not model.startswith(ALLOWED_MODEL_FAMILIES):
+        raise ModelError("MODEL_NOT_ALLOWED", "El reto solo permite Grok 4.7, 4.6, 4.5 o 4.20.")
     client = OpenAI(
         api_key=api_key,
         base_url=os.getenv("GROK_BASE_URL", DEFAULT_BASE_URL).strip(),

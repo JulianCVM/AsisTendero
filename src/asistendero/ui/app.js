@@ -17,9 +17,16 @@
   const costBasis = document.querySelector('#cost-basis');
   const costLines = document.querySelector('#cost-lines');
   const filterButtons = [...document.querySelectorAll('[data-filter]')];
+  const sessionMode = document.querySelector('#session-mode');
+  const newSession = document.querySelector('#new-session');
+  const sessionLabel = document.querySelector('#session-label');
+  const history = document.querySelector('#chat-history');
+  // El servidor crea el identificador de la sesión; el visor solo lo devuelve en el turno siguiente.
+  let sessionId = null;
+  let turnNumber = 0;
   const nodeNames = ['validate', 'interpret', 'retrieve', 'respond'];
   const nodeLabels = {validate:'Validar mensaje', interpret:'Grok decide', retrieve:'Ejecutar herramienta', respond:'Resolver y verificar'};
-  const stateLabels = {found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
+  const stateLabels = {informed:'Información de la tienda', refused:'Pedido no permitido', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
@@ -83,7 +90,42 @@
   function updateCount() {
     document.querySelector('#char-count').textContent = query.value.length + ' / 2000';
   }
+  function historyRow(role, text) {
+    const row = document.createElement('div');
+    row.className = 'chat-row ' + role;
+    const icon = document.createElement('span');
+    icon.className = 'chat-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = role === 'customer' ? 'C' : 'AT';
+    const body = document.createElement('div');
+    const speaker = document.createElement('span');
+    speaker.className = 'speaker';
+    speaker.textContent = role === 'customer' ? 'Cliente' : 'AsisTendero';
+    const bubble = document.createElement('div');
+    bubble.className = role === 'customer' ? 'bubble' : 'bubble agent-bubble';
+    bubble.textContent = text;
+    body.append(speaker, bubble);
+    row.append(icon, body);
+    return row;
+  }
+  function renderSessionLabel() {
+    sessionLabel.textContent = !sessionMode.checked ? 'Una consulta por ejecución' :
+      (turnNumber ? 'Conversación con memoria · turno ' + turnNumber : 'Conversación con memoria · sin turnos');
+    newSession.disabled = !sessionMode.checked || !sessionId;
+  }
+  function clearSession() {
+    sessionId = null;
+    turnNumber = 0;
+    history.replaceChildren();
+    renderSessionLabel();
+  }
   function reset() {
+    // En una conversación, el turno anterior pasa al historial antes de mostrar el nuevo.
+    if (sessionMode.checked && sessionId && !customerMessage.hidden && currentAnswer) {
+      history.append(historyRow('customer', customerText.textContent), historyRow('agent', currentAnswer));
+    } else if (!sessionMode.checked) {
+      history.replaceChildren();
+    }
     customerText.textContent = query.value.trim();
     customerMessage.hidden = false;
     events = [];
@@ -123,7 +165,8 @@
     if (event.type === 'node') return nodeLabels[event.node] + ' · ' + (event.status === 'running' ? 'iniciando' : 'completado');
     if (event.type === 'model_request') return 'Solicitud a Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
     if (event.type === 'model_response') return 'Respuesta de Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
-    return ({input:'Mensaje recibido', route:'Ruta decidida', final:'Resultado final', error:'Error de ejecución'})[event.type] || event.type;
+    return ({input:'Mensaje recibido', route:'Ruta decidida', final:'Resultado final', error:'Error de ejecución',
+      session:'Memoria de la sesión'})[event.type] || event.type;
   }
   function subtitleOf(event) {
     if (event.type === 'node' && event.node === 'retrieve' && event.status === 'complete') {
@@ -206,10 +249,16 @@
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
       renderCost(result.cost, true);
       setStatus(stateLabels[result.estado] || result.estado || 'Finalizado',
-        ['found', 'answered'].includes(result.estado) || result.estado === 'quoted' ? 'success' : 'warning');
+        ['found', 'answered', 'quoted', 'informed', 'refused'].includes(result.estado) ? 'success' : 'warning');
       copy.disabled = !currentAnswer;
     }
+    if (event.type === 'session') {
+      sessionId = event.session_id;
+      turnNumber = event.turno;
+      renderSessionLabel();
+    }
     if (event.type === 'error') {
+      if (event.code && event.code.startsWith('SESSION_')) clearSession();
       setStatus('Error de ejecución', 'error');
       answer.textContent = event.message || 'No se pudo completar la prueba.';
       if (runningNode) setStep(runningNode, 'error');
@@ -220,6 +269,15 @@
   }
 
   query.addEventListener('input', updateCount);
+  sessionMode.addEventListener('change', clearSession);
+  newSession.addEventListener('click', () => {
+    clearSession();
+    customerMessage.hidden = true;
+    currentAnswer = '';
+    answer.textContent = 'Conversación nueva. Escribe el primer mensaje.';
+    responseBox.classList.add('is-empty');
+    query.focus();
+  });
   document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => {
     query.value = button.dataset.example;
     updateCount();
@@ -264,7 +322,8 @@
     try {
       const response = await fetch('/api/trace', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({consulta:query.value})
+        body:JSON.stringify(sessionMode.checked ?
+          {consulta:query.value, sesion:true, session_id:sessionId} : {consulta:query.value})
       });
       if (!response.ok) {
         const data = await response.json();
