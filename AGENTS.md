@@ -38,6 +38,10 @@ el sitio no publica fechas límite por hito.
 - **Hitos del Track 1:**
   - S1: flujo extremo a extremo con Grok, repositorio público y README con el problema.
   - S2: tres herramientas, manejo de errores, diez ejecuciones y video de dos minutos.
+    Aclaración de la organización (22-10-2026): una herramienta es una función que el agente decide invocar por
+    sí mismo para consultar o actuar de verdad (base de datos, API, la propia plataforma), con manejo de errores;
+    una función que solo regresa datos fijos no cuenta. La revisión de las diez herramientas está en
+    `evaluation/S4_EVIDENCIA.md`.
   - S3: un set de evaluación propio de 30 o más casos y un reporte de costo por tarea.
   - S4: mil unidades de trabajo, doce horas desatendido y bitácora completa.
 - **Evaluación del Track 1 (sobre 100):** impacto 25, autonomía y funcionalidad 25, ingeniería sobre Grok 20, evidencia

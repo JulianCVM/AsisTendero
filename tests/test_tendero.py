@@ -40,6 +40,11 @@ def test_price_and_stock_edits_reach_the_agent_and_leave_an_audit_trail(shop):
     updated = inventory.update("PVC-050", {"precio_cop": 9000, "stock": 20})
     assert updated["precio_cop"] == 9000 and updated["stock"] == 20 and updated["disponible"] == 20
     assert catalog.get("PVC-050").price_cop == 9000 and catalog.get("PVC-050").stock == 20
+    # Las herramientas que invoca el agente leen la base, no datos fijos: ven el cambio del tendero al instante.
+    from asistendero.tools import execute_tool
+    availability = execute_tool("consultar_disponibilidad", {"sku": "PVC-050"}, catalog=catalog)
+    quote = execute_tool("calcular_cotizacion_informativa", {"lines": [{"sku": "PVC-050", "quantity": 15}]}, catalog=catalog)
+    assert availability["data"]["stock"] == 20 and quote["data"]["total_cop"] == 135000
     history = inventory.history()
     assert {(item["campo"], item["antes"], item["despues"]) for item in history} == {
         ("precio", "8500", "9000"), ("existencias", "12", "20")}
