@@ -16,6 +16,7 @@ SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{1,31}$")
 # «2 metros» o «1 bulto» es cuánto se vende, no una medida del producto: en la corrida exploratoria X-03
 # Grok la puso en measure y la búsqueda devolvió opciones cercanas en vez de preguntar el diámetro.
 SALE_QUANTITY = re.compile(r"^\s*\d+\s*(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
+MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
 NUMBER_WORDS = {
     "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
     "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "quince": 15, "veinte": 20,
@@ -53,8 +54,11 @@ def is_distinguished(original: str, item_query: str, selected: Product, candidat
 
 
 def quantities_in_message(message: str) -> set[int]:
-    """Cantidades que el cliente expresó; excluye medidas como 1/2, 50 kg o 2 pulgadas."""
-    text = re.sub(r"\d+\s*/\s*\d+", " ", normalize_text(message))
+    """Cantidades que el cliente expresó; excluye medidas (1/2, 50 kg, 2 pulgadas) y precios."""
+    # Un precio no es una cantidad: con «el cemento cuesta $10» o «pon el precio en $1.000», el 10, el 1
+    # y el 0 quedaban como cantidades dichas y Grok podía cotizarlas.
+    text = MONEY.sub(" ", normalize_text(message))
+    text = re.sub(r"\d+\s*/\s*\d+", " ", text)
     measure = r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×))"
     found = {int(value) for value in re.findall(rf"\b(\d{{1,4}})\b{measure}", text)}
     found |= {
