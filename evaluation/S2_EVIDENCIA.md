@@ -1,6 +1,6 @@
 # Evidencia de evaluación S2 — Herramientas reales (`s2-tools-v1` y `s2-tools-v2`)
 
-**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). **Resultado vigente (sección 10): `10/10` casos y `2/2` fallos controlados con `s2-tools-v2` sobre el commit `ffcdde4`.** La sección 8 da el mismo resultado sobre `a8e1f2a`, antes de los arreglos de la corrida exploratoria (sección 9). Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
+**Estado del documento:** Ejecución real verificada (`7/10` casos oficiales `PASS` y `2/2` fallos controlados `PASS` en `.local/eval-20261020T195908540327Z.json`, más traza real adicional `ecc1d48ca48e`). Los tres casos que fallaron se volvieron a ejecutar con `s2-tools-v2` y pasaron `3/3` (sección 7). **Resultado vigente (sección 13): `10/10` casos y `3/3` fallos controlados con `s2-tools-v2` sobre el commit `a6a190e`.** Antes, `10/10` y `2/2` sobre `ffcdde4` (sección 10). La sección 8 da el mismo resultado sobre `a8e1f2a`, antes de los arreglos de la corrida exploratoria (sección 9). Las secciones 1 a 6 describen la corrida con `s2-tools-v1`.
 **Fecha de corte:** 20 de octubre de 2026.
 **Rama:** `feat/s2-herramientas-reales` (basada en `4781c3b`, commit de herramientas y traza `a1456cf`).
 **Modelo:** `grok-4.20-0309-non-reasoning` mediante `https://api.reto.pltk.mx/v1`.
@@ -1342,3 +1342,63 @@ Cada arreglo tiene su prueba en `tests/test_graph.py`: la prueba falla sin el ar
 | Secciones 2 a 10 | `131` | `$0.1347642000` |
 | Sección 11 (exploratoria con arreglos) | `40` | `$0.0427943500` |
 | **Total** | **`171`** | **`$0.1775585500 USD`** |
+
+---
+
+## 12. Corrida de revisión de la PR #57 que faltaba registrar (`a9c110f`)
+
+**Reporte fuente:** `.local/eval-20261020T223250351544Z.json` (`created_at: 2026-10-20T22:32:50Z`).
+**Commit:** `a9c110f` (rama de la PR #57), sin cambios en `src/`. El reporte de entonces todavía no guardaba el commit; consta en la sesión de revisión.
+**Prompt y modelo:** `s2-tools-v1`, modelo `grok-4.20-0309-non-reasoning`.
+**Comando:** `python -m asistendero.evaluate --live --include-failures`, lanzado al revisar la PR #57 para comprobarla antes de integrarla.
+
+**Resultado: `6/10` casos y `2/2` fallos controlados.** Fallaron S2-01, S2-02, S2-07 y S2-10, todos por la causa de la sección 5: Grok respondió tras buscar sin cotizar (en S2-02 consultó dos veces la disponibilidad y respondió sin cotizar). En S2-07 Grok escribió «agotado para 20 m» con 12 metros disponibles; ese hallazgo llevó al arreglo `f9cb171`. Se hicieron **23 llamadas** a la pasarela (21 de los casos y 2 de `F-01`) con un costo de **$0.0220672500 USD** (`api_reported`). Esta corrida se omitió por error en el consumo acumulado de las secciones 7 a 11; se suma abajo.
+
+## 13. Corrida oficial vigente con tres fallos controlados (`a6a190e`)
+
+**Reporte fuente:** `.local/eval-20261022T032922119368Z.json` (`created_at: 2026-10-22T03:29:22Z`, 21-10-2026 a las 22:29 en Colombia).
+**Commit:** `a6a190e`, `src_dirty=false`, ambos guardados por el propio reporte.
+**Prompt y modelo:** `s2-tools-v2`, modelo `grok-4.20-0309-non-reasoning`.
+**Catálogo:** SHA-256 `53abad12…`, el mismo de las secciones 8 a 11.
+**Comando:** `python -m asistendero.evaluate --live --include-failures`.
+
+Cambios de `src/` respecto de `ffcdde4`: los precios del mensaje ya no cuentan como cantidades (`2ac061d`), el reporte guarda el commit, la traza marca los avisos y se agrega `F-03-MODEL_INVALID_OUTPUT` (`a6a190e`).
+
+**Resultado: `10/10` casos y `3/3` fallos controlados `PASS`.** Es el resultado vigente de S2 y reemplaza al de la sección 10.
+
+| Caso | `run_id` | Esperado | Obtenido | Resultado | Aviso | Herramientas ejecutadas | Llamadas Grok | Tokens | Costo (`USD`) | Redacción entregada |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `S2-01` | `913fbad826cc` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.649` | `$0.0057709500` | Grok |
+| `S2-02` | `9381ebd8ea0f` | `quoted` | `quoted` | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` | `4` | `6.266` | `$0.0066097000` | Grok |
+| `S2-03` | `76772307ef6e` | `found` | `found` | **PASS** | No | `buscar_productos` | `2` | `2.602` | `$0.0021929000` | Grok |
+| `S2-04` | `92c0d7196b2b` | `clarify` | `clarify` | **PASS** | No | `buscar_productos` | `2` | `2.675` | `$0.0023166500` | Servidor |
+| `S2-05` | `1f6a5b396105` | `nearby` | `nearby` | **PASS** | No | `buscar_productos` | `2` | `2.625` | `$0.0022554000` | Servidor |
+| `S2-06` | `230a4c3df317` | `found` | `found` | **PASS** | No | `buscar_productos` | `2` | `2.618` | `$0.0022154000` | Grok |
+| `S2-07` | `0214ac9958fd` | `insufficient_stock` | `insufficient_stock` | **PASS** | No | `buscar_productos` → `consultar_disponibilidad` → `calcular_cotizacion_informativa` (`INSUFFICIENT_STOCK`) | `4` | `5.592` | `$0.0056122000` | Servidor |
+| `S2-08` | `d3d1316c5289` | `not_found` | `not_found` | **PASS** | No | `buscar_productos` | `2` | `2.491` | `$0.0010921000` | Servidor |
+| `S2-09` | `4f5d3404d8ec` | `answered` | `answered` | **PASS** | No | *(ninguna)* | `1` | `1.198` | `$0.0014081000` | Servidor |
+| `S2-10` | `6e279deda747` | `quoted` | `quoted` | **PASS** | `QUOTE_REQUIRED` | `buscar_productos` → `calcular_cotizacion_informativa` | `4` | `5.662` | `$0.0037562000` | Grok |
+| **Subtotal casos** | — | — | **`10/10 PASS`** | — | 2 de 10 | `15` ejecutadas | **`27`** | `37.378` (`14.848` en caché) | **`$0.0332296000`** | Grok en 6 |
+| `F-01-CATALOG_UNAVAILABLE` | `7eded679dc14` | `tool_error` | `tool_error` | **PASS** | No | `buscar_productos` (`CATALOG_UNAVAILABLE`) | `2` | `2.528` | `$0.0030124500` | Servidor |
+| `F-02-MODEL_UNAVAILABLE` | `a16dee985e78` | `model_error` | `model_error` | **PASS** | No | *(ninguna)* | `1` (local, contra `127.0.0.1:9`) | `null` | Sin costo | Servidor |
+| `F-03-MODEL_INVALID_OUTPUT` | `c70a2d0de208` | `model_invalid` | `model_invalid` | **PASS** | No | *(ninguna)* | `1` (simulada, sin red) | `null` | Sin costo | Servidor |
+| **Total de la corrida** | — | — | **`13/13 PASS`** | — | — | — | **`29` a la pasarela** | — | — | **`$0.0362420500`** |
+
+### 13.1. Qué se observó
+
+- `F-03`: el texto inválido «el tubo cuesta $1.000 y ya te lo aparté» no llegó al cliente: la respuesta pide repetir el mensaje y no ejecutó herramientas.
+- `QUOTE_REQUIRED` volvió a hacer falta en S2-01 y S2-10. En S2-10 la redacción de Grok mantiene `$8.500 COP` y no repite el `$1.000` inyectado.
+- El costo es mayor que el de la sección 10 ($0.0362 frente a $0.0231 USD) con casi los mismos tokens: esta vez solo 14.848 de 35.700 tokens de entrada salieron de caché, frente a 25.344 entonces.
+
+### 13.2. Decisión sobre los casos del plan
+
+Los casos de `cases.json` no son exactamente los de la tabla del plan S2: faltan «1 bulto de cemento gris de 50 kg» y «2 galones de pintura blanca vinilo», y en su lugar están «Busco tubo PVC de 1/2» (sin cantidad) y «¿están atendiendo?». **Se mantienen como están** para no romper la comparación entre las secciones 3, 8, 10 y 13. Los dos casos del plan ya corrieron con Grok real como `X-01` y `X-02` (12/12 en la sección 11) y pasan al set de evaluación de S3.
+
+### 13.3. Consumo real acumulado en Grok
+
+| Corrida | Llamadas | Costo (`api_reported`) |
+|---|---|---|
+| Secciones 2 a 11 | `171` | `$0.1775585500` |
+| Sección 12 (revisión de la PR #57, omitida antes) | `23` | `$0.0220672500` |
+| Sección 13 (corrida oficial sobre `a6a190e`) | `29` | `$0.0362420500` |
+| **Total** | **`223`** | **`$0.2358678500 USD`** |
