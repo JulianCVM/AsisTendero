@@ -12,11 +12,13 @@ mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor ne
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
 reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
 por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero`), visor local
-(`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`). Código, comentarios, documentación, commits y PR
-en **español**.
+(`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`); el panel del tendero (`asistendero-tendero`)
+administra inventario y pedidos sobre la misma base. Código, comentarios, documentación, commits y PR en **español**.
 
-Fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi, Supabase, datos reales de un piloto, pedidos,
-reservas, pagos o fiados.
+Desde el 22-10-2026 el plan S4 incluye **pedidos para recoger** dentro de una conversación (registrar, confirmar,
+agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. Siguen fuera de
+alcance mientras no lo pida el plan del corte: WhatsApp, Wompi, Supabase, datos reales de un piloto, pagos, fiados y
+domicilios.
 
 ## Reglas del reto (reglamento externo)
 
@@ -71,6 +73,10 @@ propio.
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
    - `format_cop` y `reply_is_grounded` (`answers.py`); `next_node` (`graph.py`).
    - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
+   - `OrderBook` (`orders.py`), `validate_order_request` y `order_action_pending` (`order_rules.py`), `order_reply`
+     (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
+   - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
+   - `record` y `verdict` (`eval_checks.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
    - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `SessionStore` y `remembered_products`
      (`sessions.py`); `run_turn` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
@@ -109,13 +115,18 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Un nodo o una ruta del flujo | `graph.py` (la traza usa `next_node`) |
 | Un aviso del servidor cuando Grok responde sin un paso que el mensaje exige | `reminders.py` (`pending_reminder`), con su prueba en `tests/test_graph.py` |
 | Una herramienta del servidor o un código de error de negocio | `tools.py` (`execute_tool`), con su prueba aislada |
+| Una regla antes de registrar, confirmar, agendar o cancelar un pedido | `validate_order_request` de `order_rules.py`, con su prueba en `tests/test_orders.py` |
+| Un estado, plazo o límite del pedido | `orders.py` (`OrderBook`); la herramienta, en `order_tools.py` |
+| Cómo se redacta un pedido o un aviso de vencimiento | `order_replies.py`; el barrido, en `order_watch.py` |
+| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `tendero.py` y `ui/tendero.*` |
+| Entender mejor un mensaje mal escrito | `spelling.py` (`heard_as`), con su prueba en `tests/test_spelling.py` |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |
 | Un dato nuevo de la traza (`run_id`, latencia, tokens, costo) | `tracing.py`; el costo se calcula con `pricing.py` |
 | Una pregunta trampa, un tema delicado o un dato personal que filtrar | `guardrails.py` (`SENSITIVE_TOPICS`, `PERSONAL_DATA`), con su prueba en `tests/test_guardrails.py` |
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
-| Un caso de evaluación | `evaluation/cases.json` (con su `suite`) y su guion en `tests/test_evaluation_cases.py`; los resultados reales, en `evaluation/*.md` |
+| Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas o varios clientes: ver `eval_sessions.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` (nunca datos reales); `seed.py` arma `PRODUCTS` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
@@ -133,13 +144,18 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
   La redacción de Grok se usa solo si cada `$`, SKU y cantidad coincide con las observaciones de esa ejecución; si no,
   se responde con la salida determinista.
 - **La cotización es informativa**: no crea pedido, reserva, pago ni factura (`reservation_created=false`).
+- **Un pedido solo existe si el cliente lo pidió** y `registrar_pedido` lo creó en su conversación. Confirmar exige su
+  «sí» en el turno, agendar exige la hora que dijo y cancelar, que lo pida; lo valida el código, no el prompt. Un
+  cliente nunca ve ni cambia el pedido de otro. El pago es siempre en el mostrador: ni Grok ni el chat cobran o fían.
+- **Las herramientas del agente nunca escriben precio ni existencias físicas**: un pedido solo aparta unidades. Solo
+  el panel del tendero (`inventory.py`) cambia precio o stock, con historial, y entregar un pedido descuenta la bodega.
 - **Una opción cercana no es equivalente** a lo pedido; con medida ambigua se pregunta, no se elige.
 - **Todo fallo termina en un estado seguro** con código estable (`MODEL_*`, `TOOL_*`, códigos de negocio) y una
   respuesta que no inventa precio ni existencias.
 
-## Visor local
+## Visor local y panel del tendero
 
-- Escucha solo en `127.0.0.1` y rechaza otro `Host` u `Origin`. No se expone a la red.
+- Los dos escuchan solo en `127.0.0.1` y rechazan otro `Host` u `Origin`. No se exponen a la red.
 - Los datos se pintan con `textContent`, nunca con `innerHTML`. Nada de `alert()`, `confirm()`, `prompt()` ni
   JavaScript inline: listeners en `ui/app.js`.
 - Celular primero: se revisa a 390 px de ancho, sin desplazamiento horizontal. Cada botón de solo ícono lleva
@@ -182,7 +198,8 @@ Una tarea no está terminada hasta que esto pase sin errores (en Windows, `.venv
 .venv/Scripts/python -m compileall -q src  # sintaxis de todo el paquete
 ```
 
-- Si cambiaste algo que se ve en el visor, **ábrelo en el navegador** (escritorio y 390 px) y recorre el flujo.
+- Si cambiaste algo que se ve en el visor o en el panel del tendero, **ábrelo en el navegador** (escritorio y 390 px)
+  y recorre el flujo.
 - Las corridas reales (`asistendero`, el visor o `python -m asistendero.evaluate --live`) **consumen créditos del
   reto**. Solo se hacen cuando la persona lo pide y con un objetivo de evaluación. Su resultado se registra en
   bitácora con commit, fecha, `PROMPT_VERSION` y costo, aunque falle.

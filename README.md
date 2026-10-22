@@ -15,12 +15,14 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 ## Qué hace hoy
 
 - Recibe consultas de texto desde la terminal o desde un visor web local, sueltas o en una **conversación con memoria acotada**: Grok ve los últimos cuatro turnos sin precios y los productos ya identificados, y entiende «dame 3 metros de ese» o «¿y el de 3/4?».
-- Usa Grok para decidir, paso a paso, si responde o pide una de cinco herramientas:
+- Usa Grok para decidir, paso a paso, si responde o pide una de cinco herramientas de consulta:
   - `buscar_productos`: hasta cinco artículos por llamada, con criterios como tipo de producto, material, medida, uso, presentación y color.
   - `consultar_disponibilidad`: existencias de un SKU.
   - `calcular_cotizacion_informativa`: precio, subtotales y total en COP con las cantidades que dijo el cliente.
   - `consultar_info_tienda`: horario (y si está abierta según el reloj del servidor), ubicación, medios de pago, domicilios, garantías y contacto.
   - `explorar_categoria`: las categorías del catálogo o los productos de una, sin precios.
+- En una conversación, registra **pedidos para recoger**: el cliente dice que se lo lleva, Grok lo registra con el precio vigente y lo aparta 5 minutos; con su «sí» queda confirmado y apartado hasta la recogida que el cliente agenda («paso mañana a las 4», «lo recoge mi hermano»). Si nadie confirma, vence solo y el cliente recibe un aviso. El pago es en el mostrador: el chat no cobra ni fía.
+- Entiende mensajes mal escritos («nesesito 3 metros de tuvo pbc de 1/2 pa l agua») sin aceptar medidas ni cantidades que el cliente no escribió.
 - Filtra en código, antes de Grok, las preguntas trampa (instrucciones internas, llaves, datos técnicos, datos de otros clientes o del personal, costos y ventas del negocio) y tapa los datos personales. Si no queda nada que atender, responde sin llamar a Grok.
 - Valida cada solicitud de Grok **antes** de ejecutarla:
   - herramienta permitida y argumentos dentro de sus límites;
@@ -35,7 +37,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
 - Muestra en el visor la ruta seguida, las llamadas al modelo, las herramientas pedidas y ejecutadas, el costo por ejecución y un mapa del harness con las seis etapas del flujo.
 
-El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa**: no crea pedidos, reservas, pagos ni facturas (`reservation_created=false`).
+El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa** (`reservation_created=false`); un pedido solo existe si el cliente lo pidió y Grok lo registró, y nunca implica un pago. El tendero ve esos pedidos y administra el inventario en un panel local.
 
 ## Cómo funciona
 
@@ -151,6 +153,14 @@ Para una conversación de varios turnos con memoria de sesión (por ejemplo, «B
 
 Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
 
+### Panel del tendero
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.tendero
+```
+
+Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Muestra las ventas del día, los pedidos que llegaron por el chat (para marcarlos entregados o cancelarlos) y el inventario, con edición de precio y existencias e historial de cambios. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
+
 ### Docker
 
 El repositorio incluye un Dockerfile que instala el paquete y crea el catálogo de prueba durante la construcción:
@@ -205,6 +215,9 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/tools.py` | Las cinco herramientas del servidor (`execute_tool`) sobre el catálogo. |
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
 | `src/asistendero/evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py` | Evaluador de casos de uno o varios turnos, conversaciones con pedidos, clientes a la vez, fallos controlados, costo por tarea y por modelo. |
+| `src/asistendero/orders.py`, `order_rules.py`, `order_tools.py`, `order_replies.py` y `order_watch.py` | Pedidos para recoger: apartado, reglas, herramientas, respuestas y avisos de vencimiento. |
+| `src/asistendero/inventory.py`, `sales.py`, `tendero.py` y `ui/tendero.*` | Panel local del tendero: inventario, pedidos y ventas. |
+| `src/asistendero/spelling.py` | Lectura de mensajes mal escritos para respaldar lo que Grok extrajo. |
 | `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
 | `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |
 | `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |
@@ -216,13 +229,13 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 
 ## Estado y próximos pasos
 
-Este prototipo **no está conectado a un comercio real**. Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; tampoco gestiona pedidos, pagos, fiados ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
+Este prototipo **no está conectado a un comercio real**. Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; gestiona pedidos para recoger sobre datos ficticios, pero no pagos, fiados, domicilios ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
 
 La visión y las tareas están organizadas en [PLANIFICACION.md](PLANIFICACION.md) y en el [tablero de PulsoTienda](https://github.com/users/JulianCVM/projects/9). El diseño aplicado al visor se documenta en [DESIGN.md](DESIGN.md). Las decisiones de dinero o crédito deberán quedar bajo autorización del dueño o de un rol delegado, y una confirmación de pago requerirá una fuente verificable.
 
 ## Relación con el Agent Challenge
 
-AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el recorrido **mensaje → Grok → procesamiento → respuesta**. El corte S2 agrega tres herramientas reales del servidor, el manejo de errores y las corridas registradas en la evidencia, con una clave de API real y un catálogo de prueba. El corte S3 agrega un set propio de 43 casos, el reporte de costo por tarea, la comparación entre los modelos Grok permitidos, sesiones de chat, dos herramientas de tienda y las barreras ante preguntas trampa. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
+AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el recorrido **mensaje → Grok → procesamiento → respuesta**. El corte S2 agrega tres herramientas reales del servidor, el manejo de errores y las corridas registradas en la evidencia, con una clave de API real y un catálogo de prueba. El corte S3 agrega un set propio de 43 casos, el reporte de costo por tarea, la comparación entre los modelos Grok permitidos, sesiones de chat, dos herramientas de tienda y las barreras ante preguntas trampa. El corte S4 agrega pedidos para recoger con avisos de vencimiento, el panel del tendero, la lectura de mensajes mal escritos, pruebas de caos y la evaluación de conversaciones largas con varios clientes y modelos a la vez. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
 
 ## Licencia
 

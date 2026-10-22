@@ -47,10 +47,12 @@ En escritorio, el chat ocupa la columna principal y la explicación queda al lad
 
 La respuesta al cliente debe ser breve, natural y útil. Puede usar un saludo cercano como «Hola, veci» cuando suene apropiado, sin repetirlo mecánicamente. Precio, existencia, medida, horario, pago y reserva solo se afirman con datos verificados. Si falta un atributo decisivo, se pide una aclaración concreta.
 
-La interfaz distingue **mensaje del cliente**, **estado del visor** y **respuesta final del agente**. Esta versión de Semana 1 usa un catálogo ficticio y no crea pedidos, reservas ni pagos. El chat visual no representa una integración con WhatsApp.
+La interfaz distingue **mensaje del cliente**, **estado del visor**, **respuesta final del agente** y **aviso automático** (borde punteado, ícono «!» y la etiqueta «aviso automático», no solo color). El catálogo es ficticio; desde S4 el chat registra pedidos para recoger, pero no pagos. El chat visual no representa una integración con WhatsApp.
 
 ## Implementación y pendientes
 
 La pantalla está en [index.html](src/asistendero/ui/index.html), sus estilos en [conversacion.css](src/asistendero/ui/conversacion.css) y su comportamiento en [app.js](src/asistendero/ui/app.js). [visual.py](src/asistendero/visual.py) sirve los archivos locales mediante rutas explícitas; [pyproject.toml](pyproject.toml) los incluye en el paquete.
+
+El **panel del tendero** ([tendero.html](src/asistendero/ui/tendero.html), [tendero.css](src/asistendero/ui/tendero.css), [tendero.js](src/asistendero/ui/tendero.js)) usa la misma paleta y tipografía, celular primero: pestañas en una grilla de cuatro columnas a 390 px, tarjetas de pedido con el estado escrito en una etiqueta además del color del borde, y acciones destructivas (cancelar) que piden un segundo toque en lugar de un diálogo.
 
 Pendiente de diseño de marca: vectorizar el símbolo, preparar versiones de logo para tamaños y fondos distintos, probar accesibilidad con usuarios y decidir el nombre definitivo de la plataforma. La propuesta 02 define el visor actual, no el diseño completo del futuro panel comercial.
