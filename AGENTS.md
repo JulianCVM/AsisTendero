@@ -80,15 +80,19 @@ propio.
 5. **No inventes APIs.** Si no sabes si una función, un parámetro del SDK de `openai` o de `langgraph`, o un campo de
    la pasarela existe, compruébalo en el código instalado en `.venv` o en la documentación oficial antes de usarlo.
 
-## Propiedad de archivos en el corte S2
+## Propiedad de archivos
 
-| Persona | Es dueña de | No edita |
-|---|---|---|
-| Julian | `grok.py`, `graph.py`, `reminders.py`, `validation.py`, `observations.py`, `answers.py`, `executor.py`, `tests/test_graph.py`, `tests/test_search_contract.py`, `README.md`, video | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py` |
-| Laura | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py`, `evaluation/`, integración y evidencia | Los archivos de Julian (deja el defecto como comentario reproducible en el PR) |
+Desde el 21-10-2026, Julian es dueño de **todo** el repositorio: Laura no puede continuar con su parte por motivos
+logísticos, y Julian asume herramientas, catálogo, trazas, evaluación, evidencia e integración. El reparto del corte S2
+queda como historia:
 
-Si un cambio obliga a tocar un archivo ajeno (por ejemplo, porque cambió una firma), el cambio es mínimo, se explica en
-el PR y la dueña decide si lo reescribe.
+| Persona | Era dueña de (S2, hasta el 21-10-2026) |
+|---|---|
+| Julian | `grok.py`, `graph.py`, `reminders.py`, `validation.py`, `observations.py`, `answers.py`, `executor.py`, `tests/test_graph.py`, `tests/test_search_contract.py`, `README.md`, video |
+| Laura | `tools.py`, `catalog.py`, `tracing.py`, `evaluate.py`, `evaluation/`, integración y evidencia |
+
+Si vuelve a haber más de una persona, se reparte de nuevo aquí antes de editar: un cambio en un archivo ajeno es
+mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 ## Dónde va cada cosa
 
