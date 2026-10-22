@@ -1,6 +1,22 @@
 """Contrato tipado entre la interpretación del agente y la búsqueda del servidor."""
 
 from dataclasses import dataclass, replace
+import re
+
+# Separa los artículos de un mensaje: «1 galón de pintura blanca y 2 brochas de 3 pulgadas».
+CLAUSE_BREAK = re.compile(r",|;|\n|\s(?:y|e|ademas|tambien)\s")
+
+
+def item_clause(message: str, text: str, tokenize) -> str:
+    """Lo que el cliente dijo de un artículo: la parte del mensaje que más palabras comparte con su texto.
+
+    Grok a veces deja un atributo fuera de ``text`` («galón» solo en presentation); la parte del mensaje lo
+    respalda sin prestarle a un artículo lo que el cliente dijo de otro. Sin coincidencias, queda el texto solo.
+    """
+    words = tokenize(text)
+    clauses = [part for part in CLAUSE_BREAK.split(message) if part.strip()]
+    best = max(clauses, key=lambda part: len(tokenize(part) & words), default="")
+    return f"{best} {text}" if words & tokenize(best) else text
 
 
 @dataclass(frozen=True)

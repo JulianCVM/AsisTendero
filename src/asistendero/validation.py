@@ -8,7 +8,7 @@ from asistendero.catalog import Product, tokens
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.measures import UNITS, atom_support, canonical_text, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
-from asistendero.search import ProductQuery
+from asistendero.search import ProductQuery, item_clause
 from asistendero.spelling import heard_as
 
 
@@ -227,10 +227,10 @@ def validate_request(
             if SALE_QUANTITY.match(normalize_text(fields.get("presentation", ""))):
                 fields["presentation"] = re.sub(r"^\s*\d+\s*", "", fields["presentation"])
             heard = canonical_text(heard_as(message, " ".join([text, *fields.values()])))
-            # Con varios artículos, un atributo debe estar también en la frase del suyo («tubo PVC y cemento
-            # gris» no pinta el tubo de gris). Con uno solo, todo el mensaje habla de él: en la primera corrida
-            # S4 Grok dejó «galón» en presentation y no en text, y se preguntaba la presentación ya dicha.
-            phrase = heard if len(items) == 1 else None
+            # Con varios artículos, un atributo debe estar en la parte del mensaje que habla del suyo («tubo PVC y
+            # cemento gris» no pinta el tubo de gris). Con uno solo, todo el mensaje habla de él. En las corridas S4
+            # Grok dejó «galón» en presentation y no en text (P-03 y C-08) y se preguntaba la presentación ya dicha.
+            phrase = heard if len(items) == 1 else item_clause(heard, text, tokens)
             query = ProductQuery(text.strip(), **fields).grounded(heard, tokens, phrase)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}

@@ -146,3 +146,21 @@ def test_with_two_items_an_attribute_must_be_in_its_own_phrase(catalog):
         {"text": "1 bulto de cemento gris de 50 kg", "product": "cemento", "color": "gris"},
     ]}, message, [])
     assert "color" not in arguments["items"][0] and arguments["items"][1]["color"] == "gris"
+
+
+def test_with_two_items_each_attribute_is_backed_by_its_part_of_the_message(catalog):
+    # C-08, corrida de regresión S4: Grok dejó «galón» solo en presentation; con dos artículos se descartaba y se
+    # preguntaba la presentación que el cliente ya había dicho.
+    from asistendero.tools import execute_tool
+    from asistendero.validation import grounded_products, validate_request
+
+    message = "Necesito 1 galón de pintura blanca de vinilo y 2 brochas de 3 pulgadas"
+    arguments = validate_request("buscar_productos", {"items": [
+        {"text": "pintura blanca de vinilo", "product": "pintura", "use": "vinilo", "color": "blanca", "presentation": "galón"},
+        {"text": "brocha de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas", "presentation": "galón"},
+    ]}, message, [])
+    assert arguments["items"][0]["presentation"] == "galón" and "presentation" not in arguments["items"][1]
+    response = execute_tool("buscar_productos", arguments, catalog=catalog)
+    call = {"requested_tool": "buscar_productos", "arguments": arguments, "response": response, "executed": True}
+    assert sorted(grounded_products(message, [call])) == ["BRO-3", "PIN-BLA"]
+
