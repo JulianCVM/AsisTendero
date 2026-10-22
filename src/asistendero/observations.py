@@ -13,6 +13,10 @@ lee este módulo (si cambian, solo hay que ajustar ``search_findings`` y ``lates
   cierra] | None}, "festivos", "zona_horaria", "ahora", "dia_actual", "abierto_ahora"}``.
 - explorar_categoria: ``{"categorias": [{"categoria", "variantes", "con_existencias"}]}`` o
   ``{"categoria", "productos": [{"nombre", "variantes", "con_existencias"}]}``, sin precios.
+- registrar_pedido, confirmar_pedido, agendar_recogida y cancelar_pedido: un pedido ``{"pedido", "estado",
+  "lineas": [{"sku", "nombre", "variante", "unidad", "cantidad", "precio_unitario_cop", "subtotal_cop"}],
+  "total_cop", "aparta_hasta", "recogida", "nota", "creado", "pago"}`` (``orders.OrderBook``);
+  consultar_pedido: ``{"pedidos": [pedido]}``. ``order_results`` los lee.
 
 ``producto`` usa los campos de ``catalog.Product``.
 """
@@ -116,6 +120,31 @@ def category_listings(calls: list[ToolCall]) -> list[dict]:
             if isinstance(data, dict) and (isinstance(data.get("categorias"), list) or isinstance(data.get("productos"), list)):
                 listings.append(data)
     return listings
+
+
+ORDER_TOOLS_DATA = ("registrar_pedido", "confirmar_pedido", "agendar_recogida", "cancelar_pedido", "consultar_pedido")
+
+
+def _valid_order(order: object) -> bool:
+    return (
+        isinstance(order, dict) and isinstance(order.get("pedido"), str) and isinstance(order.get("estado"), str)
+        and isinstance(order.get("total_cop"), int) and isinstance(order.get("lineas"), list)
+        and all(isinstance(line, dict) and isinstance(line.get("sku"), str)
+                and all(isinstance(line.get(key), int) for key in ("cantidad", "precio_unitario_cop", "subtotal_cop"))
+                for line in order["lineas"])
+    )
+
+
+def order_results(calls: list[ToolCall]) -> list[tuple[str, dict]]:
+    """(herramienta, pedido) de cada respuesta válida de pedidos, en orden; consultar_pedido aporta varios."""
+    results = []
+    for call in calls:
+        if call["requested_tool"] not in ORDER_TOOLS_DATA or call["response"].get("status") != "ok":
+            continue
+        data = call["response"].get("data") or {}
+        orders = data.get("pedidos") if call["requested_tool"] == "consultar_pedido" else [data]
+        results.extend((call["requested_tool"], order) for order in orders or [] if _valid_order(order))
+    return results
 
 
 def latest_quote(calls: list[ToolCall]) -> tuple[dict | None, ToolCall | None]:

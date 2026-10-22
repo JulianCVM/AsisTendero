@@ -6,7 +6,7 @@ import json
 import sqlite3
 
 from asistendero.catalog import MockCatalog, tokens
-from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
+from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, ORDER_TOOLS, STORE_TOPICS, TOOL_NAMES
 from asistendero.observations import error_envelope
 from asistendero.search import ProductQuery
 from asistendero.validation import MAX_QUANTITY, QUERY_FIELDS, SKU_PATTERN
@@ -199,6 +199,10 @@ def execute_tool(name: str, arguments: dict, *, catalog: MockCatalog) -> dict:
         return error_envelope("error", "INVALID_ARGUMENT", "Se requiere un catálogo válido del servidor.", SOURCE)
     if name not in TOOL_NAMES:
         return error_envelope("error", "UNKNOWN_TOOL", "Herramienta fuera de la lista permitida.", SOURCE)
+    if name in ORDER_TOOLS:
+        # Los pedidos necesitan la sesión del servidor: los atiende order_tools desde catalog_executor.
+        return error_envelope("error", "SESSION_REQUIRED",
+                              "Los pedidos solo se registran dentro de una conversación con sesión.", SOURCE)
     if not isinstance(arguments, dict):
         return error_envelope("error", "INVALID_ARGUMENT", "Los argumentos deben ser un objeto.", SOURCE)
     try:

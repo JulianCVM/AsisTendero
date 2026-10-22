@@ -8,6 +8,7 @@ import re
 
 from asistendero.grok import Decision
 from asistendero.observations import ToolCall
+from asistendero.order_rules import order_action_pending
 from asistendero.validation import grounded_products, normalize_text, quantities_in_message
 
 
@@ -35,7 +36,13 @@ INFO_REMINDER = _reminder(
     "El mensaje pregunta por la tienda (horario, ubicación, pagos, domicilios o garantías): llama a "
     "consultar_info_tienda con el tema antes de responder.",
 )
-REMINDERS = {item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)}
+# Un «sí, confirmo» respondido con «¡Listo, quedó confirmado!» sin la herramienta sería un pedido inventado.
+ORDER_REMINDER = _reminder(
+    "ORDER_REQUIRED",
+    "El mensaje pide una acción sobre un pedido (registrar, confirmar, agendar la recogida o cancelar): llama a "
+    "la herramienta de pedidos que corresponde antes de responder. No afirmes la acción sin ella.",
+)
+REMINDERS = {item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, ORDER_REMINDER)}
 STORE_QUESTION = re.compile(
     r"\b(?:horario|atiend\w*|abiert[oa]s?|abren|cierran|cerrad[oa]s?|domicilio\w*|direccion|ubicad[oa]s?|donde\s+quedan"
     r"|donde\s+estan|medios?\s+de\s+pago|pago\s+con|reciben\s+(?:tarjeta|transferencia|nequi|efectivo)|garantia\w*"
@@ -45,6 +52,7 @@ STORE_QUESTION = re.compile(
 
 def pending_reminder(
     message: str, decision: Decision, calls: list[ToolCall], sent: set[str], reference: str | None = None,
+    context: dict | None = None,
 ) -> str | None:
     """Código del aviso que corresponde tras un ``respond`` de Grok, o None si puede responder.
 
@@ -60,6 +68,8 @@ def pending_reminder(
     asks_store = STORE_QUESTION.search(normalize_text(message)) or (decision.intent == "tienda" and not calls)
     if asks_store and "consultar_info_tienda" not in tools and "INFO_REQUIRED" not in sent:
         return "INFO_REQUIRED"
+    if "ORDER_REQUIRED" not in sent and order_action_pending(message, reference, calls, context):
+        return "ORDER_REQUIRED"
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
     if not calls and "SEARCH_REQUIRED" not in sent and asks_products:
         return "SEARCH_REQUIRED"

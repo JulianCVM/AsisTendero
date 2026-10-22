@@ -12,7 +12,7 @@ from asistendero.catalog import MockCatalog, tokens
 from asistendero.executor import catalog_executor
 from asistendero.graph import Planner, ToolExecutor, after_validate, build_graph, next_node
 from asistendero.grok import (
-    AGENT_PROMPT, DEFAULT_BASE_URL, DEFAULT_MODEL, PROMPT_VERSION, Decision, ModelError, decide_with_grok,
+    AGENT_PROMPT, DEFAULT_BASE_URL, PROMPT_VERSION, Decision, ModelError, current_model, decide_with_grok,
 )
 from asistendero.guardrails import redact_personal_data
 from asistendero.pricing import call_cost, run_cost
@@ -72,7 +72,7 @@ def run_traced(
             "step": step_number,
             "phase": phase,
             "endpoint": _visible_endpoint(),
-            "model": os.getenv("GROK_MODEL", DEFAULT_MODEL),
+            "model": current_model(),
             "instructions": AGENT_PROMPT,
             "mensaje": message,
             "observaciones": observations,

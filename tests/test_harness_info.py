@@ -25,21 +25,24 @@ def test_description_comes_from_the_code_constants():
     assert [tool["name"] for tool in info["tools"]] == list(TOOL_NAMES)
     assert info["limits"]["max_tool_calls"] == MAX_TOOL_CALLS
     assert info["limits"]["max_message_chars"] == MAX_MESSAGE_CHARS
-    assert [item["code"] for item in info["reminders"]] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED", "INFO_REQUIRED"]
+    assert [item["code"] for item in info["reminders"]] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED", "INFO_REQUIRED",
+                                                            "ORDER_REQUIRED"]
     assert set(info["guardrails"]) == {"PROMPT_DISCLOSURE", "CREDENTIALS", "INTERNAL_DATA", "THIRD_PARTY_DATA",
                                        "BUSINESS_PRIVATE"}
 
 
 def test_every_rejection_code_in_the_flow_is_on_the_map():
-    source = (SRC / "validation.py").read_text(encoding="utf-8") + (SRC / "graph.py").read_text(encoding="utf-8")
+    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("validation.py", "graph.py", "order_rules.py"))
     codes = set(re.findall(r'Rejected\("([A-Z_]+)"', source))
     assert codes, "no se encontraron rechazos en el código"
     assert codes <= set(describe_harness()["rejections"])
 
 
 def test_every_final_state_in_the_flow_is_classified():
-    source = (SRC / "answers.py").read_text(encoding="utf-8") + (SRC / "graph.py").read_text(encoding="utf-8")
+    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("answers.py", "graph.py", "order_replies.py"))
     patterns = [
+        r'_(?:pedido|recogida)": "([a-z_]+)"',  # STATUS_BY_TOOL de order_replies
+        r'if results else "([a-z_]+)"',  # estado de order_reply sin pedidos válidos
         r'return "([a-z_]+)", ',  # (estado, respuesta) de render_answer
         r'statuses\.append\("([a-z_]+)"\)',
         r'status = "([a-z_]+)"',
@@ -49,7 +52,7 @@ def test_every_final_state_in_the_flow_is_classified():
     ]
     states = {state for pattern in patterns for state in re.findall(pattern, source)}
     classified = {state for group in describe_harness()["outcomes"].values() for state in group["states"]}
-    assert {"quoted", "insufficient_stock", "model_error", "limit_reached"} <= states
+    assert {"quoted", "insufficient_stock", "model_error", "limit_reached", "order_confirmed", "order_issue"} <= states
     assert states <= classified
     # Ningún estado puede estar en dos grupos: el veredicto de la corrida sería ambiguo.
     total = sum(len(group["states"]) for group in describe_harness()["outcomes"].values())

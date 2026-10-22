@@ -4,10 +4,9 @@ El texto explicativo de cada etapa vive en ``ui/index.html``; aquí solo están 
 código (prompt, versión, herramientas, límites, códigos y estados) para que el mapa no se desactualice.
 """
 
-import os
-
 from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
-from asistendero.grok import AGENT_PROMPT, DEFAULT_MODEL, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES
+from asistendero.grok import AGENT_PROMPT, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES, current_model
+from asistendero.orders import HOLD_MINUTES
 from asistendero.guardrails import SENSITIVE_TOPICS
 from asistendero.reminders import REMINDERS
 from asistendero.validation import MAX_QUANTITY
@@ -34,6 +33,26 @@ TOOLS = {
         "arguments": '{"categoria": "plomería"}',
         "returns": "Sin categoría, la lista de categorías; con ella, sus productos y variantes, sin precios.",
     },
+    "registrar_pedido": {
+        "arguments": '{"lines": [{"sku": "PVC-050", "quantity": 3}]}',
+        "returns": f"Pedido pendiente con código, líneas y total; aparta las unidades {HOLD_MINUTES} minutos. Solo en sesión.",
+    },
+    "confirmar_pedido": {
+        "arguments": '{"pedido": "P-1A2B3C"}',
+        "returns": "Pedido confirmado: queda apartado hasta la recogida (o 24 horas). Solo si el cliente confirmó ahora.",
+    },
+    "agendar_recogida": {
+        "arguments": '{"pedido": "P-1A2B3C", "fecha": "2026-10-22", "hora": "16:00", "nota": "lo recoge mi hermano"}',
+        "returns": "Pedido con la hora de recogida (dentro del horario y de 7 días) y la nota sin datos personales.",
+    },
+    "consultar_pedido": {
+        "arguments": '{"pedido": "P-1A2B3C"} o {}',
+        "returns": "Estado, líneas, total y horas de los pedidos de esta conversación.",
+    },
+    "cancelar_pedido": {
+        "arguments": '{"pedido": "P-1A2B3C"}',
+        "returns": "Pedido cancelado y unidades liberadas. Solo si el cliente pidió cancelar.",
+    },
 }
 
 # Lo que se quita del mensaje antes de Grok y la respuesta fija que recibe el cliente.
@@ -48,6 +67,11 @@ REJECTIONS = {
     "SKU_NOT_GROUNDED": "SKU que no salió de una búsqueda o que el mensaje no distingue.",
     "QUANTITY_NOT_GROUNDED": "Cantidad que el cliente no dijo.",
     "DUPLICATE_CALL": "La misma llamada ya se ejecutó en esta corrida.",
+    "SESSION_REQUIRED": "Herramienta de pedidos fuera de una conversación con sesión.",
+    "PURCHASE_NOT_STATED": "Registrar un pedido sin que el cliente diga que lo lleva.",
+    "CONFIRMATION_NOT_STATED": "Confirmar sin un «sí» del cliente en este mensaje, o en el mismo turno del registro.",
+    "TIME_NOT_GROUNDED": "Agendar una hora o un día que el cliente no dijo.",
+    "CANCEL_NOT_STATED": "Cancelar sin que el cliente lo pida.",
 }
 
 ERRORS = {
@@ -56,6 +80,13 @@ ERRORS = {
         "INSUFFICIENT_STOCK": "La cantidad supera las existencias.",
         "CATALOG_UNAVAILABLE": "No se pudo leer el catálogo.",
         "TOOL_FAILURE": "La herramienta falló o devolvió un sobre mal formado.",
+        "ORDER_NOT_FOUND": "El pedido no existe o es de otra conversación.",
+        "ORDER_EXPIRED": f"El pedido venció ({HOLD_MINUTES} minutos sin confirmar o sin recoger a tiempo).",
+        "ORDER_CLOSED": "El pedido ya está entregado, cancelado o vencido.",
+        "TOO_MANY_ORDERS": "La conversación ya tiene el máximo de pedidos activos.",
+        "PICKUP_IN_PAST": "Recogida antes de 10 minutos desde ahora.",
+        "PICKUP_TOO_FAR": "Recogida a más de 7 días.",
+        "PICKUP_OUTSIDE_HOURS": "Recogida con la tienda cerrada.",
     },
     "model": {
         "MODEL_NOT_CONFIGURED": "Falta la llave de Grok.",
@@ -78,11 +109,15 @@ OUTCOMES = {
             "insufficient_stock": "Existencias insuficientes", "nearby": "Opciones cercanas",
             "not_found": "Sin coincidencia", "answered": "Respondido sin herramientas",
             "informed": "Información de la tienda o del catálogo",
+            "order_pending": "Pedido registrado, falta confirmar", "order_confirmed": "Pedido confirmado",
+            "pickup_scheduled": "Recogida agendada", "order_cancelled": "Pedido cancelado",
+            "order_status": "Estado de pedidos",
         },
     },
     "clarify": {
         "label": "Pide un dato al cliente",
-        "states": {"clarify": "Falta aclaración", "partial": "Resultado parcial"},
+        "states": {"clarify": "Falta aclaración", "partial": "Resultado parcial",
+                   "order_issue": "Pedido que necesita otro dato o venció"},
     },
     "safe_failure": {
         "label": "Fallo controlado en estado seguro",
@@ -100,7 +135,7 @@ def describe_harness() -> dict:
     """Datos públicos del flujo; no incluye la llave ni la URL de la pasarela."""
     return {
         "prompt_version": PROMPT_VERSION,
-        "model": os.getenv("GROK_MODEL", DEFAULT_MODEL),
+        "model": current_model(),
         "instructions": AGENT_PROMPT,
         "limits": {
             "max_message_chars": MAX_MESSAGE_CHARS,

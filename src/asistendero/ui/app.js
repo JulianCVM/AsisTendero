@@ -26,7 +26,7 @@
   let turnNumber = 0;
   const nodeNames = ['validate', 'interpret', 'retrieve', 'respond'];
   const nodeLabels = {validate:'Validar mensaje', interpret:'Grok decide', retrieve:'Ejecutar herramienta', respond:'Resolver y verificar'};
-  const stateLabels = {informed:'Información de la tienda', refused:'Pedido no permitido', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
+  const stateLabels = {order_pending:'Pedido por confirmar', order_confirmed:'Pedido confirmado', pickup_scheduled:'Recogida agendada', order_cancelled:'Pedido cancelado', order_status:'Estado del pedido', order_issue:'Pedido con novedad', informed:'Información de la tienda', refused:'Pedido no permitido', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
@@ -96,13 +96,13 @@
     const icon = document.createElement('span');
     icon.className = 'chat-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = role === 'customer' ? 'C' : 'AT';
+    icon.textContent = role === 'customer' ? 'C' : (role === 'notice' ? '!' : 'AT');
     const body = document.createElement('div');
     const speaker = document.createElement('span');
     speaker.className = 'speaker';
-    speaker.textContent = role === 'customer' ? 'Cliente' : 'AsisTendero';
+    speaker.textContent = {customer:'Cliente', notice:'AsisTendero · aviso automático'}[role] || 'AsisTendero';
     const bubble = document.createElement('div');
-    bubble.className = role === 'customer' ? 'bubble' : 'bubble agent-bubble';
+    bubble.className = role === 'customer' ? 'bubble' : (role === 'notice' ? 'bubble agent-bubble notice-bubble' : 'bubble agent-bubble');
     bubble.textContent = text;
     body.append(speaker, bubble);
     row.append(icon, body);
@@ -249,7 +249,8 @@
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
       renderCost(result.cost, true);
       setStatus(stateLabels[result.estado] || result.estado || 'Finalizado',
-        ['found', 'answered', 'quoted', 'informed', 'refused'].includes(result.estado) ? 'success' : 'warning');
+        ['found', 'answered', 'quoted', 'informed', 'refused', 'order_pending', 'order_confirmed', 'pickup_scheduled',
+          'order_cancelled', 'order_status'].includes(result.estado) ? 'success' : 'warning');
       copy.disabled = !currentAnswer;
     }
     if (event.type === 'session') {
@@ -267,6 +268,28 @@
     }
     addEvent(event);
   }
+
+  // Los avisos (pedido por vencer o vencido) los escribe el servidor sin Grok; el visor los recoge cada 10 s.
+  async function pollNotices() {
+    if (!sessionMode.checked || !sessionId || run.disabled) return;
+    try {
+      const response = await fetch('/api/avisos?sesion=' + encodeURIComponent(sessionId));
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data.avisos) || !data.avisos.length) return;
+      if (!customerMessage.hidden && currentAnswer) {
+        history.append(historyRow('customer', customerText.textContent), historyRow('agent', currentAnswer));
+      }
+      data.avisos.forEach(text => history.append(historyRow('notice', String(text))));
+      customerMessage.hidden = true;
+      currentAnswer = '';
+      answer.textContent = 'Llegó un aviso sobre tu pedido. Puedes responder abajo.';
+      responseBox.classList.add('is-empty');
+    } catch {
+      // Sin conexión con el visor no hay avisos que mostrar; se intenta en el siguiente ciclo.
+    }
+  }
+  setInterval(pollNotices, 10000);
 
   query.addEventListener('input', updateCount);
   sessionMode.addEventListener('change', clearSession);

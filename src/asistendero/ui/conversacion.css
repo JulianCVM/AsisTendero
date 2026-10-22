@@ -97,6 +97,7 @@ button:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-vis
 .chat-history { display: flex; flex-direction: column; gap: 18px; }
 .chat-history:empty { display: none; }
 .chat-history .bubble { opacity: .82; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-history .notice-bubble { opacity: 1; border-style: dashed; border-left-style: solid; background: #FFF8E8; }
 .chat-composer { padding: 18px 21px 20px; border-top: 1px solid #EEE5D7; background: white; }
 .composer-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .composer-heading label { margin: 0; font-size: .88rem; font-weight: 900; }

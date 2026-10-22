@@ -5,7 +5,9 @@ import re
 from asistendero.catalog import Product, tokens
 from asistendero.grok import AGENT_PROMPT, MAX_ITEMS, Decision
 from asistendero.guardrails import leaks
-from asistendero.observations import ToolCall, availability_by_sku, latest_quote, search_findings, store_info_by_topic
+from asistendero.observations import (ToolCall, availability_by_sku, latest_quote, order_results, search_findings,
+                                      store_info_by_topic)
+from asistendero.order_replies import order_allowances, order_reply
 from asistendero.store_replies import store_lines, store_reply_is_consistent
 from asistendero.validation import grounded_products, grounded_selection, normalize_text
 
@@ -13,9 +15,11 @@ from asistendero.validation import grounded_products, grounded_selection, normal
 PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones", "libra": "libras",
           "rollo": "rollos", "par": "pares", "pliego": "pliegos", "bolsa": "bolsas", "caja": "cajas"}
 # Una afirmación de acción ejecutada, descuento o equivalencia invalida la redacción de Grok, y también
-# ofrecer apartar o reservar (en S2-02 Grok preguntó «¿Quieres apartar…?»): la demo no lo hace.
+# ofrecer apartar o reservar fuera de una sesión (en S2-02 Grok preguntó «¿Quieres apartar…?»). Dentro de una
+# sesión, lo que respalda un pedido observado se quita antes de mirar (order_replies.CLAIMS_BY_STATUS).
 FORBIDDEN_CLAIMS = re.compile(
-    r"\b(reservad|apartad|pagad|despachad|entregad|facturad|descuent|compatib|equivalen|abiert|cerrad)\w*"
+    r"\b(reservad|apartad|separad|registrad|confirmad|agendad|programad|pagad|despachad|entregad|facturad|descuent"
+    r"|compatib|equivalen|abiert|cerrad)\w*"
     r"|\b(?:apart|reserv)ar\w*"
     r"|\bpedido\s+(?:creado|registrado|confirmado|listo)",
     re.I,
@@ -27,13 +31,30 @@ RESERVATION_REQUEST = re.compile(
     r"(?:pago|pagar|pagaria)\s+(?:manana|despues|luego|la\s+otra\s+semana))"
 )
 RESERVATION_NOTE = "No es un pedido ni una reserva: por este chat no aparto productos, no fío ni recibo pagos."
+# En una sesión sí hay pedidos: lo que nunca se hace es fiar o cobrar, y sin pedido registrado no hay nada apartado.
+CREDIT_REQUEST = re.compile(r"\b(?:fia\w*|fiar\w*|credito|(?:pago|pagar|pagaria)\s+(?:manana|despues|luego|la\s+otra\s+semana))")
+CREDIT_NOTE = "No fío ni recibo pagos por este chat: el pago es en el mostrador al recoger."
+NO_ORDER_NOTE = "Todavía no hay nada apartado: si lo quieres llevar, dime cuántas unidades y registro el pedido."
 
 
-def with_reservation_note(message: str, answer: str) -> str:
-    """Agrega la aclaración cuando el cliente pidió apartar, reservar o fiar y la respuesta no la trae."""
-    if not RESERVATION_REQUEST.search(normalize_text(message)) or "no es un pedido ni una reserva" in answer.casefold():
+def with_reservation_note(message: str, answer: str, calls: list[ToolCall] | None = None,
+                          context: dict | None = None) -> str:
+    """Agrega la aclaración cuando el cliente pidió apartar, reservar o fiar y la respuesta no la trae.
+
+    Fuera de una sesión (``context`` None) no hay pedidos. Dentro, fiar nunca se hace y «apártalo» sin un pedido
+    registrado o activo recibe la indicación de cómo registrarlo.
+    """
+    text = normalize_text(message)
+    if not RESERVATION_REQUEST.search(text):
         return answer
-    return f"{answer}\n{RESERVATION_NOTE}"
+    if context is None:
+        return answer if "no es un pedido ni una reserva" in answer.casefold() else f"{answer}\n{RESERVATION_NOTE}"
+    if CREDIT_REQUEST.search(text):
+        return answer if "no fío" in answer.casefold() else f"{answer}\n{CREDIT_NOTE}"
+    active = any(order.get("estado") in {"pendiente", "confirmado"} for order in context.get("pedidos") or [])
+    if order_results(calls or []) or active or "nada apartado" in answer.casefold():
+        return answer
+    return f"{answer}\n{NO_ORDER_NOTE}"
 
 
 def format_cop(value: int) -> str:
@@ -83,8 +104,9 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
     """Respuesta determinista construida solo con lo que devolvieron las herramientas."""
     findings = search_findings(calls)
     store = store_lines(calls)
-    if not findings and store:
-        return "informed", "\n".join(store) + "\nSon datos de demostración."
+    orders = order_reply(calls)
+    if not findings and (store or orders):
+        return (orders[0] if orders else "informed"), "\n".join([*store, *([orders[1]] if orders else [])]) + "\nSon datos de demostración."
     if not findings:
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
             return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
@@ -161,19 +183,35 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
         else:
             answer += "\nNo pude calcular la cotización en este momento; los datos anteriores sí vienen del catálogo."
             status = "quote_error"
+    if orders:
+        status, answer = orders[0], f"{answer}\n{orders[1]}"
     return status, answer + "\nSon datos de demostración."
 
 
-def reply_is_grounded(reply: str, message: str, calls: list[ToolCall]) -> bool:
-    """La redacción de Grok solo se usa si cada cifra sale de una observación de esta ejecución."""
+def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: dict | None = None) -> bool:
+    """La redacción de Grok solo se usa si cada cifra sale de una observación de esta ejecución.
+
+    ``context`` es el de la sesión (None fuera de ella): aporta los códigos de pedido que el cliente ya conoce.
+    """
     if not reply or len(reply) > 1200 or leaks(reply, AGENT_PROMPT):
         return False
     normalized = normalize_text(reply)
+    orders = order_allowances(calls, context)
     # Con el horario consultado, «abierto» y «cerrado» valen si coinciden con el reloj del servidor.
     checked = re.sub(r"\b(?:abiert|cerrad)\w*", "", reply, flags=re.I) if "horario" in store_info_by_topic(calls) else reply
+    if orders["claims"]:
+        checked = orders["claims"].sub("", checked)
+    if context is not None:
+        # En una sesión ofrecer el pedido es legítimo («¿te lo aparto?»); afirmarlo sin herramienta, no.
+        checked = re.sub(r"\b(?:apart|reserv)ar\w*", "", checked, flags=re.I)
     if FORBIDDEN_CLAIMS.search(checked):
         return False
-    consistent, store_amounts = store_reply_is_consistent(normalized, calls)
+    said_codes = set(re.findall(r"\bP-[0-9A-F]{6}\b", reply))
+    if not said_codes <= orders["codes"] or not orders["required"] <= said_codes:
+        return False
+    for moment in orders["times"]:
+        normalized = normalized.replace(moment, "")
+    consistent, store_amounts = store_reply_is_consistent(normalized, calls, paid_at_pickup=bool(order_results(calls)))
     if not consistent:
         return False
     if not re.search(r"simulad|demostracion|fictici|de prueba", normalized):
@@ -182,10 +220,10 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall]) -> bool:
     selected = grounded_products(message, calls)
     availability = availability_by_sku(calls)
     quote, quote_call = latest_quote(calls)
-    allowed_amounts = {format_cop(p.price_cop) for p in selected.values()} | store_amounts
-    allowed_counts = {p.stock for f in findings for p in f["matches"] + f["nearby"]}
+    allowed_amounts = {format_cop(p.price_cop) for p in selected.values()} | store_amounts | orders["amounts"]
+    allowed_counts = {p.stock for f in findings for p in f["matches"] + f["nearby"]} | orders["counts"]
     allowed_counts |= {data["stock"] for data in availability.values()}
-    allowed_skus = {p.sku for f in findings for p in f["matches"] + f["nearby"]}
+    allowed_skus = {p.sku for f in findings for p in f["matches"] + f["nearby"]} | orders["skus"]
     if quote:
         allowed_amounts |= {format_cop(quote["total_cop"])}
         for line in quote["lines"]:

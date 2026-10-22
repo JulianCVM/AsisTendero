@@ -321,7 +321,7 @@ def test_visual_server_streams_local_events_and_rejects_other_origins(monkeypatc
 
 
 def test_visual_server_keeps_the_session_on_the_server(monkeypatch, tmp_path):
-    def fake_turn(store, session_id, query, emit):
+    def fake_turn(store, session_id, query, emit, orders=None):
         store.context(session_id)
         turn = store.record(session_id, query, "Respuesta", "answered", [])
         emit({"type": "session", "session_id": session_id, "turno": turn})
@@ -353,6 +353,23 @@ def test_visual_server_keeps_the_session_on_the_server(monkeypatch, tmp_path):
         assert foreign[-1]["type"] == "error" and foreign[-1]["code"] == "SESSION_NOT_FOUND"
         status, _ = post({"consulta": "Hola", "sesion": True, "session_id": 123})
         assert status == 400
+
+        # Los avisos de pedidos se entregan una sola vez, solo al visor local y con una sesión bien formada.
+        server.sessions.notify(session_id, "Pasaron 5 minutos sin confirmar el pedido P-ABC123.")
+
+        def get(path, host=None):
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+            connection.request("GET", path, headers={"Host": host} if host else {})
+            response = connection.getresponse()
+            body = response.read().decode("utf-8")
+            connection.close()
+            return response.status, body
+
+        assert get(f"/api/avisos?sesion={session_id}", "sitio-externo.example")[0] == 403
+        status, body = get(f"/api/avisos?sesion={session_id}")
+        assert status == 200 and json.loads(body) == {"avisos": ["Pasaron 5 minutos sin confirmar el pedido P-ABC123."]}
+        assert json.loads(get(f"/api/avisos?sesion={session_id}")[1]) == {"avisos": []}
+        assert get("/api/avisos?sesion=../../etc/passwd")[0] == 400
     finally:
         server.shutdown()
         server.server_close()

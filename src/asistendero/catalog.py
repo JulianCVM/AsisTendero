@@ -13,6 +13,12 @@ from asistendero.search import ProductQuery
 
 # Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
 MAX_MATCHES = 8
+# Lo apartado en pedidos pendientes o confirmados (orders.py) no está disponible para otro cliente.
+RESERVED_SQL = (
+    "COALESCE((SELECT SUM(l.quantity) FROM order_lines l JOIN orders o ON o.id = l.order_id "
+    "WHERE o.business_id = products.business_id AND o.store_id = products.store_id AND l.sku = products.sku "
+    "AND o.status IN ('pendiente', 'confirmado')), 0)"
+)
 
 STOPWORDS = {
     "a", "al", "busco", "como", "con", "cual", "cuales", "cuanto", "cuantos",
@@ -128,16 +134,11 @@ class MockCatalog:
         if not query_words:
             return SearchResult((), ())
 
-        connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
-        connection.row_factory = sqlite3.Row
-        try:
-            rows = connection.execute(
-                """SELECT sku, name, variant, unit, price_cop, stock, search_terms, updated_at
-                   FROM products WHERE business_id = ? AND store_id = ?""",
-                (self.business_id, self.store_id),
-            ).fetchall()
-        finally:
-            connection.close()
+        rows = self._rows(
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, search_terms, updated_at
+               FROM products WHERE business_id = ? AND store_id = ?""",
+            (),
+        )
 
         type_words = tokens(request.product or "")
         for field in (request.material, request.measure, request.presentation, request.color, request.brand):
@@ -197,34 +198,34 @@ class MockCatalog:
         )
 
     def get(self, sku: str) -> Product | None:
-        if not self.path.is_file():
-            raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
-        connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
-        connection.row_factory = sqlite3.Row
-        try:
-            row = connection.execute(
-                """SELECT sku, name, variant, unit, price_cop, stock, updated_at
-                   FROM products WHERE business_id = ? AND store_id = ? AND sku = ?""",
-                (self.business_id, self.store_id, sku),
-            ).fetchone()
-        finally:
-            connection.close()
-        return Product(**dict(row)) if row else None
+        rows = self._rows(
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, updated_at
+               FROM products WHERE business_id = ? AND store_id = ? AND sku = ?""",
+            (sku,),
+        )
+        return Product(**dict(rows[0])) if rows else None
 
     def _rows(self, sql: str, params: tuple) -> list[sqlite3.Row]:
-        """Consulta parametrizada en solo lectura, siempre filtrada por el negocio y la sede del servidor."""
+        """Consulta parametrizada en solo lectura, siempre filtrada por el negocio y la sede del servidor.
+
+        ``{stock}`` en la consulta se reemplaza por las existencias disponibles: las físicas menos lo apartado
+        en pedidos pendientes o confirmados. Una base sin tablas de pedidos (la de S2) usa las físicas.
+        """
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
         connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
         try:
-            return connection.execute(sql, (self.business_id, self.store_id, *params)).fetchall()
+            has_orders = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'order_lines'").fetchone()
+            stock = f"MAX(products.stock - {RESERVED_SQL}, 0)" if has_orders else "products.stock"
+            return connection.execute(sql.replace("{stock}", stock), (self.business_id, self.store_id, *params)).fetchall()
         finally:
             connection.close()
 
     def categories(self) -> list[dict]:
         rows = self._rows(
-            """SELECT category, COUNT(*) AS variants, SUM(stock > 0) AS available FROM products
+            """SELECT category, COUNT(*) AS variants, SUM({stock} > 0) AS available FROM products
                WHERE business_id = ? AND store_id = ? GROUP BY category ORDER BY category""",
             (),
         )
@@ -234,7 +235,7 @@ class MockCatalog:
     def category_overview(self, category: str) -> list[dict]:
         """Productos de una categoría con cuántas variantes tienen; sin precios, que salen de la búsqueda."""
         rows = self._rows(
-            """SELECT name, COUNT(*) AS variants, SUM(stock > 0) AS available FROM products
+            """SELECT name, COUNT(*) AS variants, SUM({stock} > 0) AS available FROM products
                WHERE business_id = ? AND store_id = ? AND category = ? GROUP BY name ORDER BY name""",
             (category,),
         )

@@ -12,9 +12,10 @@ from typing import NotRequired, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from asistendero.answers import direct_response, render_answer, reply_is_grounded, with_reservation_note
-from asistendero.grok import PROMPT_VERSION, Decision, ModelError
+from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
+from asistendero.order_rules import validate_order_request
 from asistendero.reminders import pending_reminder, with_reminders
 from asistendero.validation import Rejected, quantities_in_message, validate_request
 
@@ -55,7 +56,8 @@ def _pending(state: AgentState) -> str | None:
     if len(calls) >= MAX_TOOL_CALLS:
         return None
     sent = {item["code"] for item in state.get("avisos", [])}
-    return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent, state.get("referencia"))
+    return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent, state.get("referencia"),
+                            state.get("contexto"))
 
 
 def next_node(state: AgentState) -> str:
@@ -129,7 +131,13 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         try:
             # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
             quantities = quantities_in_message(state["consulta"]) or quantities_in_message(state["referencia"])
-            arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities)
+            if decision.tool in ORDER_TOOLS and isinstance(decision.arguments, dict):
+                # Los pedidos miran el mensaje del turno: confirmar o cancelar lo tiene que decir ahora el cliente.
+                arguments = validate_order_request(decision.tool, decision.arguments, current=state["consulta"],
+                                                   reference=state["referencia"], calls=calls,
+                                                   context=state.get("contexto"))
+            else:
+                arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities)
             if any(previous["executed"] and previous["requested_tool"] == decision.tool
                    and previous["arguments"] == arguments for previous in calls):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")
@@ -147,7 +155,8 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0,
                     "estado": "refused", "respuesta": " ".join([*notes, REFUSAL_CLOSING])}
         update = _respond(state)
-        update["respuesta"] = with_reservation_note(state["consulta"], update["respuesta"])
+        update["respuesta"] = with_reservation_note(state["consulta"], update["respuesta"], state["tool_calls"],
+                                                    state.get("contexto"))
         if notes:
             update["respuesta"] = " ".join(notes) + "\n" + update["respuesta"]
         return update
@@ -178,7 +187,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         if not calls:
             return {**common, "estado": "answered", "respuesta": direct_response(state["consulta"], decision)}
         status, answer = render_answer(message, calls)
-        if reply_is_grounded(decision.reply, message, calls):
+        if reply_is_grounded(decision.reply, message, calls, state.get("contexto")):
             answer = decision.reply.strip()
         return {**common, "estado": status, "respuesta": answer}
 

@@ -78,10 +78,15 @@ def store_allowances(calls: list[ToolCall]) -> tuple[set[str], set[str], bool | 
     return amounts, hours, open_now
 
 
-def store_reply_is_consistent(normalized_reply: str, calls: list[ToolCall]) -> tuple[bool, set[str]]:
-    """(¿la redacción respeta horario y apertura?, montos de la tienda que puede citar)."""
+def store_reply_is_consistent(
+    normalized_reply: str, calls: list[ToolCall], paid_at_pickup: bool = False,
+) -> tuple[bool, set[str]]:
+    """(¿la redacción respeta horario y apertura?, montos de la tienda que puede citar).
+
+    ``paid_at_pickup``: hubo un pedido observado, que ya dice que el pago es en el mostrador al recoger.
+    """
     amounts, hours, open_now = store_allowances(calls)
-    consulted = store_info_by_topic(calls)
+    consulted = set(store_info_by_topic(calls)) | ({"medios_pago"} if paid_at_pickup else set())
     if any(topic not in consulted and pattern.search(normalized_reply) for topic, pattern in POLICY_CLAIMS.items()):
         return False, amounts
     said_hours = {_hour(value) for value in re.findall(r"\b\d{1,2}:\d{2}\b", normalized_reply)}

@@ -4,12 +4,15 @@ import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 import json
+from urllib.parse import parse_qs, urlsplit
 
 from dotenv import load_dotenv
 
 from asistendero.chat import run_turn
 from asistendero.harness_info import describe_harness
-from asistendero.sessions import SessionError, SessionStore
+from asistendero.order_watch import Watcher
+from asistendero.orders import OrderBook
+from asistendero.sessions import SESSION_ID, SessionError, SessionStore
 from asistendero.tracing import run_traced
 
 
@@ -57,6 +60,20 @@ class TraceHandler(BaseHTTPRequestHandler):
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
             return
+        url = urlsplit(self.path)
+        if url.path == "/api/avisos":
+            # Avisos del servidor para una conversación (pedido por vencer o vencido); se entregan una vez.
+            if not self._is_local_host():
+                self._json_error(403, "Origen local no permitido.")
+                return
+            session_id = (parse_qs(url.query).get("sesion") or [""])[0]
+            if not SESSION_ID.match(session_id):
+                self._json_error(400, "Sesión inválida.")
+                return
+            body = json.dumps({"avisos": self.server.sessions.take_notices(session_id)}, ensure_ascii=False).encode("utf-8")
+            self._headers(200, "application/json; charset=utf-8", len(body))
+            self.wfile.write(body)
+            return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
             return
@@ -101,7 +118,7 @@ class TraceHandler(BaseHTTPRequestHandler):
         try:
             if in_session:
                 store = self.server.sessions
-                run_turn(store, session_id or store.create(), query, emit)
+                run_turn(store, session_id or store.create(), query, emit, orders=self.server.orders)
             else:
                 run_traced(query, emit)
         except SessionError as exc:
@@ -119,10 +136,11 @@ class TraceHandler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port: int, sessions: SessionStore | None = None) -> ThreadingHTTPServer:
+def make_server(port: int, sessions: SessionStore | None = None, orders: OrderBook | None = None) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(("127.0.0.1", port), TraceHandler)
     # La sesión vive en el servidor; el visor solo guarda el identificador que este le entrega.
     server.sessions = sessions or SessionStore()
+    server.orders = orders
     return server
 
 
@@ -133,13 +151,17 @@ def main() -> None:
     if not 1 <= args.port <= 65535:
         parser.error("--port debe estar entre 1 y 65535")
     load_dotenv()
-    with make_server(args.port) as server:
+    with make_server(args.port, orders=OrderBook()) as server:
+        # Vence los pedidos sin confirmar a los 5 minutos y deja el aviso para cada cliente, sin llamar a Grok.
+        watcher = Watcher(server.orders, server.sessions).start()
         print(f"Visor local: http://127.0.0.1:{server.server_port}/")
         print("Ctrl+C para detenerlo. Cada mensaje llama a Grok y puede consumir cupo.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+        finally:
+            watcher.stop()
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ from asistendero.chat import run_turn
 from asistendero.executor import catalog_executor
 from asistendero.graph import build_graph
 from asistendero.grok import decide_with_grok
+from asistendero.order_watch import last_event, sweep
+from asistendero.orders import OrderBook
 from asistendero.sessions import SessionError, SessionStore
 
 
@@ -20,9 +22,14 @@ EXIT_WORDS = {"salir", "exit", "chao"}
 def _chat() -> int:
     store = SessionStore()
     session_id = store.create()
-    executor = catalog_executor(MockCatalog())
+    orders = OrderBook()
+    seen = last_event(orders)
     print("Conversación nueva con AsisTendero (datos de demostración). Escribe «salir» para terminar.")
     while True:
+        # Sin hilo en la terminal: antes de cada mensaje se vence lo que pasó su plazo y se muestran los avisos.
+        seen = sweep(orders, store, seen)
+        for notice in store.take_notices(session_id):
+            print(f"AsisTendero (aviso): {notice}\n")
         try:
             message = input("Cliente: ").strip()
         except EOFError:
@@ -32,7 +39,7 @@ def _chat() -> int:
         if not message:
             continue
         try:
-            result = run_turn(store, session_id, message, tool_executor=executor)
+            result = run_turn(store, session_id, message, orders=orders)
         except SessionError as exc:
             print(exc, file=sys.stderr)
             return 1

@@ -38,8 +38,70 @@ STORE_INFO = {
                             "coordinado por el mostrador. Este asistente no programa entregas."},
     "garantias": {"texto": "Cambios con factura dentro de los 30 días siguientes, con el producto sin uso y en su "
                            "empaque. Los materiales cortados a la medida (tubo, cable, cadena) no tienen cambio."},
-    "contacto": {"texto": "Para pedidos, reservas o reclamos atiende el personal del mostrador en el horario de la tienda."},
+    "contacto": {"texto": "Reclamos, domicilios y pedidos especiales los atiende el personal del mostrador en el horario "
+                          "de la tienda."},
+    "pedidos": {"texto": "Por este chat se registran pedidos para recoger en la tienda. El pedido se aparta 5 minutos "
+                         "mientras lo confirmas; ya confirmado, se guarda hasta 2 horas después de la hora de recogida "
+                         "acordada (o 24 horas si no acuerdas hora). El pago se hace en el mostrador al recoger: este "
+                         "chat no cobra, no recibe pagos ni fía."},
 }
+# Temas agregados después de crear una base: upgrade_db los escribe en bases existentes.
+UPGRADED_TOPICS = ("contacto", "pedidos")
+
+# Pedidos para recoger en tienda (orders.py). Lo apartado se descuenta de las existencias que ve el agente.
+ORDER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    business_id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pendiente', 'confirmado', 'entregado', 'cancelado', 'vencido')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    hold_until TEXT NOT NULL,
+    pickup_at TEXT,
+    note TEXT,
+    total_cop INTEGER NOT NULL CHECK (total_cop >= 0)
+);
+CREATE TABLE IF NOT EXISTS order_lines (
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    sku TEXT NOT NULL,
+    name TEXT NOT NULL,
+    variant TEXT NOT NULL,
+    unit TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price_cop INTEGER NOT NULL,
+    subtotal_cop INTEGER NOT NULL,
+    PRIMARY KEY (order_id, sku)
+);
+CREATE TABLE IF NOT EXISTS order_events (
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS orders_by_status ON orders (business_id, store_id, status);
+CREATE INDEX IF NOT EXISTS orders_by_session ON orders (session_id);
+"""
+
+
+def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
+    """Agrega a una base existente las tablas de pedidos y los temas nuevos de la tienda; es idempotente."""
+    path = path.resolve()
+    if not path.is_file():
+        raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
+    connection = sqlite3.connect(path)
+    try:
+        with connection:
+            connection.executescript(ORDER_SCHEMA)
+            connection.executemany(
+                "INSERT OR REPLACE INTO store_info VALUES (?, ?, ?, ?)",
+                [(DEMO_BUSINESS_ID, DEMO_STORE_ID, topic, json.dumps(STORE_INFO[topic], ensure_ascii=False))
+                 for topic in UPGRADED_TOPICS],
+            )
+    finally:
+        connection.close()
+    return path
 
 
 def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
@@ -93,7 +155,7 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
     except Exception:
         path.unlink(missing_ok=True)
         raise
-    return path
+    return upgrade_db(path)
 
 
 def main() -> None:

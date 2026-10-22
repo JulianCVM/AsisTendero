@@ -19,7 +19,7 @@ import re
 import sqlite3
 from uuid import uuid4
 
-from asistendero.observations import latest_quote, search_findings
+from asistendero.observations import latest_quote, order_results, search_findings
 from asistendero.validation import grounded_products
 
 
@@ -58,7 +58,15 @@ def remembered_products(reference: str, calls: list[dict]) -> list[dict]:
     for line in (quote or {}).get("lines", []):
         if line["sku"] in known:
             products.setdefault(line["sku"], known[line["sku"]])
-    return [{"sku": p.sku, "nombre": p.name, "variante": p.variant, "unidad": p.unit} for p in products.values()]
+    remembered = {p.sku: {"sku": p.sku, "nombre": p.name, "variante": p.variant, "unidad": p.unit}
+                  for p in products.values()}
+    # Lo que entró a un pedido también queda identificado: «agrégale otro de esos» se refiere a eso.
+    for _, order in order_results(calls):
+        for line in order["lineas"]:
+            if all(isinstance(line.get(key), str) for key in ("nombre", "variante", "unidad")):
+                remembered.setdefault(line["sku"], {"sku": line["sku"], "nombre": line["nombre"],
+                                                    "variante": line["variante"], "unidad": line["unidad"]})
+    return list(remembered.values())
 
 
 class SessionStore:
@@ -78,7 +86,10 @@ class SessionStore:
                    CREATE TABLE IF NOT EXISTS session_products (
                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                        sku TEXT NOT NULL, name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
-                       last_turn INTEGER NOT NULL, PRIMARY KEY (session_id, sku));"""
+                       last_turn INTEGER NOT NULL, PRIMARY KEY (session_id, sku));
+                   CREATE TABLE IF NOT EXISTS notices (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       created_at TEXT NOT NULL, text TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);"""
             )
 
     @contextmanager
@@ -135,6 +146,23 @@ class SessionStore:
             "productos": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit}
                           for sku, name, variant, unit in products],
         }
+
+    def notify(self, session_id: str, text: str) -> bool:
+        """Deja un aviso del servidor para el cliente (pedido por vencer o vencido); False si la sesión ya no existe."""
+        with self._connect() as connection:
+            if connection.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
+                return False
+            connection.execute("INSERT INTO notices (session_id, created_at, text) VALUES (?, ?, ?)",
+                               (session_id, self.clock().isoformat(), text))
+        return True
+
+    def take_notices(self, session_id: str) -> list[str]:
+        """Avisos aún no entregados de la sesión, en orden; quedan marcados como entregados."""
+        with self._connect() as connection:
+            rows = connection.execute("SELECT rowid, text FROM notices WHERE session_id = ? AND delivered = 0 "
+                                      "ORDER BY rowid", (session_id,)).fetchall()
+            connection.executemany("UPDATE notices SET delivered = 1 WHERE rowid = ?", [(row[0],) for row in rows])
+        return [row[1] for row in rows]
 
     def record(self, session_id: str, customer: str, assistant: str, status: str, products: list[dict]) -> int:
         """Guarda el turno ya filtrado y devuelve su número."""
