@@ -19,7 +19,7 @@ from asistendero.grok import MAX_ARGUMENT_CHARS, ORDER_TOOLS
 from asistendero.guardrails import redact_personal_data
 from asistendero.observations import ToolCall, latest_quote, order_results
 from asistendero.orders import MAX_NOTE_CHARS, ORDER_ID, WEEKDAYS
-from asistendero.validation import (MAX_ITEMS, MAX_QUANTITY, SKU_PATTERN, Rejected, grounded_products,
+from asistendero.validation import (MAX_ITEMS, MAX_QUANTITY, SKU_PATTERN, Rejected, foreign_unit, grounded_products,
                                     normalize_text, quantities_in_message)
 
 
@@ -125,6 +125,9 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
     grounded = set(grounded_products(reference, calls)) | {line["sku"] for line in (quote or {}).get("lines", [])}
     # Los productos de la sesión los identificó el cliente en turnos anteriores; el precio se relee al registrar.
     grounded |= {item.get("sku") for item in (context or {}).get("productos") or []}
+    units = {item.get("sku"): item.get("unidad") for item in (context or {}).get("productos") or []}
+    units |= {line["sku"]: line.get("unit") for line in (quote or {}).get("lines", [])}
+    units |= {sku: product.unit for sku, product in grounded_products(reference, calls).items()}
     allowed = order_quantities(reference)
     clean = []
     for line in lines:
@@ -139,6 +142,8 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
             raise Rejected("SKU_NOT_GROUNDED", "Ese SKU no lo identificó el cliente; búscalo o pregunta cuál quiere.")
         if quantity not in allowed:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no dijo esa cantidad; pregúntala.")
+        if units.get(sku) and foreign_unit(reference, quantity, units[sku]):
+            raise Rejected("QUANTITY_NOT_GROUNDED", f"Esa cantidad la dijo en otra unidad; se vende por {units[sku]}.")
         if any(previous["sku"] == sku for previous in clean):
             raise Rejected("INVALID_ARGUMENT", "SKU repetido en el pedido.")
         clean.append({"sku": sku, "quantity": quantity})

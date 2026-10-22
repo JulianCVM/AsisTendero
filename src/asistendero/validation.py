@@ -18,10 +18,8 @@ SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{1,31}$")
 # «2 metros» o «1 bulto» es cuánto se vende, no una medida del producto: en la corrida exploratoria X-03
 # Grok la puso en measure y la búsqueda devolvió opciones cercanas en vez de preguntar el diámetro.
 SALE_QUANTITY = re.compile(r"^\s*(?:\d+\s*)?(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?)\s*$")
-SALE_UNIT = re.compile(
-    r"\b(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
-    r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?)\b"
-)
+SALE_UNIT_NAME = r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?)"
+SALE_UNIT = re.compile(r"\b(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+" + SALE_UNIT_NAME + r"\b")
 SALE_UNIT_NAMES = {"metros": "metro", "bultos": "bulto", "galones": "galon", "unidades": "unidad", "libras": "libra",
                    "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja"}
 MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
@@ -138,6 +136,23 @@ def sale_units(text: str) -> set[str]:
     """Unidades de venta que acompañan una cantidad («2 metros», «un bulto»), en singular."""
     found = SALE_UNIT.findall(normalize_text(text))
     return {SALE_UNIT_NAMES.get(unit, unit) for unit in found}
+
+
+def foreign_unit(message: str, quantity: int, unit: str) -> str | None:
+    """Unidad de venta distinta a ``unit`` que el cliente pegó a esa cantidad, si nunca la dijo suelta.
+
+    «un rollo de cable» no son 1 metro: en la corrida de escenarios extremos el aviso QUOTE_REQUIRED empujó a Grok
+    a cotizar 1 metro. «2 metros de cable y 2 brochas» sí deja cotizar 2 brochas: el segundo 2 va suelto.
+    """
+    text = re.sub(r"\d+\s*/\s*\d+", " ", normalize_text(message))
+    words = "|".join(NUMBER_WORDS)
+    said = [NUMBER_WORDS.get(value) or int(value) for value in re.findall(rf"\b(\d+|{words})\b", text)]
+    attached = [(NUMBER_WORDS.get(value) or int(value), SALE_UNIT_NAMES.get(name, name))
+                for value, name in re.findall(rf"\b(\d+|{words})\s+{SALE_UNIT_NAME}\b", text)]
+    units = {name for value, name in attached if value == quantity}
+    if not units or normalize_text(unit) in units or said.count(quantity) > len([1 for value, _ in attached if value == quantity]):
+        return None
+    return sorted(units)[0]
 
 
 def grounded_selection(message: str, finding: Finding) -> Product | None:
@@ -272,6 +287,10 @@ def validate_request(
             raise Rejected("SKU_NOT_GROUNDED", "El SKU no es una coincidencia que el mensaje distinga; pregunta al cliente.")
         if quantity not in allowed_quantities:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no expresó esa cantidad; pregúntala.")
+        other = foreign_unit(message, quantity, grounded[sku].unit) if sku in grounded else None
+        if other:
+            raise Rejected("QUANTITY_NOT_GROUNDED", f"El cliente dijo {quantity} {other} y se vende por "
+                                                    f"{grounded[sku].unit}; pregúntale cuántos {grounded[sku].unit}.")
         if any(previous["sku"] == sku for previous in clean_lines):
             raise Rejected("INVALID_ARGUMENT", "SKU repetido en la cotización.")
         clean_lines.append({"sku": sku, "quantity": quantity})

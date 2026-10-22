@@ -759,3 +759,45 @@ def test_sale_quantity_in_presentation_keeps_only_the_unit():
     result = run(executor, planner, "Necesito 1 galón de pintura blanca de vinilo")
     assert executor.calls[0][1]["items"][0]["presentation"] == "galón"
     assert result["estado"] == "quoted" and "$56.000" in result["respuesta"]
+
+
+# Corrida de escenarios extremos (s4-pedidos-v4): defectos que destapó Grok real.
+def _real_executor(tmp_path):
+    from asistendero.catalog import MockCatalog
+    from asistendero.executor import catalog_executor
+    from asistendero.seed import create_mock_db
+
+    return catalog_executor(MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3")))
+
+
+def test_a_roll_is_not_one_metre(tmp_path):
+    # X-06: Grok preguntó cuántos metros; el aviso QUOTE_REQUIRED lo empujó a cotizar «un rollo» como 1 metro.
+    cable = {"text": "rollo de cable 12 AWG negro", "product": "cable", "measure": "12 AWG", "color": "negro"}
+    planner = Script(tool("buscar_productos", items=[cable]),
+                     say("El cable se vende por metro. ¿Cuántos metros necesitas? Datos simulados."),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "CAB-12-NE", "quantity": 1}]), say(""))
+    result = run(_real_executor(tmp_path), planner, "necesito un rollo de cable 12 AWG negro")
+    assert result["estado"] == "found" and "Total informativo" not in result["respuesta"]
+    assert len(planner.seen) == 2  # sin aviso: respondió con la pregunta
+    # Si Grok cotiza 1 metro por su cuenta, el servidor lo rechaza.
+    forced = Script(tool("buscar_productos", items=[cable]),
+                    tool("calcular_cotizacion_informativa", lines=[{"sku": "CAB-12-NE", "quantity": 1}]), say(""))
+    rejected = run(_real_executor(tmp_path / "otra"), forced, "necesito un rollo de cable 12 AWG negro")
+    assert rejected["tool_calls"][1]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
+    # Con la cantidad en la unidad del producto, o suelta, se cotiza.
+    from asistendero.validation import foreign_unit
+    assert foreign_unit("2 metros de cable y 2 brochas", 2, "unidad") is None
+    assert foreign_unit("necesito 15 metros de cable", 15, "metro") is None
+
+
+def test_a_quantity_with_a_sale_unit_needs_a_search_even_after_a_store_tool(tmp_path):
+    # X-10: «me mandan a domicilio 2 bultos de cemento…»: tras consultar domicilios, Grok ofreció cotizar sin buscar.
+    cement = {"text": "cemento gris de 50 kg", "product": "cemento", "color": "gris", "measure": "50 kg"}
+    planner = Script(tool("consultar_info_tienda", tema="domicilios"),
+                     say("¿Quieres que te cotice el cemento?", intent="tienda"),
+                     tool("buscar_productos", items=[cement]),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 2}]), say(""))
+    result = run(_real_executor(tmp_path), planner,
+                 "me mandan a domicilio 2 bultos de cemento gris de 50 kg al barrio La Ceiba?")
+    assert planner.seen[2]["observations"][-1]["error"]["code"] == "SEARCH_REQUIRED"
+    assert result["estado"] == "quoted" and "$79.000" in result["respuesta"] and "$5.000" in result["respuesta"]

@@ -9,7 +9,12 @@ import re
 from asistendero.grok import Decision
 from asistendero.observations import ToolCall, order_results
 from asistendero.order_rules import order_action_pending
-from asistendero.validation import grounded_products, normalize_text, quantities_in_message
+from asistendero.grok import ORDER_TOOLS
+from asistendero.validation import foreign_unit, grounded_products, normalize_text, quantities_in_message, sale_units
+
+# Con cualquiera de estas el turno ya trató de productos; consultar la tienda no cuenta.
+PRODUCT_TOOLS = {"buscar_productos", "consultar_disponibilidad", "calcular_cotizacion_informativa", "explorar_categoria",
+                 *ORDER_TOOLS}
 
 
 def _reminder(code: str, message: str) -> dict:
@@ -93,15 +98,20 @@ def pending_reminder(
     order_tool = order_action_pending(message, reference, calls, context)
     if order_tool and not any(code.startswith("ORDER_REQUIRED") for code in sent):
         return f"ORDER_REQUIRED:{order_tool}"
+    # «2 bultos» pide productos aunque Grok marque la intención como «tienda»: en X-10 («me mandan a domicilio 2
+    # bultos de cemento») consultó los domicilios y ofreció cotizar en vez de buscar.
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
-    if not calls and "SEARCH_REQUIRED" not in sent and asks_products:
+    asks_units = quantities and sale_units(message) and not tools & PRODUCT_TOOLS
+    if "SEARCH_REQUIRED" not in sent and ((not calls and asks_products) or asks_units):
         return "SEARCH_REQUIRED"
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
     if (
         "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools
-        and grounded_products(reference, calls)
+        # «un rollo» no es una cantidad de metros: si cada cantidad va en otra unidad, se pregunta, no se cotiza.
+        and any(not foreign_unit(message, quantity, product.unit)
+                for product in grounded_products(reference, calls).values() for quantity in quantities)
     ):
         return "QUOTE_REQUIRED"
     return None
