@@ -40,6 +40,21 @@ def say(reply="", intent="productos"):
     return Decision("respond", intent, None, None, reply)
 
 
+
+@pytest.mark.parametrize("item, sku", [
+    # Suite variados: «20 amperios» frente a «1 polo 20 A» y «2x16» frente a «2 x 16 AWG» quedaban como cercanas.
+    ({"text": "breaker de 20 amperios", "product": "breaker", "measure": "20 amperios"}, "BRK-20"),
+    ({"text": "cable dúplex 2x16", "product": "cable", "measure": "2x16", "use": "dúplex"}, "DUP-2X16"),
+])
+def test_a_measure_matches_by_its_atoms(catalog, item, sku):
+    result = execute_tool("buscar_productos", {"items": [item]}, catalog=catalog)["data"]["results"][0]
+    assert result["matches"][0]["sku"] == sku
+    # Otra medida en la misma unidad sigue sin coincidir.
+    other = execute_tool("buscar_productos", {"items": [{**item, "measure": item["measure"].replace("20", "25")
+                                                                                     .replace("16", "18")}]},
+                         catalog=catalog)["data"]["results"][0]
+    assert sku not in {match["sku"] for match in other["matches"]}
+
 def test_buscar_productos_returns_matches_and_nearby_in_item_order(catalog):
     response = execute_tool(
         "buscar_productos",

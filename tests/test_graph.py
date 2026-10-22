@@ -848,3 +848,15 @@ def test_an_unnamed_choice_between_products_is_still_asked(tmp_path, message, it
     result = run(_real_executor(tmp_path), planner, message)
     assert result["tool_calls"][1]["response"]["error"]["code"] == "SKU_NOT_GROUNDED"
     assert "Total informativo" not in result["respuesta"]
+
+
+
+def test_a_search_without_the_presentation_does_not_pick_the_bucket(tmp_path):
+    # V-16 con Grok real: buscó «pintura vinilo beige» sin «galón»; el cuñete era el único beige de su nombre y la
+    # respuesta lo daba como el producto pedido aunque el cliente dijo «10 galones».
+    item = {"text": "pintura vinilo beige", "product": "pintura", "use": "vinilo", "color": "beige"}
+    planner = Script(tool("buscar_productos", items=[item]),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "PIV-BEI-G", "quantity": 10}]), say(""))
+    result = run(_real_executor(tmp_path), planner, "¿me hace descuento si llevo 10 galones de pintura vinilo beige?")
+    assert result["tool_calls"][1]["executed"] and "Total informativo: $589.000" in result["respuesta"]
+    assert "PIV-BEI-C5" not in result["respuesta"]

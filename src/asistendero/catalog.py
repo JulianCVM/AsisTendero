@@ -162,9 +162,13 @@ class MockCatalog:
                 "color": (request.color, product_words),
                 "brand": (request.brand, product_words),
             }
+            # Una medida también se cumple por sus átomos: «20 amperios» es el «20 A» de la variante y «2x16», el
+            # «2 x 16 AWG» (suite variados: los dos quedaban como opciones cercanas).
+            atoms = measures(request.measure or "")
             missing = [
                 field for field, (value, words) in constraints.items()
                 if value and not covers(value, words)
+                and not (field == "measure" and atoms and atoms <= measures(f"{row['name']} {row['variant']}"))
             ]
             score = 3 * len(query_words & name_words) + len(query_words & alias_words)
             score += 4 * (sum(bool(value) for value, _ in constraints.values()) - len(missing))

@@ -8,7 +8,7 @@ from asistendero.catalog import Product, tokens
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.measures import UNITS, atom_support, canonical_text, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
-from asistendero.product_fit import closest_named
+from asistendero.product_fit import closest_named, described_whole
 from asistendero.search import ProductQuery, item_clause
 from asistendero.spelling import heard_as
 
@@ -173,8 +173,14 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         if product.sku.casefold() in message.casefold()
         or is_distinguished(message, described, product, finding["matches"])
     ]
-    if len({product.name for product in chosen}) > 1:
-        chosen = closest_named(message, finding["query"], chosen) or chosen
+    if len({product.name for product in finding["matches"]}) > 1:
+        # Se compara con todas las coincidencias, no solo con las distinguidas: en la corrida de variados Grok
+        # buscó sin «galón», el cuñete era el único beige de su nombre y se eligió aunque el cliente dijo
+        # «10 galones». Si el que mejor describe no se distinguió, vale solo si el cliente lo dijo entero.
+        leaders = closest_named(message, finding["query"], list(finding["matches"]))
+        if leaders:
+            whole = [product for product in leaders if described_whole(message, finding["query"], product)]
+            chosen = [product for product in chosen if product in leaders] or (whole if len(whole) == 1 else [])
     if len(chosen) > 1:
         # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
         # de venta dicha (metro) los separa. Si aun así quedan varios, se pregunta.

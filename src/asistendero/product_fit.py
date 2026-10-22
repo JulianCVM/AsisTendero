@@ -21,24 +21,32 @@ def said_about(message: str, text: str) -> str:
     return best if words & tokens(best) else message
 
 
+def _words(product: Product) -> list[set[str]]:
+    # Sin sinónimos del lado del producto: «cuñete» tiene a «galón» de sinónimo y con él «10 galones» elegía el
+    # cuñete de 5 galones. Los sinónimos sí amplían lo que dijo el cliente («foco» dice «bombillo»).
+    return [forms for word in f"{product.name} {product.variant}".split() if (forms := tokens(word, synonyms=False))]
+
+
+def _hits(said: set[str], product: Product) -> int:
+    return sum(bool(forms & said) for forms in _words(product))
+
+
+def described_whole(message: str, text: str, product: Product) -> bool:
+    """El cliente dijo cada palabra del nombre y la variante («pintura vinilo beige» y «galones»)."""
+    return _hits(tokens(said_about(message, text)), product) == len(_words(product))
+
+
 def closest_named(message: str, text: str, products: list[Product]) -> list[Product]:
     """Los productos cuyo sustantivo nombró el cliente y que tienen más palabras de nombre y variante dichas.
 
-    Si el cliente no nombró el de ninguno («2 de PVC de 1/2 para agua» puede ser el tubo o el codo), quedan todos
-    y se pregunta. En un empate gana el único que el cliente describió entero («galón» frente a «cuñete de 5
-    galones»); si no hay uno solo, quedan todos.
+    Si el cliente no nombró el de ninguno («2 de PVC de 1/2 para agua» puede ser el tubo o el codo), no queda
+    ninguno y decide la unidad de venta o se pregunta. En un empate gana el único que el cliente describió entero
+    («galón» frente a «cuñete de 5 galones»); si no hay uno solo, quedan todos los empatados.
     """
-    # Los sinónimos amplían lo que dijo el cliente («foco» dice «bombillo»), no el producto: «cuñete» tiene a
-    # «galón» de sinónimo y con él «10 galones» elegía el cuñete de 5 galones.
     said = tokens(said_about(message, text))
-    products = [product for product in products if tokens(product.name.split()[0], synonyms=False) & said]
-    if not products:
-        return []
-    described = {product.sku: [tokens(word, synonyms=False) for word in f"{product.name} {product.variant}".split()]
-                 for product in products}
-    described = {sku: [forms for forms in words if forms] for sku, words in described.items()}
-    hits = {sku: sum(bool(forms & said) for forms in words) for sku, words in described.items()}
+    named = [product for product in products if tokens(product.name.split()[0], synonyms=False) & said]
+    hits = {product.sku: _hits(said, product) for product in named}
     best = max(hits.values(), default=0)
-    leaders = [product for product in products if hits[product.sku] == best]
-    exact = [product for product in leaders if hits[product.sku] == len(described[product.sku])]
-    return exact if len(leaders) > 1 and len(exact) == 1 else leaders
+    leaders = [product for product in named if hits[product.sku] == best]
+    whole = [product for product in leaders if hits[product.sku] == len(_words(product))]
+    return whole if len(leaders) > 1 and len(whole) == 1 else leaders
