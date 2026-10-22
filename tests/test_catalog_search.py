@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MockCatalog, tokens
+from asistendero.catalog import MAX_MATCHES, MockCatalog, tokens
 from asistendero.search import ProductQuery
 from asistendero.seed import create_mock_db
 
@@ -45,8 +45,12 @@ def test_search_caps_many_variants_and_other_material_is_only_nearby(catalog):
             ],
         )
     broad = catalog.search(q("tubo PVC para agua", product="tubo", material="PVC", use="agua"))
-    assert len(broad.matches) == 3
+    # Las variantes empatadas del mismo producto se muestran juntas hasta el tope, nunca las 12.
+    assert len(broad.matches) == MAX_MATCHES
+    assert {product.name for product in broad.matches} == {"Tubo PVC presión para agua"}
     assert not broad.nearby
+    distinguished = catalog.search(q("tubo PVC de 1/2 para agua", product="tubo", material="PVC", measure="1/2 pulgada", use="agua"))
+    assert len(distinguished.matches) <= 3
 
     copper = catalog.search(q("tubo de cobre de 1/2 para agua", product="tubo", material="cobre", measure="1/2", use="agua"))
     assert not copper.matches

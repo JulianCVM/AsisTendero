@@ -11,6 +11,9 @@ from asistendero.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
 from asistendero.search import ProductQuery
 
 
+# Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
+MAX_MATCHES = 8
+
 STOPWORDS = {
     "a", "al", "busco", "como", "con", "cual", "cuales", "cuanto", "cuantos",
     "cuesta", "cuestan", "de", "del", "disponible", "disponibles", "el", "en",
@@ -146,7 +149,8 @@ class MockCatalog:
             constraints = {
                 "use": (request.use, product_words),
                 "material": (request.material, product_words),
-                "measure": (request.measure, tokens(row["variant"])),
+                # La medida puede estar en el nombre («Cable THHN calibre 12 AWG»), no solo en la variante.
+                "measure": (request.measure, name_words),
                 "presentation": (request.presentation, product_words),
                 "color": (request.color, product_words),
                 "brand": (request.brand, product_words),
@@ -173,8 +177,16 @@ class MockCatalog:
         sort_key = lambda item: (-item[0], item[1].stock == 0, item[1].sku)
         exact.sort(key=sort_key)
         nearby.sort(key=sort_key)
+        shown = exact[:limit]
+        # Una variante empatada con otra que sí se muestra no puede quedar oculta por el tope: con «broca para
+        # concreto», la de 1/4 aparecía sola y se elegía sin que el cliente diera la medida.
+        for score, product in exact[limit:]:
+            if len(shown) >= MAX_MATCHES:
+                break
+            if any(other.name == product.name and other_score == score for other_score, other in shown):
+                shown.append((score, product))
         return SearchResult(
-            tuple(product for _, product in exact[:limit]),
+            tuple(product for _, product in shown),
             tuple(product for _, product in nearby[:2]) if not exact else (),
         )
 

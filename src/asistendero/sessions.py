@@ -11,7 +11,8 @@ Precio y existencias se vuelven a leer del catálogo en cada turno. Una sesión 
 ``SESSION_TTL`` sin actividad y se borra al crear la siguiente: no hay historial indefinido.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
@@ -80,10 +81,16 @@ class SessionStore:
                        last_turn INTEGER NOT NULL, PRIMARY KEY (session_id, sku));"""
             )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        # «with sqlite3.connect()» confirma la transacción pero no cierra: en Windows el archivo queda tomado.
         connection = sqlite3.connect(self.path)
-        connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def create(self) -> str:
         """Abre una sesión nueva con un identificador del servidor y borra las vencidas."""

@@ -87,6 +87,9 @@ def is_distinguished(original: str, item_query: str, selected: Product, candidat
     said_words = tokens(original, synonyms=False) & tokens(item_query, synonyms=False)
     group = [item for item in candidates if item.name == selected.name]
     elements = [_variant_elements(item) for item in group]
+    # La medida también puede estar en el nombre («Cable THHN calibre 14 AWG»): pedir 12 AWG la contradice.
+    if contradicts(measures(f"{selected.name} {selected.variant}"), said_atoms):
+        return False
     if len(group) == 1:
         # Un producto único vale salvo que el mensaje dé otra medida en la misma unidad.
         return not contradicts(elements[0][0], said_atoms)
@@ -103,7 +106,8 @@ def quantities_in_message(message: str) -> set[int]:
     """Cantidades que el cliente expresó; excluye medidas (1/2, 50 kg, 2 pulgadas) y precios."""
     # Un precio no es una cantidad: con «el cemento cuesta $10» o «pon el precio en $1.000», el 10, el 1
     # y el 0 quedaban como cantidades dichas y Grok podía cotizarlas.
-    text = MONEY.sub(" ", normalize_text(message))
+    # La ñ se conserva antes de quitar tildes: «martillo de uña» no dice «una» unidad.
+    text = MONEY.sub(" ", normalize_text(message.replace("ñ", "nh").replace("Ñ", "NH")))
     text = re.sub(r"\d+\s*/\s*\d+", " ", text)
     # Con el catálogo ampliado también son medidas «9 W», «12 AWG», «grano 80», «talla 40» o el 2 de «1/4 x 2».
     measure = (r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×|w\b|watts|awg|ml\b|oz\b|lb\b|a\b|amperios|grados"

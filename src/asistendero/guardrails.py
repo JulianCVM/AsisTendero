@@ -49,6 +49,7 @@ SENSITIVE_TOPICS = {
     ),
 }
 _TOPIC_PATTERNS = {code: re.compile(pattern) for code, (pattern, _) in SENSITIVE_TOPICS.items()}
+FOLLOW_UP_CONTACT = re.compile(r"\b(?:su|sus)\s+(?:telefono|celular|numero|direccion|correo|cedula|nombre)s?\b")
 # Frases cortas sin pedido de producto que pueden quedar tras quitar la parte delicada («hola», «por favor»).
 FILLER = re.compile(r"^(?:\W|hola|buen[oa]s?\s*(?:dias|tardes|noches)?|por\s+favor|gracias|y|tambien|ademas|ok|oye|porfa)*$")
 # El punto corta frase solo si lo sigue un espacio o el final: «$1.000» y «.env» no se parten.
@@ -58,7 +59,7 @@ SENTENCE_SPLIT = re.compile(r"(?<=[?!;\n])\s*|(?<=\.)(?=\s|$)\s*|,\s+(?=(?:y\s+)
 PERSONAL_DATA = [
     re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
     re.compile(r"(?<![\d$.,])(?:\+?57\s?)?3\d{2}[\s-]?\d{3}[\s-]?\d{4}(?![\d])"),
-    re.compile(r"\b(?:c\.?\s?c\.?|cedula|nit|documento)\s*(?:no\.?|numero|#)?\s*:?\s*[\d.\s-]{6,15}\d", re.I),
+    re.compile(r"\b(?:c\.?\s?c\.?|c[eé]dula|nit|documento)(?:\s*(?:es|de|n[uú]mero|no\.?|#|:))*\s*[\d.\s-]{6,15}\d", re.I),
     re.compile(r"(?<![\d$.,])\d(?:[\s-]?\d){12,18}(?!\d)"),
 ]
 REDACTED = "[dato personal omitido]"
@@ -109,6 +110,10 @@ def screen_message(message: str) -> Screening:
             codes.extend(code for code in found if code not in codes)
         else:
             kept.append(sentence.strip())
+    if "THIRD_PARTY_DATA" in codes:
+        # Tras preguntar por otra persona, «dame su teléfono» se refiere a ella, no a la tienda.
+        removed += [sentence for sentence in kept if FOLLOW_UP_CONTACT.search(_plain(sentence))]
+        kept = [sentence for sentence in kept if not FOLLOW_UP_CONTACT.search(_plain(sentence))]
     remainder = " ".join(kept).strip(" ,;")
     if FILLER.match(_plain(remainder)):
         remainder = ""

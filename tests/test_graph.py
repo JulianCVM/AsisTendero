@@ -623,3 +623,10 @@ def test_measures_of_the_large_catalog_are_not_quantities(message, expected):
     from asistendero.validation import quantities_in_message
 
     assert quantities_in_message(message) == expected
+
+
+def test_enie_words_are_not_number_words():
+    from asistendero.validation import quantities_in_message
+
+    assert quantities_in_message("¿Cuánto vale el martillo de uña de 16 oz?") == set()
+    assert quantities_in_message("Quiero una brocha de 2 pulgadas") == {1}

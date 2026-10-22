@@ -56,7 +56,8 @@ def pending_reminder(
     reference = reference or message
     quantities = quantities_in_message(message)
     tools = {call["requested_tool"] for call in calls}
-    asks_store = decision.intent == "tienda" or STORE_QUESTION.search(normalize_text(message))
+    # Con intención «tienda» y otra herramienta ya usada (explorar_categoria) no hace falta el aviso.
+    asks_store = STORE_QUESTION.search(normalize_text(message)) or (decision.intent == "tienda" and not calls)
     if asks_store and "consultar_info_tienda" not in tools and "INFO_REQUIRED" not in sent:
         return "INFO_REQUIRED"
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
