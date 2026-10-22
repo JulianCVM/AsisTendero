@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel del tendero · PulsoTienda</title>
+  <link rel="stylesheet" href="/assets/tendero.css">
+  <script src="/assets/tendero.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="/assets/cercania-mark.png" alt="" width="40" height="40">
+      <div>
+        <h1>Panel del tendero</h1>
+        <p>PulsoTienda · Ferretería La Esquina</p>
+      </div>
+    </div>
+    <span class="env">Datos simulados</span>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones">
+    <button type="button" data-tab="resumen" aria-pressed="true">Resumen</button>
+    <button type="button" data-tab="pedidos" aria-pressed="false">Pedidos</button>
+    <button type="button" data-tab="inventario" aria-pressed="false">Inventario</button>
+    <button type="button" data-tab="movimientos" aria-pressed="false">Historial</button>
+  </nav>
+
+  <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+  <main>
+    <section id="tab-resumen" class="panel" aria-labelledby="resumen-title">
+      <h2 id="resumen-title">Hoy <span id="summary-day" class="muted"></span></h2>
+      <div class="tiles">
+        <div class="tile"><span class="tile-label">Ventas entregadas</span><strong id="tile-sales">—</strong></div>
+        <div class="tile"><span class="tile-label">Total vendido</span><strong id="tile-total">—</strong></div>
+        <div class="tile"><span class="tile-label">Por confirmar</span><strong id="tile-pending">—</strong></div>
+        <div class="tile"><span class="tile-label">Confirmados por recoger</span><strong id="tile-confirmed">—</strong></div>
+      </div>
+      <div class="columns">
+        <div class="card">
+          <h3>Por recoger</h3>
+          <ul id="pickup-list" class="plain-list"></ul>
+          <p id="pickup-empty" class="muted" hidden>No hay pedidos por recoger.</p>
+        </div>
+        <div class="card">
+          <h3>Más vendidos hoy</h3>
+          <ul id="top-list" class="plain-list"></ul>
+          <p id="top-empty" class="muted" hidden>Todavía no hay ventas entregadas hoy.</p>
+        </div>
+        <div class="card">
+          <h3>Pocas existencias para vender</h3>
+          <ul id="low-list" class="plain-list"></ul>
+          <p id="low-empty" class="muted" hidden>Ningún producto está por debajo de 5 disponibles.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-pedidos" class="panel" aria-labelledby="pedidos-title" hidden>
+      <div class="panel-head">
+        <h2 id="pedidos-title">Pedidos del chat</h2>
+        <button type="button" id="refresh-orders" class="secondary">Actualizar</button>
+      </div>
+      <div class="chips" id="status-filter" role="group" aria-label="Filtrar por estado"></div>
+      <div id="order-list" class="order-list"></div>
+      <p id="orders-empty" class="muted" hidden>No hay pedidos con ese estado.</p>
+    </section>
+
+    <section id="tab-inventario" class="panel" aria-labelledby="inventario-title" hidden>
+      <div class="panel-head">
+        <h2 id="inventario-title">Inventario</h2>
+        <span id="product-count" class="muted"></span>
+      </div>
+      <form id="inventory-filter" class="filters">
+        <label>Buscar <input id="search" type="search" maxlength="60" placeholder="SKU, nombre o medida"></label>
+        <label>Categoría <select id="category"><option value="">Todas</option></select></label>
+        <label class="check"><input id="low-only" type="checkbox"> Solo con pocas existencias</label>
+      </form>
+      <div id="product-list" class="product-list"></div>
+      <details class="card add-product">
+        <summary>Agregar un producto</summary>
+        <form id="add-form" class="add-grid">
+          <label>SKU <input name="sku" required maxlength="32" pattern="[A-Z0-9][A-Z0-9\-]{1,31}" placeholder="TUB-099"></label>
+          <label>Nombre <input name="nombre" required maxlength="80"></label>
+          <label>Variante <input name="variante" required maxlength="80" placeholder="1/2 pulgada"></label>
+          <label>Unidad <select name="unidad" id="unit-select"></select></label>
+          <label>Categoría <input name="categoria" required maxlength="80" list="category-options"></label>
+          <label>Precio (COP) <input name="precio_cop" type="number" min="0" max="50000000" step="1" required></label>
+          <label>Existencias <input name="stock" type="number" min="0" max="100000" step="1" required></label>
+          <label class="wide">Términos de búsqueda <input name="terminos" maxlength="300" placeholder="tubo pvc agua media"></label>
+          <datalist id="category-options"></datalist>
+          <button type="submit" class="primary wide">Agregar producto</button>
+        </form>
+      </details>
+    </section>
+
+    <section id="tab-movimientos" class="panel" aria-labelledby="movimientos-title" hidden>
+      <h2 id="movimientos-title">Cambios de inventario</h2>
+      <ul id="history-list" class="plain-list history"></ul>
+      <p id="history-empty" class="muted" hidden>Todavía no hay cambios registrados.</p>
+    </section>
+  </main>
+</body>
+</html>

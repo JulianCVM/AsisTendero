@@ -19,6 +19,7 @@ dev = ["pytest>=8,<10"]
 [project.scripts]
 asistendero = "asistendero.cli:main"
 asistendero-visual = "asistendero.visual:main"
+asistendero-tendero = "asistendero.tendero:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

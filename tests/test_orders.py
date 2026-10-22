@@ -8,6 +8,7 @@ import pytest
 
 from asistendero.catalog import MockCatalog
 from asistendero.orders import BOGOTA, HOLD_MINUTES, OrderBook, OrderError
+from asistendero.sales import order_board
 from asistendero.seed import create_mock_db
 
 
@@ -116,7 +117,7 @@ def test_cancel_releases_and_deliver_discounts_physical_stock(store):
     with pytest.raises(OrderError) as error:
         book.deliver(sold["pedido"])
     assert error.value.code == "ORDER_CLOSED"
-    history = [event["estado"] for event in book.list()[0]["historial"]]
+    history = [event["estado"] for event in order_board(book)[0]["historial"]]
     assert history == ["pendiente", "confirmado", "entregado"]
 
 

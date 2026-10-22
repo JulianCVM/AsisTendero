@@ -116,7 +116,7 @@ class OrderBook:
             raise OrderError("ORDER_NOT_FOUND", "No encuentro ese pedido en esta conversación.")
         return row
 
-    def _view(self, connection: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    def view(self, connection: sqlite3.Connection, row: sqlite3.Row) -> dict:
         lines = connection.execute("SELECT * FROM order_lines WHERE order_id = ? ORDER BY rowid", (row["id"],)).fetchall()
         return {
             "pedido": row["id"], "estado": row["status"],
@@ -162,7 +162,7 @@ class OrderBook:
             )
             connection.executemany("INSERT INTO order_lines VALUES (?, ?, ?, ?, ?, ?, ?, ?)", stored)
             self._event(connection, order_id, "pendiente", "registrado por el agente")
-            return self._view(connection, self._load(connection, order_id))
+            return self.view(connection, self._load(connection, order_id))
 
     def _active(self, connection: sqlite3.Connection, order_id: str, session_id: str | None) -> sqlite3.Row:
         self._expire(connection)
@@ -177,13 +177,13 @@ class OrderBook:
         with self.transaction() as connection:
             row = self._active(connection, order_id, session_id)
             if row["status"] == "confirmado":
-                return self._view(connection, row)
+                return self.view(connection, row)
             pickup = datetime.fromisoformat(row["pickup_at"]) if row["pickup_at"] else None
             hold = pickup + PICKUP_GRACE if pickup else self.clock() + CONFIRMED_HOLD
             connection.execute("UPDATE orders SET status = 'confirmado', hold_until = ?, updated_at = ? WHERE id = ?",
                                (utc_text(hold), utc_text(self.clock()), order_id))
             self._event(connection, order_id, "confirmado", "confirmado por el cliente")
-            return self._view(connection, self._load(connection, order_id))
+            return self.view(connection, self._load(connection, order_id))
 
     def check_pickup(self, connection: sqlite3.Connection, pickup: datetime) -> None:
         now = self.clock()
@@ -216,7 +216,7 @@ class OrderBook:
                                (*changes.values(), utc_text(self.clock()), order_id))
             detail = f"recogida {local_text(changes['pickup_at'])}" if "pickup_at" in changes else "nota del cliente"
             self._event(connection, order_id, row["status"], detail)
-            return self._view(connection, self._load(connection, order_id))
+            return self.view(connection, self._load(connection, order_id))
 
     def cancel(self, order_id: str, session_id: str | None = None, by: str = "cliente") -> dict:
         with self.transaction() as connection:
@@ -224,7 +224,7 @@ class OrderBook:
             connection.execute("UPDATE orders SET status = 'cancelado', updated_at = ? WHERE id = ?",
                                (utc_text(self.clock()), order_id))
             self._event(connection, order_id, "cancelado", f"cancelado por el {by}")
-            return self._view(connection, self._load(connection, order_id))
+            return self.view(connection, self._load(connection, order_id))
 
     def deliver(self, order_id: str) -> dict:
         """El tendero entrega: el pedido pasa a venta y se descuentan las existencias físicas."""
@@ -241,34 +241,16 @@ class OrderBook:
             connection.execute("UPDATE orders SET status = 'entregado', updated_at = ? WHERE id = ?",
                                (utc_text(self.clock()), order_id))
             self._event(connection, order_id, "entregado", "entregado por el tendero")
-            return self._view(connection, self._load(connection, order_id))
+            return self.view(connection, self._load(connection, order_id))
 
     def get(self, order_id: str, session_id: str | None = None) -> dict:
         with self.transaction() as connection:
             self._expire(connection)
-            return self._view(connection, self._load(connection, order_id, session_id))
+            return self.view(connection, self._load(connection, order_id, session_id))
 
     def session_orders(self, session_id: str, limit: int = 5) -> list[dict]:
         with self.transaction() as connection:
             self._expire(connection)
             rows = connection.execute("SELECT * FROM orders WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
                                       (session_id, limit)).fetchall()
-            return [self._view(connection, row) for row in rows]
-
-    def list(self, status: str | None = None, limit: int = 200) -> list[dict]:
-        """Pedidos de la sede para el tendero, con la sesión abreviada y el historial de estados."""
-        with self.transaction() as connection:
-            self._expire(connection)
-            rows = connection.execute(
-                "SELECT * FROM orders WHERE business_id = ? AND store_id = ? AND (? IS NULL OR status = ?) "
-                "ORDER BY created_at DESC, rowid DESC LIMIT ?",
-                (self.business_id, self.store_id, status, status, limit),
-            ).fetchall()
-            result = []
-            for row in rows:
-                events = connection.execute("SELECT at, status, detail FROM order_events WHERE order_id = ? ORDER BY rowid",
-                                            (row["id"],)).fetchall()
-                result.append({**self._view(connection, row), "conversacion": row["session_id"][:8],
-                               "historial": [{"hora": local_text(event["at"]), "estado": event["status"],
-                                              "detalle": event["detail"]} for event in events]})
-            return result
+            return [self.view(connection, row) for row in rows]
