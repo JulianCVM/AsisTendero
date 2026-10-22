@@ -137,7 +137,9 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
                                                    reference=state["referencia"], calls=calls,
                                                    context=state.get("contexto"))
             else:
-                arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities)
+                remembered = {item.get("sku") for item in (state.get("contexto") or {}).get("productos") or []}
+                arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities,
+                                             remembered)
             if any(previous["executed"] and previous["requested_tool"] == decision.tool
                    and previous["arguments"] == arguments for previous in calls):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")

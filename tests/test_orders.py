@@ -371,6 +371,71 @@ def test_orders_need_a_session(tmp_path):
     assert executor("registrar_pedido", {"lines": [{"sku": "PVC-050", "quantity": 3}]})["error"]["code"] == "SESSION_REQUIRED"
 
 
+
+def test_without_a_session_the_rejected_order_keeps_the_quote_answer(tmp_path):
+    # G-07, corridas S4: fuera de una conversación Grok intentó registrar; la respuesta es la cotización.
+    executor = catalog_executor(MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3")))
+    cement = {"text": "cemento gris de 50 kg", "product": "cemento", "measure": "50 kg", "presentation": "bulto"}
+    planner = Script(tool("buscar_productos", items=[cement]),
+                     tool("registrar_pedido", lines=[{"sku": "CEM-050", "quantity": 3}]),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 3}]),
+                     say("Te aparté 3 bultos. Datos simulados."))
+    result = build_graph(executor, planner).invoke({"consulta": "Apártame 3 bultos de cemento gris de 50 kg, pago mañana"})
+    assert result["tool_calls"][1]["response"]["error"]["code"] == "SESSION_REQUIRED"
+    assert result["estado"] == "quoted"
+    assert "No es un pedido ni una reserva" in result["respuesta"] and "aparté" not in result["respuesta"]
+
+
+def test_a_remembered_product_is_quoted_without_searching_again(chat):
+    # M-01, segunda corrida S4: «dame 3 metros de ese» cotizó el SKU recordado sin buscar y se rechazaba.
+    turn, sessions, _, _, _ = chat
+    session = sessions.create()
+    turn(session, "Busco tubo PVC de 1/2 para agua", tool("buscar_productos", items=[PVC_HALF]), say())
+    result = turn(session, "Dame 3 metros de ese",
+                  tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    assert result["tool_calls"][0]["executed"] and result["estado"] == "quoted"
+    assert "$25.500" in result["respuesta"] and "Tubo PVC" in result["respuesta"]
+    # Un SKU que la sesión no identificó sigue rechazado, y la cantidad debe estar dicha.
+    other = turn(session, "y 2 de cemento", tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 2}]),
+                 say())
+    assert other["tool_calls"][0]["response"]["error"]["code"] == "SKU_NOT_GROUNDED" and "$" not in other["respuesta"]
+    unsaid = turn(session, "cotízamelo", tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 7}]),
+                  say())
+    assert unsaid["tool_calls"][0]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
+
+
+def test_a_registered_order_does_not_ask_for_a_separate_quote(chat):
+    # P-02, corridas S4: tras registrar, el aviso QUOTE_REQUIRED pedía cotizar lo mismo (dos llamadas más).
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    cement = {"text": "bultos de cemento gris de 50 kg", "product": "cemento", "measure": "50 kg", "presentation": "bulto"}
+    result = turn(session, "me llevo 2 bultos de cemento gris de 50 kg", tool("buscar_productos", items=[cement]),
+                  tool("registrar_pedido", lines=[{"sku": "CEM-050", "quantity": 2}]), say())
+    assert len(result["planner"].seen) == 3 and result["estado"] == "order_pending"
+    assert "$79.000" in result["respuesta"] and [o["estado"] for o in book.session_orders(session)] == ["pendiente"]
+    # Sin pedido registrado el aviso sigue: una cantidad con producto distinguido se cotiza.
+    plain = turn(sessions.create(), "Necesito 3 metros de tubo PVC de 1/2 para agua",
+                 tool("buscar_productos", items=[PVC_HALF]), say(), say())
+    assert plain["planner"].seen[-1]["observaciones"][-1]["error"]["code"] == "QUOTE_REQUIRED"
+
+def test_a_question_about_confirming_is_not_a_confirmation(chat):
+    # P-02, segunda corrida S4: «¿todavía lo puedo confirmar?» tras vencer el apartado disparó el aviso de
+    # registrar y Grok registró un pedido que el cliente no había pedido.
+    turn, sessions, book, _, clock = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    clock.advance(minutes=6)
+    book.expire_due()
+    asked = turn(session, "uy se me pasó, todavía lo puedo confirmar?",
+                 say("Ese pedido venció. Si aún lo quieres, dime y lo registro de nuevo. Datos simulados."))
+    assert len(asked["planner"].seen) == 1
+    assert [order["estado"] for order in book.session_orders(session)] == ["vencido"]
+    # «sí, ¿a qué hora abren?» sigue confirmando: abre con el sí.
+    from asistendero.order_rules import confirms
+    assert confirms("sí, ¿a qué hora abren?") and not confirms("¿ya quedó confirmado?")
+
+
 def test_watcher_warns_one_minute_before_and_notifies_expiry_once(chat):
     turn, sessions, book, catalog, clock = chat
     session = sessions.create()

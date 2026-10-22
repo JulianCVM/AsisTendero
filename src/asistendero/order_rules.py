@@ -33,6 +33,7 @@ CONFIRMATION = re.compile(
     r"^\W*(?:si+|sip|claro|ok(?:ey|ay)?|vale|va|listo|dale|correcto|perfecto|exacto)\b"
     r"|\b(?:confirm\w*|de\s+una|hagale|dale|listo|de\s+acuerdo|esta\s+bien|me\s+sirve|asi\s+esta\s+bien)\b"
 )
+AFFIRMATION_FIRST = re.compile(r"^\W*(?:si+|sip|claro|ok(?:ey|ay)?|vale|listo|dale|correcto|perfecto|exacto|confirm\w*)\b")
 NEGATION = re.compile(r"^\W*no\b|\b(?:no\s+(?:confirm\w*|todavia|aun|lo|la|los|las|quiero)|todavia\s+no|aun\s+no"
                       r"|espera\w*|mejor\s+no|cancel\w*|ya\s+no)\b")
 CANCEL_INTENT = re.compile(
@@ -72,7 +73,13 @@ def order_quantities(text: str) -> set[int]:
 
 def confirms(message: str) -> bool:
     text = normalize_text(message)
-    return bool(CONFIRMATION.search(text)) and not NEGATION.search(text)
+    if NEGATION.search(text):
+        return False
+    # Una pregunta confirma solo si abre con el sí («sí, ¿a qué hora abren?»): «¿todavía lo puedo confirmar?»
+    # pregunta (P-02, segunda corrida S4: el aviso empujó a registrar un pedido que el cliente no pidió).
+    if "?" in message:
+        return bool(AFFIRMATION_FIRST.search(text))
+    return bool(CONFIRMATION.search(text))
 
 
 def wants_to_buy(message: str, context: dict | None) -> bool:

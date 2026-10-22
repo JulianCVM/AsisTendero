@@ -94,8 +94,11 @@ STATUS_BY_TOOL = {"registrar_pedido": "order_pending", "confirmar_pedido": "orde
                   "consultar_pedido": "order_status"}
 
 
-def order_reply(calls: list[ToolCall]) -> tuple[str, str] | None:
-    """(estado, texto) para lo que pasó con los pedidos en la ejecución, o None si no hubo herramientas de pedidos."""
+def order_reply(calls: list[ToolCall]) -> tuple[str | None, str] | None:
+    """(estado, texto) para lo que pasó con los pedidos en la ejecución, o None si no hubo herramientas de pedidos.
+
+    El estado es None cuando el único problema es que no hay conversación: la respuesta sigue siendo la cotización.
+    """
     order_calls = [call for call in calls if call["requested_tool"] in ORDER_TOOLS]
     if not order_calls:
         return None
@@ -118,6 +121,8 @@ def order_reply(calls: list[ToolCall]) -> tuple[str, str] | None:
         return None
     if results or any(call["response"].get("status") == "error" for call in order_calls):
         lines.append(PAYMENT)
+    if not results and all((call["response"].get("error") or {}).get("code") == "SESSION_REQUIRED" for call in order_calls):
+        status = None
     return status, "\n".join(lines)
 
 

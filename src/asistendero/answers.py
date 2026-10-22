@@ -105,8 +105,12 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
     findings = search_findings(calls)
     store = store_lines(calls)
     orders = order_reply(calls)
+    quote, quote_call = latest_quote(calls)
+    if not findings and quote:
+        answer = "\n".join([*store, _quote_text(quote, {}), *([orders[1]] if orders else [])])
+        return (orders and orders[0]) or "quoted", answer + "\nSon datos de demostración."
     if not findings and (store or orders):
-        return (orders[0] if orders else "informed"), "\n".join([*store, *([orders[1]] if orders else [])]) + "\nSon datos de demostración."
+        return (orders and orders[0]) or "informed", "\n".join([*store, *([orders[1]] if orders else [])]) + "\nSon datos de demostración."
     if not findings:
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
             return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
@@ -154,17 +158,8 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
     answer += ("Con gusto, esto encontré:\n" if len(lines) > 1 else "")
     answer += ("\n".join(f"• {line.removeprefix('Encontré ')}" for line in lines) if len(lines) > 1 else lines[0])
 
-    quote, quote_call = latest_quote(calls)
     if quote:
-        quote_lines = []
-        for line in quote["lines"]:
-            product = products.get(line["sku"])
-            label = f"{product.name} {product.variant}" if product else f"SKU {line['sku']}"
-            unit = product.unit if product else "unidad"
-            quote_lines.append(f"• {line['quantity']} {_units(unit, line['quantity'])} de {label}: "
-                               f"{format_cop(line['unit_price_cop'])} COP c/u → {format_cop(line['subtotal_cop'])} COP")
-        answer += ("\nCotización informativa:\n" + "\n".join(quote_lines)
-                   + f"\nTotal informativo: {format_cop(quote['total_cop'])} COP. No es un pedido ni una reserva.")
+        answer += "\n" + _quote_text(quote, products)
         if status == "found":
             status = "quoted"
     elif quote_call:
@@ -184,8 +179,21 @@ def render_answer(message: str, calls: list[ToolCall]) -> tuple[str, str]:
             answer += "\nNo pude calcular la cotización en este momento; los datos anteriores sí vienen del catálogo."
             status = "quote_error"
     if orders:
-        status, answer = orders[0], f"{answer}\n{orders[1]}"
+        status, answer = orders[0] or status, f"{answer}\n{orders[1]}"
     return status, answer + "\nSon datos de demostración."
+
+
+def _quote_text(quote: dict, products: dict[str, Product]) -> str:
+    lines = []
+    for line in quote["lines"]:
+        product = products.get(line["sku"])
+        name, variant, unit = ((product.name, product.variant, product.unit) if product
+                               else (line.get("name"), line.get("variant"), line.get("unit") or "unidad"))
+        label = f"{name} {variant}" if name else f"SKU {line['sku']}"
+        lines.append(f"• {line['quantity']} {_units(unit, line['quantity'])} de {label}: "
+                     f"{format_cop(line['unit_price_cop'])} COP c/u → {format_cop(line['subtotal_cop'])} COP")
+    return ("Cotización informativa:\n" + "\n".join(lines)
+            + f"\nTotal informativo: {format_cop(quote['total_cop'])} COP. No es un pedido ni una reserva.")
 
 
 def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: dict | None = None) -> bool:

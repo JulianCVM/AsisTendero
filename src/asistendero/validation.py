@@ -164,11 +164,13 @@ def grounded_products(message: str, calls: list[ToolCall]) -> dict[str, Product]
 
 def validate_request(
     name: str | None, arguments: object, message: str, calls: list[ToolCall], quantities: set[int] | None = None,
+    remembered: set[str] = frozenset(),
 ) -> dict:
     """Devuelve los argumentos que efectivamente recibirá el ejecutor o rechaza la solicitud.
 
-    ``message`` es lo que el cliente dijo (en una sesión, sus turnos recientes más el actual) y
-    ``quantities``, las cantidades que puede cotizar; por omisión, las de ``message``.
+    ``message`` es lo que el cliente dijo (en una sesión, sus turnos recientes más el actual);
+    ``quantities``, las cantidades que puede cotizar (por omisión, las de ``message``), y ``remembered``,
+    los SKU que la sesión ya identificó en turnos anteriores.
     """
     if name not in TOOL_NAMES:
         raise Rejected("UNKNOWN_TOOL", "Herramienta fuera de la lista permitida.")
@@ -255,7 +257,9 @@ def validate_request(
             raise Rejected("INVALID_ARGUMENT", "Se requiere un SKU válido.")
         if not isinstance(quantity, int) or isinstance(quantity, bool) or not 1 <= quantity <= MAX_QUANTITY:
             raise Rejected("INVALID_QUANTITY", f"La cantidad debe ser un entero de 1 a {MAX_QUANTITY}.")
-        if sku not in grounded:
+        # Un producto que la sesión ya identificó se cotiza sin volver a buscar, como en los pedidos: el precio
+        # lo relee la herramienta del catálogo (M-01, segunda corrida S4: «dame 3 metros de ese» se rechazaba).
+        if sku not in grounded and sku not in remembered:
             raise Rejected("SKU_NOT_GROUNDED", "El SKU no es una coincidencia que el mensaje distinga; pregunta al cliente.")
         if quantity not in allowed_quantities:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no expresó esa cantidad; pregúntala.")

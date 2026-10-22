@@ -7,7 +7,7 @@ cronológico. El servidor solo recuerda: nunca ejecuta la herramienta por su cue
 import re
 
 from asistendero.grok import Decision
-from asistendero.observations import ToolCall
+from asistendero.observations import ToolCall, order_results
 from asistendero.order_rules import order_action_pending
 from asistendero.validation import grounded_products, normalize_text, quantities_in_message
 
@@ -93,8 +93,10 @@ def pending_reminder(
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
     if not calls and "SEARCH_REQUIRED" not in sent and asks_products:
         return "SEARCH_REQUIRED"
+    # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
+    registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
     if (
-        "QUOTE_REQUIRED" not in sent and quantities
+        "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools
         and grounded_products(reference, calls)
     ):

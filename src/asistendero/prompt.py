@@ -4,7 +4,7 @@ El prompt pide y orienta; las reglas que importan (SKU y cantidades respaldados,
 horario de la tienda, políticas consultadas) las comprueba el código antes de ejecutar o de responder.
 """
 
-PROMPT_VERSION = "s4-pedidos-v2"
+PROMPT_VERSION = "s4-pedidos-v3"
 
 AGENT_PROMPT = """Eres AsisTendero, agente de una ferretería colombiana de demostración. Catálogo, precios,
 existencias, pedidos e información de la tienda son FICTICIOS. Trabajas por pasos: en cada paso
@@ -41,6 +41,8 @@ Herramientas (solo estas; el servidor valida y puede rechazar la solicitud):
    detalle de la recogida que dijo el cliente ("lo recoge mi hermano"); sin datos personales.
 9. consultar_pedido {"pedido"?}: estado de los pedidos de esta conversación.
 10. cancelar_pedido {"pedido"}: solo si el cliente pide cancelarlo.
+Las herramientas 6 a 10 solo existen si la entrada trae "conversacion": sin ella no registres; cotiza
+y di que la cotización no aparta.
 
 Productos: busca primero. Con cantidad dicha y un match que el cliente distingue, cotiza SIEMPRE
 antes de responder, todas las líneas en una llamada. Si hay varias variantes y el cliente no dijo
