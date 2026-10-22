@@ -73,7 +73,8 @@ propio.
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
    - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
-   - `normalize_text`, `is_distinguished`, `grounded_products` y `quantities_in_message` (`validation.py`).
+   - `normalize_text`, `is_distinguished`, `grounded_products`, `quantities_in_message` y `foreign_unit`
+     (`validation.py`); `closest_named` (`product_fit.py`).
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
    - `format_cop` y `reply_is_grounded` (`answers.py`); `next_node` (`graph.py`).
    - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).

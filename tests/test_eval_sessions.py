@@ -20,7 +20,7 @@ from asistendero.orders import BOGOTA
 from asistendero.seed import create_mock_db
 
 
-S4_SUITES = {"ruido", "pedidos", "sesion_larga", "concurrencia", "extremos", "flujos"}
+S4_SUITES = {"ruido", "pedidos", "sesion_larga", "concurrencia", "extremos", "flujos", "variados"}
 MODEL = "grok-4.20-0309-non-reasoning"
 
 
@@ -84,6 +84,8 @@ CEMENT = {"product": "cemento", "color": "gris", "measure": "50 kg"}
 BULB = {"product": "bombillo", "measure": "9 W", "color": "cálida"}
 BRUSH = {"product": "brocha", "measure": "3 pulgadas"}
 PAINT = {"product": "pintura", "color": "blanca", "material": "vinilo", "presentation": "galón"}
+NAIL = {"product": "puntilla", "measure": "2 pulgadas"}
+WHITE_BULB = {"product": "bombillo", "measure": "9 W", "color": "blanca"}
 ORDER_STATUS = [call("consultar_pedido"), finish("pedido")]
 
 SCRIPTS = {
@@ -220,6 +222,100 @@ SCRIPTS = {
                                                        register(("PIN-BLA", 2)), finish("pedido")],
     "me llevo 2 siliconas transparentes": [search("siliconas transparentes", product="silicona", color="transparente"),
                                            register(("SIL-TRA", 2)), finish("pedido")],
+    # variados
+    "cuánto vale la libra de puntilla con cabeza de 2 pulgadas": [search("puntilla con cabeza de 2 pulgadas", **NAIL),
+                                                                   finish()],
+    "deme 3 libras de puntilla con cabeza de 1 pulgada": [search("puntilla con cabeza de 1 pulgada", product="puntilla",
+                                                                 measure="1 pulgada"), quote(("PUN-1", 3)), finish()],
+    "necesito 2 pares de guantes de carnaza talla L": [search("guantes de carnaza talla L", product="guantes",
+                                                              material="carnaza", measure="talla L"),
+                                                       quote(("GUA-L", 2)), finish()],
+    "un par de bisagras de cobre de 3 pulgadas": [search("bisagras de cobre de 3 pulgadas", product="bisagra",
+                                                         material="cobre", measure="3 pulgadas"),
+                                                  quote(("BIS-3", 1)), finish()],
+    "necesito 50 tornillos drywall #6 x 1 pulgada": [search("tornillo drywall #6 x 1 pulgada", product="tornillo",
+                                                            measure="#6 x 1 pulgada"), finish()],
+    "2 bombillos LED de 9 W luz blanca": [search("bombillos LED de 9 W luz blanca", **WHITE_BULB),
+                                          quote(("BOM-09", 2)), finish()],
+    "¿tienen martillo de uña de 16 oz?": [search("martillo de uña de 16 oz", product="martillo", measure="16 oz"), finish()],
+    "necesito una broca de 1/4": [search("broca de 1/4", product="broca", measure="1/4 pulgada"),
+                                  finish("productos", "¿Para concreto, metal o madera? Datos simulados.")],
+    "3 metros de cadena galvanizada de 5 mm y un candado de latón de 40 mm": [
+        call("buscar_productos", items=[{"text": "cadena galvanizada de 5 mm", "product": "cadena", "measure": "5 mm"},
+                                        {"text": "candado de latón de 40 mm", "product": "candado", "measure": "40 mm"}]),
+        quote(("CAD-5MM", 3), ("CAN-40", 1)), finish()],
+    "tengo 50 mil, ¿cuántos bultos de cemento gris de 25 kg me alcanzan?": [
+        search("cemento gris de 25 kg", product="cemento", color="gris", measure="25 kg"), finish()],
+    "NECESITO 6 METROS DE TUBO SANITARIO DE 4 PULGADAS": [search("tubo sanitario de 4 pulgadas", product="tubo",
+                                                                 use="sanitario", measure="4 pulgadas"),
+                                                          quote(("SAN-4", 6)), finish()],
+    "3x brochas de 2 pulgadas": [search("brochas de 2 pulgadas", product="brocha", measure="2 pulgadas"),
+                                 quote(("BRO-2", 3)), finish()],
+    # El filtro de frases junta las líneas de la lista con espacios.
+    "- 2 codos de 90 de 1/2 - 3 tees de 1/2 - 1 registro de bola de 1/2": [
+        call("buscar_productos", items=[{"text": "codo de 90 de 1/2", "product": "codo", "measure": "1/2 pulgada"},
+                                        {"text": "tee de 1/2", "product": "tee", "measure": "1/2 pulgada"},
+                                        {"text": "registro de bola de 1/2", "product": "registro", "measure": "1/2 pulgada"}]),
+        quote(("COD-050", 2), ("TEE-050", 3), ("REG-050", 1)), finish()],
+    "media libra de grapa para cerca": [search("grapa para cerca", product="grapa"),
+                                        finish("productos", "Se vende por libra completa. Datos simulados.")],
+    "dos cuñetes de estuco plástico": [search("estuco plástico en cuñete", product="estuco", presentation="cuñete"),
+                                       quote(("EST-CUN", 2)), finish()],
+    "¿me hace descuento si llevo 10 galones de pintura vinilo beige?": [
+        search("pintura vinilo beige en galón", product="pintura", color="beige", material="vinilo", presentation="galón"),
+        quote(("PIV-BEI-G", 10)), finish()],
+    "🔨🔨 2 martillos de uña de 20 oz plis": [search("martillo de uña de 20 oz", product="martillo", measure="20 oz"),
+                                             quote(("MAR-20", 2)), finish()],
+    "necesito ladrillos": [search("ladrillos", product="ladrillo"), finish()],
+    "200 ladrillos tolete": [search("ladrillo tolete", product="ladrillo"), finish()],
+    "¿cuánto valen el cemento blanco de 1 kg y el de 5 kg?": [
+        call("buscar_productos", items=[{"text": "cemento blanco de 1 kg", "product": "cemento", "color": "blanco", "measure": "1 kg"},
+                                        {"text": "cemento blanco de 5 kg", "product": "cemento", "color": "blanco", "measure": "5 kg"}]),
+        finish()],
+    "precio del breaker de 20 amperios": [search("breaker de 20 A", product="breaker", measure="20 A"), finish()],
+    "una teja de zinc de 8 pies y 2 de 10 pies": [
+        call("buscar_productos", items=[{"text": "teja de zinc de 8 pies", "product": "teja", "material": "zinc", "measure": "8 pies"},
+                                        {"text": "teja de zinc de 10 pies", "product": "teja", "material": "zinc", "measure": "10 pies"}]),
+        quote(("TZN-8", 1), ("TZN-10", 2)), finish()],
+    "¿qué diferencia hay entre el thinner y el varsol?": [
+        call("buscar_productos", items=[{"text": "thinner", "product": "thinner"}, {"text": "varsol", "product": "varsol"}]),
+        finish()],
+    "quiero 3 metros de alambre negro": [search("alambre negro", product="alambre", color="negro"),
+                                         finish("productos", "El alambre se vende por rollo de 1 kg. Datos simulados.")],
+    "necesito cable dúplex 2x16, 10 metros": [search("cable dúplex 2 x 16 AWG", product="cable", measure="2 x 16 AWG"),
+                                              quote(("DUP-2X16", 10)), finish()],
+    "quiero veinte chazos plásticos de 1/4": [search("chazo plástico de 1/4", product="chazo", measure="1/4 pulgada"),
+                                              quote(("CHZ-014", 20)), finish()],
+    "mándame una foto del taladro": [search("taladro", product="taladro"), finish()],
+    "necesito pintura": [search("pintura", product="pintura"), finish("productos", "¿De qué tipo y color? Datos simulados.")],
+    "¿la ducha eléctrica de 3 temperaturas tiene garantía?": [call("consultar_info_tienda", tema="garantias"), finish("tienda")],
+    "3 rollos de cinta de enmascarar de 1 pulgada": [search("cinta de enmascarar de 1 pulgada", product="cinta",
+                                                            use="enmascarar", measure="1 pulgada"),
+                                                     quote(("CEN-1", 3)), finish()],
+    "2 galones de esmalte sintético negro": [search("esmalte sintético negro en galón", product="esmalte", color="negro",
+                                                    presentation="galón"), quote(("ESM-NEG-G", 2)), finish()],
+    "cuánto vale el rodillo de felpa de 9 pulgadas": [search("rodillo de felpa de 9 pulgadas", product="rodillo",
+                                                             measure="9 pulgadas"), finish()],
+    "deme dos": [quote(("ROD-9", 2)), finish()],
+    "listo, me los llevo entonces": [register(("ROD-9", 2)), finish("pedido")],
+    "necesito 3 metros de tubo pvc": [search("tubo PVC", product="tubo", material="PVC"),
+                                      finish("productos", "¿De qué medida y para qué uso? Datos simulados.")],
+    "de media, para agua": [search("tubo PVC de 1/2 para agua", **PVC), quote(("PVC-050", 3)), finish()],
+    "me llevo 2 cascos de seguridad amarillos": [search("casco de seguridad amarillo", product="casco", color="amarillo"),
+                                                 register(("CAS-AMA", 2)), finish("pedido")],
+    "mejor que sean blancos, no amarillos": [search("casco de seguridad blanco", product="casco", color="blanco"),
+                                             cancel_pending, register(("CAS-BLA", 2)), finish("pedido")],
+    "¿a qué hora abren el domingo?": [call("consultar_info_tienda", tema="horario"), finish("tienda")],
+    "¿y el sábado?": [call("consultar_info_tienda", tema="horario"), finish("tienda")],
+    "me llevo 3 libras de puntilla con cabeza de 2 pulgadas": [search("puntilla con cabeza de 2 pulgadas", **NAIL),
+                                                               register(("PUN-2", 3)), finish("pedido")],
+    "¿en qué estado está mi pedido?": ORDER_STATUS,
+    "cancélalo por favor": [cancel_pending, finish("pedido")],
+    "hola, ¿tienen guantes de nitrilo?": [search("guantes de nitrilo", product="guantes", material="nitrilo"), finish()],
+    "me llevo 5 pares": [register(("GNI-M", 5)), finish("pedido")],
+    "entonces me llevo los 3 que hay": [register(("GNI-M", 3)), finish("pedido")],
+    "me llevo 2 bombillos LED de 9 W luz blanca": [search("bombillos LED de 9 W luz blanca", **WHITE_BULB),
+                                                   register(("BOM-09", 2)), finish("pedido")],
 }
 
 

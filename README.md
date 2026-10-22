@@ -193,7 +193,7 @@ El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama 
 .\.venv\Scripts\python.exe -m asistendero.evaluate --compare .local\eval-A.json .local\eval-B.json   # tabla, sin Grok
 # S4: conversaciones largas con pedidos, clientes a la vez y varios modelos, con tope de gasto
 .\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite ruido pedidos sesion_larga concurrencia --budget-usd 1
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite extremos flujos --concurrency 3 --budget-usd 1
+.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite extremos flujos variados --concurrency 3 --budget-usd 1
 .\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite pedidos concurrencia --concurrency 3 `
     --models grok-4.20-0309-non-reasoning grok-4.5 grok-4.7 --budget-usd 2
 ```
@@ -210,6 +210,7 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/store_replies.py` | Respuestas y comprobaciones de la información de la tienda. |
 | `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar o sin cotizar. |
 | `src/asistendero/validation.py` | Reglas que una solicitud de Grok cumple antes de ejecutarse. |
+| `src/asistendero/product_fit.py` | Cuál de varios productos distintos describe el cliente con sus palabras. |
 | `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
 | `src/asistendero/answers.py` | Respuesta final verificada contra lo que devolvieron las herramientas. |
 | `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |

@@ -75,7 +75,7 @@ def _raw_words(value: str) -> list[str]:
 def _forms(word: str, synonyms: bool = True) -> set[str]:
     forms = {word}
     # Plural regular («bisagras», «galones»): con cientos de productos no cabe un sinónimo por palabra.
-    if len(word) >= 5 and word.endswith("s") and not word[-2].isdigit():
+    if (len(word) >= 5 and word.endswith("s") and not word[-2].isdigit()) or (len(word) == 4 and word.endswith("es")):
         forms.add(word[:-1])
         if word.endswith("es") and len(word) >= 6:
             forms.add(word[:-2])

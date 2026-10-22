@@ -8,6 +8,7 @@ from asistendero.catalog import Product, tokens
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.measures import UNITS, atom_support, canonical_text, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
+from asistendero.product_fit import closest_named
 from asistendero.search import ProductQuery, item_clause
 from asistendero.spelling import heard_as
 
@@ -115,6 +116,8 @@ def quantities_in_message(message: str) -> set[int]:
     # La ñ se conserva antes de quitar tildes: «martillo de uña» no dice «una» unidad.
     text = MONEY.sub(" ", normalize_text(message.replace("ñ", "nh").replace("Ñ", "NH")))
     text = re.sub(r"\d+\s*/\s*\d+", " ", text)
+    # «3x brochas» es una cantidad (suite variados); «2x16» sigue siendo una medida.
+    text = re.sub(r"\b(\d{1,4})x\b", r"\1", text)
     groups = set()
     for count, group in GROUP_COUNT.findall(text):
         factor = 0.5 if count in {"media", "medio"} else int(count) if count.isdigit() else NUMBER_WORDS[count]
@@ -139,7 +142,10 @@ def sale_units(text: str) -> set[str]:
 
 
 def foreign_unit(message: str, quantity: int, unit: str) -> str | None:
-    """Unidad de venta distinta a ``unit`` que el cliente pegó a esa cantidad, si nunca la dijo suelta.
+    """Unidad de venta que el cliente pegó a esa cantidad y que ``unit`` no nombra, si nunca la dijo suelta.
+
+    ``unit`` lleva la unidad y la variante del producto: el esmalte en «galón» se vende por unidad y «2 galones»
+    sí son 2 de esos (V-31 en la suite variados).
 
     «un rollo de cable» no son 1 metro: en la corrida de escenarios extremos el aviso QUOTE_REQUIRED empujó a Grok
     a cotizar 1 metro. «2 metros de cable y 2 brochas» sí deja cotizar 2 brochas: el segundo 2 va suelto.
@@ -150,7 +156,8 @@ def foreign_unit(message: str, quantity: int, unit: str) -> str | None:
     attached = [(NUMBER_WORDS.get(value) or int(value), SALE_UNIT_NAMES.get(name, name))
                 for value, name in re.findall(rf"\b(\d+|{words})\s+{SALE_UNIT_NAME}\b", text)]
     units = {name for value, name in attached if value == quantity}
-    if not units or normalize_text(unit) in units or said.count(quantity) > len([1 for value, _ in attached if value == quantity]):
+    offered = {SALE_UNIT_NAMES.get(word, word) for word in re.findall(r"[a-z]+", normalize_text(unit))}
+    if not units or units & offered or said.count(quantity) > len([1 for value, _ in attached if value == quantity]):
         return None
     return sorted(units)[0]
 
@@ -166,6 +173,8 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         if product.sku.casefold() in message.casefold()
         or is_distinguished(message, described, product, finding["matches"])
     ]
+    if len({product.name for product in chosen}) > 1:
+        chosen = closest_named(message, finding["query"], chosen) or chosen
     if len(chosen) > 1:
         # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
         # de venta dicha (metro) los separa. Si aun así quedan varios, se pregunta.
@@ -287,7 +296,7 @@ def validate_request(
             raise Rejected("SKU_NOT_GROUNDED", "El SKU no es una coincidencia que el mensaje distinga; pregunta al cliente.")
         if quantity not in allowed_quantities:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no expresó esa cantidad; pregúntala.")
-        other = foreign_unit(message, quantity, grounded[sku].unit) if sku in grounded else None
+        other = foreign_unit(message, quantity, f"{grounded[sku].unit} {grounded[sku].variant}") if sku in grounded else None
         if other:
             raise Rejected("QUANTITY_NOT_GROUNDED", f"El cliente dijo {quantity} {other} y se vende por "
                                                     f"{grounded[sku].unit}; pregúntale cuántos {grounded[sku].unit}.")

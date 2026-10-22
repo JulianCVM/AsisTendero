@@ -108,13 +108,13 @@ def pending_reminder(
         return "SEARCH_REQUIRED"
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
-    units = {sku: product.unit for sku, product in grounded_products(reference, calls).items()}
+    units = {sku: f"{product.unit} {product.variant}" for sku, product in grounded_products(reference, calls).items()}
     remembered = (context or {}).get("productos") or []
     # Q-11: tras «¿tienen silicona transparente?», «dame 2» no se cotizaba porque el turno no volvió a buscar. Con un
     # solo producto recordado no hay duda de cuál es; una hora («paso a las 10») no es una cantidad que cotizar.
     counts = quantities - mentioned_hours(message)
     if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
-        units = {remembered[0].get("sku"): remembered[0].get("unidad") or ""}
+        units = {remembered[0].get("sku"): f"{remembered[0].get('unidad') or ''} {remembered[0].get('variante') or ''}"}
     if (
         "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools

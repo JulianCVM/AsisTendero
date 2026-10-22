@@ -1914,5 +1914,581 @@
       }
     ],
     "suite": "flujos"
+  },
+  {
+    "id": "V-01",
+    "query": "cuánto vale la libra de puntilla con cabeza de 2 pulgadas",
+    "expected_status": "found",
+    "must_include": [
+      "$3.900"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-02",
+    "query": "deme 3 libras de puntilla con cabeza de 1 pulgada",
+    "expected_status": "quoted",
+    "expected_sku": "PUN-1",
+    "must_include": [
+      "$12.600"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-03",
+    "query": "necesito 2 pares de guantes de carnaza talla L",
+    "expected_status": "quoted",
+    "expected_sku": "GUA-L",
+    "must_include": [
+      "$17.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-04",
+    "query": "un par de bisagras de cobre de 3 pulgadas",
+    "expected_status": [
+      "quoted",
+      "found"
+    ],
+    "must_include": [
+      "$6.900"
+    ],
+    "must_not_include": [
+      "$13.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-05",
+    "query": "necesito 50 tornillos drywall #6 x 1 pulgada",
+    "expected_status": [
+      "found",
+      "insufficient_stock",
+      "clarify",
+      "answered"
+    ],
+    "must_include": [
+      "35"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-06",
+    "query": "2 bombillos LED de 9 W luz blanca",
+    "expected_status": "quoted",
+    "expected_sku": "BOM-09",
+    "must_include": [
+      "$11.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-07",
+    "query": "¿tienen martillo de uña de 16 oz?",
+    "expected_status": [
+      "found",
+      "nearby",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-08",
+    "query": "necesito una broca de 1/4",
+    "expected_status": [
+      "found",
+      "clarify",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-09",
+    "query": "3 metros de cadena galvanizada de 5 mm y un candado de latón de 40 mm",
+    "expected_status": "quoted",
+    "expected_skus": [
+      "CAD-5MM",
+      "CAN-40"
+    ],
+    "must_include": [
+      "$42.600"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-10",
+    "query": "tengo 50 mil, ¿cuántos bultos de cemento gris de 25 kg me alcanzan?",
+    "expected_status": [
+      "found",
+      "answered",
+      "quoted"
+    ],
+    "must_include": [
+      "$22.500"
+    ],
+    "must_not_include": [
+      "$1.125.000"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-11",
+    "query": "NECESITO 6 METROS DE TUBO SANITARIO DE 4 PULGADAS",
+    "expected_status": "quoted",
+    "expected_sku": "SAN-4",
+    "must_include": [
+      "$119.400"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-12",
+    "query": "3x brochas de 2 pulgadas",
+    "expected_status": "quoted",
+    "expected_sku": "BRO-2",
+    "must_include": [
+      "$14.700"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-13",
+    "query": "- 2 codos de 90 de 1/2\n- 3 tees de 1/2\n- 1 registro de bola de 1/2",
+    "expected_status": "quoted",
+    "expected_skus": [
+      "COD-050",
+      "TEE-050",
+      "REG-050"
+    ],
+    "must_include": [
+      "$25.300"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-14",
+    "query": "media libra de grapa para cerca",
+    "expected_status": [
+      "found",
+      "clarify",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-15",
+    "query": "dos cuñetes de estuco plástico",
+    "expected_status": "quoted",
+    "expected_sku": "EST-CUN",
+    "must_include": [
+      "$239.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-16",
+    "query": "¿me hace descuento si llevo 10 galones de pintura vinilo beige?",
+    "expected_status": "quoted",
+    "expected_sku": "PIV-BEI-G",
+    "must_include": [
+      "$589.000"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-17",
+    "query": "🔨🔨 2 martillos de uña de 20 oz plis",
+    "expected_status": "quoted",
+    "expected_sku": "MAR-20",
+    "must_include": [
+      "$65.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-18",
+    "query": "necesito ladrillos",
+    "expected_status": "found",
+    "must_include": [
+      "$950"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-19",
+    "query": "200 ladrillos tolete",
+    "expected_status": [
+      "found",
+      "insufficient_stock",
+      "clarify",
+      "answered"
+    ],
+    "must_include": [
+      "15"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-20",
+    "query": "¿cuánto valen el cemento blanco de 1 kg y el de 5 kg?",
+    "expected_status": "found",
+    "must_include": [
+      "$4.900",
+      "$19.900"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-21",
+    "query": "precio del breaker de 20 amperios",
+    "expected_status": "found",
+    "must_include": [
+      "$15.900"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-22",
+    "query": "una teja de zinc de 8 pies y 2 de 10 pies",
+    "expected_status": "quoted",
+    "expected_skus": [
+      "TZN-8",
+      "TZN-10"
+    ],
+    "must_include": [
+      "$126.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-23",
+    "query": "¿qué diferencia hay entre el thinner y el varsol?",
+    "expected_status": [
+      "found",
+      "answered",
+      "partial",
+      "clarify"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-24",
+    "query": "quiero 3 metros de alambre negro",
+    "expected_status": [
+      "found",
+      "clarify",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-25",
+    "query": "necesito cable dúplex 2x16, 10 metros",
+    "expected_status": "quoted",
+    "expected_sku": "DUP-2X16",
+    "must_include": [
+      "$29.000"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-26",
+    "query": "quiero veinte chazos plásticos de 1/4",
+    "expected_status": "quoted",
+    "expected_sku": "CHZ-014",
+    "must_include": [
+      "$1.600"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-27",
+    "query": "mándame una foto del taladro",
+    "expected_status": [
+      "not_found",
+      "nearby",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-28",
+    "query": "necesito pintura",
+    "expected_status": [
+      "found",
+      "clarify",
+      "answered"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-29",
+    "query": "¿la ducha eléctrica de 3 temperaturas tiene garantía?",
+    "expected_status": [
+      "informed",
+      "found",
+      "answered"
+    ],
+    "expected_tools": [
+      "consultar_info_tienda"
+    ],
+    "must_not_include": [
+      "Total informativo"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-30",
+    "query": "3 rollos de cinta de enmascarar de 1 pulgada",
+    "expected_status": "quoted",
+    "expected_sku": "CEN-1",
+    "must_include": [
+      "$19.500"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "V-31",
+    "query": "2 galones de esmalte sintético negro",
+    "expected_status": "quoted",
+    "expected_sku": "ESM-NEG-G",
+    "must_include": [
+      "$159.800"
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-01",
+    "turns": [
+      {
+        "query": "cuánto vale el rodillo de felpa de 9 pulgadas",
+        "expected_status": "found",
+        "must_include": [
+          "$13.900"
+        ]
+      },
+      {
+        "query": "deme dos",
+        "expected_status": "quoted",
+        "must_include": [
+          "$27.800"
+        ]
+      },
+      {
+        "query": "listo, me los llevo entonces",
+        "expected_status": "order_pending",
+        "expected_orders": [
+          "pendiente"
+        ],
+        "must_include": [
+          "$27.800"
+        ]
+      },
+      {
+        "query": "sí, confirmo",
+        "expected_status": "order_confirmed",
+        "expected_orders": [
+          "confirmado"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-02",
+    "turns": [
+      {
+        "query": "necesito 3 metros de tubo pvc",
+        "expected_status": [
+          "found",
+          "clarify",
+          "answered"
+        ],
+        "must_not_include": [
+          "Total informativo"
+        ]
+      },
+      {
+        "query": "de media, para agua",
+        "expected_status": "quoted",
+        "must_include": [
+          "$25.500"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-03",
+    "turns": [
+      {
+        "query": "me llevo 2 cascos de seguridad amarillos",
+        "expected_status": "order_pending",
+        "expected_orders": [
+          "pendiente"
+        ],
+        "must_include": [
+          "$49.800"
+        ]
+      },
+      {
+        "query": "mejor que sean blancos, no amarillos",
+        "expected_status": "order_pending",
+        "expected_orders": [
+          "cancelado",
+          "pendiente"
+        ],
+        "must_include": [
+          "$49.800"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-04",
+    "turns": [
+      {
+        "query": "¿a qué hora abren el domingo?",
+        "expected_status": "informed"
+      },
+      {
+        "query": "¿y el sábado?",
+        "expected_status": "informed",
+        "must_include": [
+          "14:00"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-05",
+    "turns": [
+      {
+        "query": "me llevo 3 libras de puntilla con cabeza de 2 pulgadas",
+        "expected_status": "order_pending",
+        "expected_orders": [
+          "pendiente"
+        ],
+        "must_include": [
+          "$11.700"
+        ]
+      },
+      {
+        "query": "¿en qué estado está mi pedido?",
+        "expected_status": "order_status"
+      },
+      {
+        "query": "cancélalo por favor",
+        "expected_status": "order_cancelled",
+        "expected_orders": [
+          "cancelado"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "W-06",
+    "turns": [
+      {
+        "query": "hola, ¿tienen guantes de nitrilo?",
+        "expected_status": "found",
+        "must_include": [
+          "$6.900"
+        ]
+      },
+      {
+        "query": "me llevo 5 pares",
+        "expected_status": [
+          "order_issue",
+          "insufficient_stock",
+          "found",
+          "answered"
+        ],
+        "expected_orders": []
+      },
+      {
+        "query": "entonces me llevo los 3 que hay",
+        "expected_status": "order_pending",
+        "expected_orders": [
+          "pendiente"
+        ],
+        "must_include": [
+          "$20.700"
+        ]
+      }
+    ],
+    "suite": "variados"
+  },
+  {
+    "id": "K-05",
+    "expected_active_total": 1,
+    "suite": "variados",
+    "clients": [
+      {
+        "turns": [
+          {
+            "query": "me llevo 2 bombillos LED de 9 W luz blanca",
+            "expected_status": [
+              "order_pending",
+              "order_issue"
+            ]
+          }
+        ]
+      },
+      {
+        "turns": [
+          {
+            "query": "me llevo 2 bombillos LED de 9 W luz blanca",
+            "expected_status": [
+              "order_pending",
+              "order_issue"
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]

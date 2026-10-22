@@ -801,3 +801,50 @@ def test_a_quantity_with_a_sale_unit_needs_a_search_even_after_a_store_tool(tmp_
                  "me mandan a domicilio 2 bultos de cemento gris de 50 kg al barrio La Ceiba?")
     assert planner.seen[2]["observations"][-1]["error"]["code"] == "SEARCH_REQUIRED"
     assert result["estado"] == "quoted" and "$79.000" in result["respuesta"] and "$5.000" in result["respuesta"]
+
+
+def _item(text, **fields):
+    return {"text": text, **fields}
+
+
+@pytest.mark.parametrize("message, items, lines, total", [
+    # Suite variados: la búsqueda traía otro producto de nombre distinto y se preguntaba lo ya dicho.
+    ("necesito 4 ladrillos", [_item("ladrillos", product="ladrillo")], [("LAD-COM", 4)], "$3.800"),
+    ("2 rodillos de felpa de 9 pulgadas", [_item("rodillo de felpa de 9 pulgadas", product="rodillo", measure="9 pulgadas")],
+     [("ROD-9", 2)], "$27.800"),
+    ("dame 3 de puntilla con cabeza de 2 pulgadas", [_item("puntilla con cabeza de 2 pulgadas", product="puntilla",
+                                                             measure="2 pulgadas")], [("PUN-2", 3)], "$11.700"),
+    # «cuñete» tiene a «galón» de sinónimo: el sinónimo amplía lo que dijo el cliente, no lo que dice el producto.
+    ("10 galones de pintura vinilo beige", [_item("pintura vinilo beige en galón", product="pintura", color="beige",
+                                                  presentation="galón")], [("PIV-BEI-G", 10)], "$589.000"),
+    ("2 codos de 90 de 1/2 y 3 tees de 1/2", [_item("codo de 90 de 1/2", product="codo", measure="1/2 pulgada"),
+                                               _item("tee de 1/2", product="tee", measure="1/2 pulgada")],
+     [("COD-050", 2), ("TEE-050", 3)], "$6.400"),
+    ("3x brochas de 2 pulgadas", [_item("brochas de 2 pulgadas", product="brocha", measure="2 pulgadas")],
+     [("BRO-2", 3)], "$14.700"),
+    # El galón del esmalte se vende por unidad: «2 galones» no es otra unidad de venta.
+    ("2 galones de esmalte sintético negro", [_item("esmalte sintético negro en galón", product="esmalte", color="negro",
+                                                    presentation="galón")], [("ESM-NEG-G", 2)], "$159.800"),
+])
+def test_the_product_the_client_named_is_quoted_without_asking(tmp_path, message, items, lines, total):
+    planner = Script(tool("buscar_productos", items=items),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": sku, "quantity": n} for sku, n in lines]),
+                     say(""))
+    result = run(_real_executor(tmp_path), planner, message)
+    assert result["tool_calls"][1]["executed"], result["tool_calls"][1]["response"]["error"]
+    assert result["estado"] == "quoted" and f"Total informativo: {total}" in result["respuesta"]
+
+
+@pytest.mark.parametrize("message, items, line", [
+    # El cliente no nombró cuál: tubo o codo, broca de concreto, metal o madera. Se pregunta, no se elige.
+    ("Necesito 2 de PVC de 1/2 para agua", [_item("PVC de 1/2 para agua", material="PVC", measure="1/2 pulgada",
+                                                  use="agua")], ("PVC-050", 2)),
+    ("necesito 2 brocas de 1/4", [_item("broca de 1/4", product="broca", measure="1/4 pulgada")], ("BRC-014", 2)),
+    ("necesito 2 de pintura", [_item("pintura", product="pintura")], ("PIV-BEI-G", 2)),
+])
+def test_an_unnamed_choice_between_products_is_still_asked(tmp_path, message, items, line):
+    planner = Script(tool("buscar_productos", items=items),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": line[0], "quantity": line[1]}]), say(""))
+    result = run(_real_executor(tmp_path), planner, message)
+    assert result["tool_calls"][1]["response"]["error"]["code"] == "SKU_NOT_GROUNDED"
+    assert "Total informativo" not in result["respuesta"]

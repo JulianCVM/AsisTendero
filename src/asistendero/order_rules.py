@@ -129,9 +129,11 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
     grounded = set(grounded_products(reference, calls)) | {line["sku"] for line in (quote or {}).get("lines", [])}
     # Los productos de la sesión los identificó el cliente en turnos anteriores; el precio se relee al registrar.
     grounded |= {item.get("sku") for item in (context or {}).get("productos") or []}
-    units = {item.get("sku"): item.get("unidad") for item in (context or {}).get("productos") or []}
-    units |= {line["sku"]: line.get("unit") for line in (quote or {}).get("lines", [])}
-    units |= {sku: product.unit for sku, product in grounded_products(reference, calls).items()}
+    # Con la variante: el esmalte en «galón» se vende por unidad y «2 galones» son 2 de esos.
+    units = {item.get("sku"): f"{item.get('unidad') or ''} {item.get('variante') or ''}"
+             for item in (context or {}).get("productos") or []}
+    units |= {line["sku"]: f"{line.get('unit') or ''} {line.get('variant') or ''}" for line in (quote or {}).get("lines", [])}
+    units |= {sku: f"{product.unit} {product.variant}" for sku, product in grounded_products(reference, calls).items()}
     allowed = order_quantities(reference)
     clean = []
     for line in lines:
@@ -146,7 +148,7 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
             raise Rejected("SKU_NOT_GROUNDED", "Ese SKU no lo identificó el cliente; búscalo o pregunta cuál quiere.")
         if quantity not in allowed:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no dijo esa cantidad; pregúntala.")
-        if units.get(sku) and foreign_unit(reference, quantity, units[sku]):
+        if units.get(sku, "").strip() and foreign_unit(reference, quantity, units[sku]):
             raise Rejected("QUANTITY_NOT_GROUNDED", f"Esa cantidad la dijo en otra unidad; se vende por {units[sku]}.")
         if any(previous["sku"] == sku for previous in clean):
             raise Rejected("INVALID_ARGUMENT", "SKU repetido en el pedido.")
