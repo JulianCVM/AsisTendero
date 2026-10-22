@@ -538,6 +538,28 @@ def test_give_me_two_quotes_the_only_remembered_product(chat):
     assert result["estado"] == "quoted" and "$27.800" in result["respuesta"]
 
 
+
+def test_cancel_everything_cancels_every_active_order(chat):
+    # Q-06: con «cancela todo» Grok canceló las brochas y preguntó si también cancelaba el cemento.
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    first = turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    cement = {"text": "bulto de cemento gris de 50 kg", "product": "cemento", "color": "gris", "measure": "50 kg"}
+    second = turn(session, "también me llevo 1 bulto de cemento gris de 50 kg", tool("buscar_productos", items=[cement]),
+                  tool("registrar_pedido", lines=[{"sku": "CEM-050", "quantity": 1}]), say())
+    codes = [result["tool_calls"][-1]["response"]["data"]["pedido"] for result in (first, second)]
+    result = turn(session, "cancela todo, ya no necesito nada", tool("cancelar_pedido", pedido=codes[0]),
+                  say("Cancelé el primero; ¿cancelo también el otro? Datos simulados."),
+                  tool("cancelar_pedido", pedido=codes[1]), say())
+    reminder = result["planner"].seen[2]["observaciones"][-1]["error"]
+    assert reminder["code"] == "ORDER_REQUIRED" and "cada pedido" in reminder["message"]
+    assert [order["estado"] for order in book.session_orders(session)] == ["cancelado", "cancelado"]
+    # «cancela el de las brochas» cancela uno solo y no pide más.
+    from asistendero.order_rules import order_action_pending
+    assert order_action_pending("cancela el del cemento", "", result["tool_calls"][:1], {"pedidos": [
+        {"pedido": codes[0], "estado": "pendiente"}, {"pedido": codes[1], "estado": "pendiente"}]}) is None
+
 def test_watcher_warns_one_minute_before_and_notifies_expiry_once(chat):
     turn, sessions, book, catalog, clock = chat
     session = sessions.create()

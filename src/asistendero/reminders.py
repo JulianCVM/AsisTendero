@@ -52,6 +52,8 @@ ORDER_HINTS = {
     "agendar_recogida": "El cliente dio la hora de recogida: llama a agendar_recogida con el pedido, la fecha y la "
                         "hora que dijo.",
     "cancelar_pedido": "El cliente pidió cancelar: llama a cancelar_pedido con el código del pedido.",
+    "cancelar_todos": "El cliente pidió cancelar todo: llama a cancelar_pedido con cada pedido activo que queda, uno "
+                      "por llamada, sin volver a preguntar.",
     # No es una herramienta: cambiar un pedido es cancelarlo y registrar el nuevo.
     "cambiar_pedido": "El cliente cambió su pedido: cancela el pedido activo con cancelar_pedido y registra el "
                       "nuevo con registrar_pedido con lo que dijo ahora; no dejes los dos apartados.",

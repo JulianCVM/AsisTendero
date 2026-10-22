@@ -49,6 +49,7 @@ CANCEL_INTENT = re.compile(
     r"\b(?:cancel\w*|anul\w*|ya\s+no\s+(?:lo|la|los|las|quiero|necesito|voy|puedo)|mejor\s+no|olvid(?:a|e|alo|elo)\w*"
     r"|no\s+(?:lo|la|los|las)\s+(?:quiero|necesito|voy\s+a\s+recoger)|desist\w*|no\s+voy\s+a\s+(?:ir|pasar|recoger))\b"
 )
+CANCEL_ALL = re.compile(r"\b(?:todo|todos|todas|ambos|ambas|los\s+dos|las\s+dos|nada)\b")
 # Lo que la respuesta anterior ofreció: un «sí» a «¿te registro el pedido?» también expresa intención de compra.
 ORDER_OFFER = re.compile(r"\b(?:registr\w*|apart\w*|pedido|llevar(?:lo|la|los|las)?|lo\s+llevas|confirmas)\b")
 # Preguntas por el pedido propio: estado, total o lo que se paga al recoger.
@@ -229,7 +230,13 @@ def order_action_pending(current: str, reference: str, calls: list[ToolCall], co
     active = any(order.get("estado") in {"pendiente", "confirmado"} for order in orders)
     text = normalize_text(current)
     if CANCEL_INTENT.search(text):
-        return "cancelar_pedido" if active and "cancelar_pedido" not in tools else None
+        if "cancelar_pedido" not in tools:
+            return "cancelar_pedido" if active else None
+        # Q-06: con «cancela todo» Grok canceló un pedido y preguntó por el otro.
+        cancelled = {order["pedido"] for tool, order in order_results(calls) if tool == "cancelar_pedido"}
+        left = [order for order in context.get("pedidos") or []
+                if order.get("estado") in {"pendiente", "confirmado"} and order.get("pedido") not in cancelled]
+        return "cancelar_todos" if CANCEL_ALL.search(text) and left else None
     if changes_order(current, context) and not {"cancelar_pedido", "registrar_pedido"} <= tools:
         return "cambiar_pedido"
     if pending and confirms(current) and "confirmar_pedido" not in tools and "registrar_pedido" not in tools:
