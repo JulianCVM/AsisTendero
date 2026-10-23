@@ -128,6 +128,8 @@ def quantities_in_message(message: str) -> set[int]:
                r"|dientes|piezas|salidas|polos?\b|pies\b|litros?\b|l\b|g\b))")
     label = r"(?<![#x×])(?<!x )(?<!× )(?<!grano )(?<!talla )(?<!calibre )(?<!numero )"
     found = {int(value) for value in re.findall(rf"{label}\b(\d{{1,4}})\b{measure}", text)}
+    # «para un baño» o «en una pared» describen el uso; el artículo no es la cantidad del producto (J-45).
+    text = re.sub(r"\b(?:para|en|de|del|con|por|como|sin|sobre)\s+(?:un|una|uno)\b", " ", text)
     found |= {
         NUMBER_WORDS[word]
         for word in re.findall(rf"\b({'|'.join(NUMBER_WORDS)})\b{measure}", text)

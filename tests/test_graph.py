@@ -656,6 +656,20 @@ def test_dozens_and_hundreds_are_quantities(message, expected):
     assert quantities_in_message(message) == expected
 
 
+@pytest.mark.parametrize("message, expected", [
+    # J-45 con Grok real: «para un baño» contó como 1 y el aviso QUOTE_REQUIRED hizo cotizar 1 metro de tubo.
+    ("ignoro cuántos metros de tubo PVC de 1/2 para agua necesito para un baño, ¿me ayudas?", set()),
+    ("necesito pegante para una baldosa", set()),
+    ("pintura para una pared de 3 metros", {3}),
+    ("quiero un martillo", {1}),
+    ("2 brochas y una lija para madera", {2, 1}),
+])
+def test_an_article_after_a_preposition_is_not_a_quantity(message, expected):
+    from asistendero.validation import quantities_in_message
+
+    assert quantities_in_message(message) == expected
+
+
 def test_enie_words_are_not_number_words():
     from asistendero.validation import quantities_in_message
 
