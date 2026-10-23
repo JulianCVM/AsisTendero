@@ -123,9 +123,12 @@ def test_every_s3_case_passes_with_a_scripted_grok(tmp_path):
     assert failed == {}
     summary = report["summary"]
     assert summary["by_suite"]["seguridad"]["passed"] == 10
-    # Las preguntas trampa que se rechazan no gastan llamadas a Grok.
+    # Las preguntas trampa que se rechazan y las inyecciones que se bloquean no gastan llamadas a Grok.
     refused = [record for record in report["cases"] if record["actual_status"] == "refused"]
-    assert len(refused) == 5 and all(record["model_calls"] == 0 for record in refused)
+    assert len(refused) == 3 and all(record["model_calls"] == 0 for record in refused)
+    blocked = {record["id"] for record in report["cases"] if record["actual_status"] == "blocked"}
+    assert blocked == {"G-01", "G-05", "G-06", "G-10"}
+    assert all(record["model_calls"] == 0 for record in report["cases"] if record["id"] in blocked)
     # Esos rechazos cuestan cero; no dejan el total como desconocido (pasó en la primera corrida S3).
     assert summary["cost_complete"] and report["cost"] is not None
     assert summary["tasks"] == len(cases) and summary["turns"] == len(cases) + 5

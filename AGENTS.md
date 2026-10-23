@@ -82,8 +82,9 @@ propio.
      (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
    - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
    - `record` y `verdict` (`eval_checks.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
-   - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `SessionStore` y `remembered_products`
-     (`sessions.py`); `run_turn` (`chat.py`); `measures` y `contradicts` (`measures.py`).
+   - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `detect_injection` y `blocked_reply`
+     (`injection.py`); `SessionStore` (con `ban`, `unban` y `bans`) y `remembered_products` (`sessions.py`); `run_turn` y
+     `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
 
@@ -129,6 +130,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |
 | Un dato nuevo de la traza (`run_id`, latencia, tokens, costo) | `tracing.py`; el costo se calcula con `pricing.py` |
 | Una pregunta trampa, un tema delicado o un dato personal que filtrar | `guardrails.py` (`SENSITIVE_TOPICS`, `PERSONAL_DATA`), con su prueba en `tests/test_guardrails.py` |
+| Una forma de inyección que bloquear y banear | `PATTERNS` o `_variants` de `injection.py`, con sus ataques y sus frases legítimas parecidas en `tests/test_injection.py` |
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
 | Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas o varios clientes: ver `eval_sessions.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |

@@ -24,6 +24,7 @@
     <button type="button" data-tab="pedidos" aria-pressed="false">Pedidos</button>
     <button type="button" data-tab="inventario" aria-pressed="false">Inventario</button>
     <button type="button" data-tab="movimientos" aria-pressed="false">Historial</button>
+    <button type="button" data-tab="bloqueos" aria-pressed="false">Bloqueos</button>
   </nav>
 
   <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
@@ -98,6 +99,14 @@
       <h2 id="movimientos-title">Cambios de inventario</h2>
       <ul id="history-list" class="plain-list history"></ul>
       <p id="history-empty" class="muted" hidden>Todavía no hay cambios registrados.</p>
+    </section>
+
+    <section id="tab-bloqueos" class="panel" aria-labelledby="bloqueos-title" hidden>
+      <h2 id="bloqueos-title">Conversaciones bloqueadas</h2>
+      <p class="muted">El chat bloquea una conversación cuando el cliente intenta cambiar las reglas del asistente,
+        y cancela sus pedidos apartados. Si fue un error, desbloquéala: los pedidos cancelados no vuelven.</p>
+      <div id="ban-list" class="order-list"></div>
+      <p id="bans-empty" class="muted" hidden>No hay conversaciones bloqueadas.</p>
     </section>
   </main>
 </body>

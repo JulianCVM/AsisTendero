@@ -20,9 +20,9 @@ from asistendero.guardrails import leaks
 from asistendero.harness_info import describe_harness
 from asistendero.inventory import Inventory
 from asistendero.order_rules import CANCEL_INTENT, confirms
-from asistendero.orders import BOGOTA, OrderBook
+from asistendero.orders import ACTIVE, BOGOTA, OrderBook
 from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionStore
+from asistendero.sessions import SessionError, SessionStore
 from asistendero.validation import normalize_text
 
 
@@ -147,6 +147,15 @@ def test_random_decisions_never_break_the_invariants(world, seed):
         answer = result["respuesta"]
         assert result["estado"] in states and answer.strip()
         assert KEY not in str(result) and not leaks(answer, AGENT_PROMPT)
+        if result["estado"] == "blocked":
+            # Una inyección banea la sesión sin Grok y sin dejar unidades apartadas; el cliente sigue en otra.
+            assert result["model_calls"] == 0 and not result["tool_calls"]
+            assert not [order for order in book.session_orders(session, limit=50) if order["estado"] in ACTIVE]
+            with pytest.raises(SessionError) as banned:
+                run_turn(store, session, "hola", planner=ChaosGrok(rng), orders=book)
+            assert banned.value.code == "SESSION_BANNED"
+            session = store.create()
+            continue
 
         executed = [call for call in result["tool_calls"] if call["executed"]]
         allowed = set()

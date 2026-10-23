@@ -159,7 +159,7 @@ Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor 
 .\.venv\Scripts\python.exe -m asistendero.tendero
 ```
 
-Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Muestra las ventas del día, los pedidos que llegaron por el chat (para marcarlos entregados o cancelarlos) y el inventario, con edición de precio y existencias e historial de cambios. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
+Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Muestra las ventas del día, los pedidos que llegaron por el chat (para marcarlos entregados o cancelarlos) el inventario, con edición de precio y existencias e historial de cambios, y las conversaciones bloqueadas por intentar inyectar instrucciones, con un botón para desbloquearlas. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
 
 ### Docker
 
@@ -205,6 +205,7 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | Ruta | Contenido |
 | --- | --- |
 | `src/asistendero/graph.py` | Flujo LangGraph: Grok decide, el servidor ejecuta y se responde. |
+| `src/asistendero/injection.py` | Detecta inyecciones de instrucciones (también disfrazadas) antes de Grok; la sesión queda baneada. |
 | `src/asistendero/guardrails.py` | Barreras ante preguntas trampa, datos personales y fugas del prompt. |
 | `src/asistendero/sessions.py` y `chat.py` | Sesiones de chat con memoria acotada en SQLite local. |
 | `src/asistendero/store_replies.py` | Respuestas y comprobaciones de la información de la tienda. |

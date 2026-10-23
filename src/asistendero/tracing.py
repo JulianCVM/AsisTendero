@@ -121,7 +121,8 @@ def run_traced(
             state.update(update)
             if node == "validate":
                 details = {"consulta_normalizada": update["consulta"], "longitud": len(update["consulta"]),
-                           "barreras": update["filtro"]["codes"], "datos_personales_omitidos": update["filtro"]["redacted"]}
+                           "barreras": update["filtro"]["codes"], "datos_personales_omitidos": update["filtro"]["redacted"],
+                           "inyeccion": update.get("inyeccion")}
             elif node == "interpret":
                 decision = update.get("decisiones", [None])[-1] if update.get("decisiones") else None
                 details = {
@@ -150,7 +151,9 @@ def run_traced(
                 details=details,
             )
             if node == "validate" and after_validate(state) == "respond":
-                push("route", details={"motivo": "El mensaje solo pedía información que no se entrega; "
+                push("route", details={"motivo": "El mensaje intentaba cambiar las reglas del agente; se bloquea sin "
+                                                 "llamar a Grok." if state.get("inyeccion") else
+                                                 "El mensaje solo pedía información que no se entrega; "
                                                  "se responde sin llamar a Grok."})
                 start_node("respond")
             elif node in {"validate", "retrieve"}:
@@ -193,6 +196,7 @@ def run_traced(
         "model_called": state["model_called"],
         "model_calls": state["model_calls"],
         "barreras": (state.get("filtro") or {}).get("codes", []),
+        "inyeccion": state.get("inyeccion"),
         "tool_calls": len(tool_calls),
         "tools_requested": [call["requested_tool"] for call in tool_calls],
         "tools_executed": [call["requested_tool"] for call in tool_calls if call["executed"]],

@@ -33,6 +33,10 @@ def verdict(check: dict, result: dict, selected_skus: list[str]) -> list[str]:
     reasons += [f"dice «{text}»" for text in check.get("must_not_include", []) if text.casefold() in response]
     if "max_model_calls" in check and result["model_calls"] > check["max_model_calls"]:
         reasons.append(f"{result['model_calls']} llamadas a Grok")
+    injection = result.get("inyeccion") or {}
+    for key, field in (("expected_injection", "code"), ("expected_technique", "technique")):
+        if key in check and injection.get(field) != check[key]:
+            reasons.append(f"inyección {injection.get(field)}")
     expected_error = check.get("expected_error_code")
     if expected_error:
         codes = {(call["response"].get("error") or {}).get("code") for call in tool_calls}

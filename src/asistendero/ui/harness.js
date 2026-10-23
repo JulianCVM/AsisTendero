@@ -109,7 +109,10 @@
   function onNodeComplete(node, details) {
     setStage(node, 'complete');
     if (node === 'validate') {
-      addStep(1, 'Mensaje válido: ' + (details.longitud ?? '—') + ' caracteres');
+      if (details.inyeccion) {
+        addStep(1, 'Inyección detectada: ' + details.inyeccion.code + ' (' + details.inyeccion.technique +
+          '); no llega a Grok', 'error');
+      } else addStep(1, 'Mensaje válido: ' + (details.longitud ?? '—') + ' caracteres');
     } else if (node === 'interpret') {
       const decision = details.decision;
       if (details.error) addStep(2, 'Grok falló: ' + details.error.code, 'error');

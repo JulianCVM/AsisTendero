@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from asistendero.answers import direct_response, render_answer, reply_is_grounded, with_reservation_note
 from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
+from asistendero.injection import INJECTION_CODES, blocked_reply, detect_injection
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
 from asistendero.order_rules import validate_order_request
 from asistendero.reminders import pending_reminder, with_reminders
@@ -49,6 +50,7 @@ class AgentState(TypedDict):
     contexto: NotRequired[dict | None]
     referencia: NotRequired[str]
     filtro: NotRequired[dict]
+    inyeccion: NotRequired[dict | None]
 
 
 def _pending(state: AgentState) -> str | None:
@@ -91,8 +93,15 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             raise ValueError("La consulta no puede estar vacía.")
         if len(message) > MAX_MESSAGE_CHARS:
             raise ValueError(f"La consulta supera el límite de {MAX_MESSAGE_CHARS} caracteres.")
-        screening = screen_message(message)
         context = state.get("contexto") or None
+        turns = (context or {}).get("turnos") or []
+        injection = detect_injection(message, (turns[-1].get("cliente") or "") if turns else "")
+        if injection:
+            # El mensaje no se guarda ni llega a Grok: intentaba cambiar las reglas del agente.
+            return {"consulta": "", "decisiones": [], "tool_calls": [], "error": None, "model_calls": 0,
+                    "referencia": "", "filtro": {"codes": [], "refusal": "", "redacted": False},
+                    "inyeccion": {"code": injection.code, "technique": injection.technique}}
+        screening = screen_message(message)
         return {
             "consulta": screening.consulta, "decisiones": [], "tool_calls": [], "error": None, "model_calls": 0,
             "referencia": reference_text(screening.consulta, context) if screening.consulta else "",
@@ -151,6 +160,11 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         return {"tool_calls": calls + [call], "fuente": "mock_sqlite"}
 
     def respond(state: AgentState) -> dict:
+        injection = state.get("inyeccion")
+        if injection:
+            return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0, "estado": "blocked",
+                    "respuesta": blocked_reply(state.get("contexto")),
+                    "error": {"code": "INJECTION_DETECTED", "message": INJECTION_CODES[injection["code"]]}}
         guard = state.get("filtro") or {}
         notes = [note for note in (guard.get("refusal"), PERSONAL_DATA_NOTE if guard.get("redacted") else "") if note]
         if not state["consulta"]:

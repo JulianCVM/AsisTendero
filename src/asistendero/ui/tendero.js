@@ -207,7 +207,42 @@
       el('li', '', item.hora + ' · ' + item.sku + ' · ' + item.campo + ': ' + (item.antes ?? '—') + ' → ' + item.despues));
   }
 
-  const loaders = {resumen:loadSummary, pedidos:loadOrders, inventario:loadProducts, movimientos:loadHistory};
+  function banCard(ban, codes) {
+    const card = el('article', 'order');
+    card.dataset.status = ban.vigente ? 'cancelado' : 'entregado';
+    const head = el('div', 'order-head');
+    const badge = el('span', 'badge', ban.vigente ? 'Bloqueada' : 'Desbloqueada');
+    badge.dataset.status = card.dataset.status;
+    head.append(el('span', 'order-code', 'Conversación ' + ban.sesion.slice(0, 8)), badge);
+    card.append(head, el('p', '', (codes[ban.codigo] || ban.codigo) + ' (' + ban.tecnica + ')'),
+      el('p', '', 'Mensaje: ' + ban.mensaje), el('p', 'muted', 'Bloqueada ' + ban.baneada));
+    if (ban.vigente) {
+      const actions = el('div', 'actions');
+      const lift = el('button', 'secondary', 'Desbloquear');
+      lift.type = 'button';
+      lift.setAttribute('aria-label', 'Desbloquear la conversación ' + ban.sesion.slice(0, 8));
+      lift.addEventListener('click', async () => {
+        try {
+          await api('/api/bloqueos/levantar', {sesion:ban.sesion});
+          say('Desbloqueada: conversación ' + ban.sesion.slice(0, 8), 'ok');
+        } catch (error) {
+          say(error.message, 'error');
+        }
+        refresh();
+      });
+      actions.append(lift);
+      card.append(actions);
+    }
+    return card;
+  }
+  async function loadBans() {
+    const data = await api('/api/bloqueos');
+    fill(document.querySelector('#ban-list'), document.querySelector('#bans-empty'), data.bloqueos,
+      ban => banCard(ban, data.codigos));
+  }
+
+  const loaders = {resumen:loadSummary, pedidos:loadOrders, inventario:loadProducts, movimientos:loadHistory,
+    bloqueos:loadBans};
   function refresh() {
     loaders[activeTab]().catch(error => say(error.message, 'error'));
   }

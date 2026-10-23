@@ -9,6 +9,10 @@ Cada turno corre el mismo grafo; la sesión solo aporta contexto. Lo que se guar
 
 Precio y existencias se vuelven a leer del catálogo en cada turno. Una sesión vence a las
 ``SESSION_TTL`` sin actividad y se borra al crear la siguiente: no hay historial indefinido.
+
+Una sesión en la que el cliente intentó inyectar instrucciones (``injection.py``) queda baneada: cada turno
+siguiente recibe ``SESSION_BANNED`` sin llegar al grafo ni a Grok. Solo el tendero levanta el baneo desde su
+panel. La sesión es la única identidad del cliente en el prototipo; con un canal real se banearía su número.
 """
 
 from collections.abc import Callable, Iterator
@@ -30,11 +34,12 @@ MAX_REMEMBERED_PRODUCTS = 8
 MAX_TURNS_PER_SESSION = 40
 SESSION_TTL = timedelta(hours=12)
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
+MAX_BAN_EXCERPT = 200
 MONEY = re.compile(r"\$\s?[\d.,]*\d(?:\s*COP)?")
 
 
 class SessionError(Exception):
-    """Sesión inexistente, vencida o llena, con un código estable."""
+    """Sesión inexistente, vencida, llena o baneada, con un código estable."""
 
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -45,9 +50,13 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _clip_to(text: str, limit: int) -> str:
+    # Se marca el recorte para que nadie lo tome como el texto completo.
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
 def _clip(text: str) -> str:
-    # El contexto es un resumen para Grok: se marca el recorte para que no lo tome como el texto completo.
-    return text if len(text) <= MAX_TURN_CHARS else text[:MAX_TURN_CHARS - 1] + "…"
+    return _clip_to(text, MAX_TURN_CHARS)
 
 
 def remembered_products(reference: str, calls: list[dict]) -> list[dict]:
@@ -89,7 +98,10 @@ class SessionStore:
                        last_turn INTEGER NOT NULL, PRIMARY KEY (session_id, sku));
                    CREATE TABLE IF NOT EXISTS notices (
                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                       created_at TEXT NOT NULL, text TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);"""
+                       created_at TEXT NOT NULL, text TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);
+                   CREATE TABLE IF NOT EXISTS bans (
+                       session_id TEXT PRIMARY KEY, banned_at TEXT NOT NULL, code TEXT NOT NULL,
+                       technique TEXT NOT NULL, excerpt TEXT NOT NULL, lifted_at TEXT);"""
             )
 
     @contextmanager
@@ -120,6 +132,10 @@ class SessionStore:
             raise SessionError("SESSION_NOT_FOUND", "La sesión no existe. Empieza una conversación nueva.")
         if datetime.fromisoformat(row[0]) < self.clock() - SESSION_TTL:
             raise SessionError("SESSION_EXPIRED", "La sesión venció por inactividad. Empieza una conversación nueva.")
+        if connection.execute("SELECT 1 FROM bans WHERE session_id = ? AND lifted_at IS NULL", (session_id,)).fetchone():
+            raise SessionError("SESSION_BANNED", "Esta conversación quedó bloqueada por un intento de cambiar las "
+                                                 "reglas del asistente. Si fue un error, pídele al tendero que la "
+                                                 "desbloquee.")
         if row[1] >= MAX_TURNS_PER_SESSION:
             raise SessionError("SESSION_FULL", f"La conversación llegó a {MAX_TURNS_PER_SESSION} turnos. "
                                                "Empieza una nueva para seguir.")
@@ -179,3 +195,28 @@ class SessionStore:
             )
             connection.execute("UPDATE sessions SET turns = ?, updated_at = ? WHERE id = ?", (number, now, session_id))
         return number
+
+    def ban(self, session_id: str, code: str, technique: str, excerpt: str) -> None:
+        """Banea la sesión; ``excerpt`` es el mensaje ya sin datos personales, para que el tendero lo revise."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO bans VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT(session_id) DO UPDATE SET "
+                "banned_at = excluded.banned_at, code = excluded.code, technique = excluded.technique, "
+                "excerpt = excluded.excerpt, lifted_at = NULL",
+                (session_id, self.clock().isoformat(), code, technique, _clip_to(excerpt, MAX_BAN_EXCERPT)),
+            )
+
+    def unban(self, session_id: str) -> bool:
+        """Levanta el baneo vigente; False si la sesión no estaba baneada."""
+        with self._connect() as connection:
+            lifted = connection.execute("UPDATE bans SET lifted_at = ? WHERE session_id = ? AND lifted_at IS NULL",
+                                        (self.clock().isoformat(), session_id))
+        return lifted.rowcount == 1
+
+    def bans(self, limit: int = 50) -> list[dict]:
+        """Baneos, el más reciente primero, con el código de la inyección y si siguen vigentes."""
+        with self._connect() as connection:
+            rows = connection.execute("SELECT session_id, banned_at, code, technique, excerpt, lifted_at FROM bans "
+                                      "ORDER BY banned_at DESC LIMIT ?", (limit,)).fetchall()
+        return [{"sesion": row[0], "baneada": row[1], "codigo": row[2], "tecnica": row[3], "mensaje": row[4],
+                 "vigente": row[5] is None} for row in rows]

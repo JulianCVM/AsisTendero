@@ -11,6 +11,7 @@ Además de lo que revisa ``eval_checks.verdict``, un turno puede traer:
   Un turno sin ``query`` solo espera y no llama a Grok.
 - ``expected_orders``: estados de los pedidos de la sesión, del más viejo al más nuevo.
 - ``expected_pickup`` y ``expected_note``: texto que debe aparecer en la recogida o en la nota de algún pedido.
+- ``expected_status`` puede ser un código de sesión (``SESSION_BANNED``): el turno no llega al grafo.
 
 Un caso con ``clients`` puede traer ``expected_active_total``: pedidos activos entre todos al final.
 """
@@ -33,7 +34,7 @@ from asistendero.order_replies import notice_text
 from asistendero.order_watch import last_event, notices, warn_due
 from asistendero.orders import ACTIVE, BOGOTA, OrderBook, utc_text
 from asistendero.pricing import run_cost
-from asistendero.sessions import SessionStore
+from asistendero.sessions import SessionError, SessionStore
 
 
 # Un miércoles a las 9:00: con la hora real, «mañana a las 10» fallaría un sábado o de noche.
@@ -103,6 +104,15 @@ def _waiting(check: dict) -> dict:
             "cost": None, "elapsed_ms": 0, "events": []}
 
 
+def _session_error(check: dict, error: SessionError) -> dict:
+    """Turno que la sesión rechazó antes del grafo (baneada, vencida o llena): sin Grok ni herramientas."""
+    expected = check["expected_status"]
+    passed = error.code in (expected if isinstance(expected, list) else [expected])
+    return {**_waiting({"wait_minutes": 0}), "query": check["query"], "expected_status": expected,
+            "actual_status": error.code, "passed": passed, "fail_reasons": [] if passed else [f"estado {error.code}"],
+            "response": str(error)}
+
+
 class Conversation:
     """Un cliente en una tienda: su sesión, sus pedidos y los avisos que ya recibió."""
 
@@ -123,9 +133,13 @@ class Conversation:
         notes = self._wait(check["wait_minutes"]) if check.get("wait_minutes") else []
         if check.get("query"):
             events: list[dict] = []
-            result = run_turn(self.store, self.session_id, check["query"], events.append, None, self.planner,
-                              orders=self.book)
-            turn = record(check, result, events)
+            try:
+                result = run_turn(self.store, self.session_id, check["query"], events.append, None, self.planner,
+                                  orders=self.book)
+            except SessionError as error:
+                turn = _session_error(check, error)
+            else:
+                turn = record(check, result, events)
         else:
             turn = _waiting(check)
         orders = list(reversed(self.book.session_orders(self.session_id, limit=10)))

@@ -8,6 +8,7 @@ from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
 from asistendero.grok import AGENT_PROMPT, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES, current_model
 from asistendero.orders import HOLD_MINUTES
 from asistendero.guardrails import SENSITIVE_TOPICS
+from asistendero.injection import INJECTION_CODES
 from asistendero.reminders import REMINDER_CODES
 from asistendero.validation import MAX_QUANTITY
 
@@ -127,6 +128,7 @@ OUTCOMES = {
             "model_error": "Fallo del modelo", "model_invalid": "Respuesta no válida",
             "limit_reached": "Límite de herramientas", "not_verified": "Sin verificar",
             "refused": "Pedido de información que no se entrega",
+            "blocked": "Intento de inyección bloqueado; en una conversación, sesión baneada",
         },
     },
 }
@@ -150,5 +152,6 @@ def describe_harness() -> dict:
         "errors": ERRORS,
         "reminders": REMINDER_CODES,
         "guardrails": GUARDRAILS,
+        "injections": INJECTION_CODES,
         "outcomes": OUTCOMES,
     }

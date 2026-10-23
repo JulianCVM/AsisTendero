@@ -21,7 +21,7 @@ SENSITIVE_TOPICS = {
     "PROMPT_DISCLOSURE": (
         r"\b(?:system\s*prompt|prompt|instrucciones\s+(?:internas|del\s+sistema|de\s+sistema|ocultas|originales)"
         r"|tus\s+(?:instrucciones|reglas|directrices|politicas)|configuracion\s+(?:interna|del\s+(?:agente|bot|sistema))"
-        r"|modo\s+(?:desarrollador|developer|debug|dios)|jailbreak|\bdan\b)",
+        r"|modo\s+(?:desarrollador|developer|debug|dios|dan)|jailbreak|\beres\s+dan\b)",
         "No puedo compartir mis instrucciones ni mi configuración interna.",
     ),
     "CREDENTIALS": (

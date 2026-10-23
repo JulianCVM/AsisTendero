@@ -1,4 +1,6 @@
-"""Plataforma local del tendero: inventario y pedidos del chat. Ejecutar: python -m asistendero.tendero
+"""Plataforma local del tendero: inventario, pedidos y conversaciones bloqueadas del chat.
+
+Ejecutar: python -m asistendero.tendero
 
 Mismas barreras que el visor: escucha solo en 127.0.0.1, rechaza otro ``Host`` u ``Origin``, recibe JSON de
 máximo 4 KB y no muestra errores internos. No llama a Grok ni gasta créditos. En el prototipo no hay inicio de
@@ -12,9 +14,11 @@ import json
 import sqlite3
 from urllib.parse import parse_qs, urlsplit
 
+from asistendero.injection import INJECTION_CODES
 from asistendero.inventory import Inventory, InventoryError
 from asistendero.orders import OrderBook, OrderError
 from asistendero.sales import STATUSES, day_summary, order_board
+from asistendero.sessions import SESSION_ID, SessionStore
 
 
 MAX_BODY = 4096
@@ -75,6 +79,8 @@ class TenderoHandler(BaseHTTPRequestHandler):
             return day_summary(orders)
         if path == "/api/movimientos":
             return {"movimientos": inventory.history()}
+        if path == "/api/bloqueos":
+            return {"bloqueos": self.server.sessions.bans(), "codigos": INJECTION_CODES}
         return None
 
     def do_POST(self) -> None:
@@ -112,6 +118,13 @@ class TenderoHandler(BaseHTTPRequestHandler):
                 raise OrderError("INVALID_ARGUMENT", "Envía solo el código del pedido.")
             order = orders.deliver(order_id) if path.endswith("entregar") else orders.cancel(order_id, by="tendero")
             return {"pedido": order}
+        if path == "/api/bloqueos/levantar":
+            session_id = body.get("sesion")
+            if set(body) != {"sesion"} or not isinstance(session_id, str) or not SESSION_ID.match(session_id):
+                raise ValueError("Envía solo el código de la conversación.")
+            if not self.server.sessions.unban(session_id):
+                raise ValueError("Esa conversación no está bloqueada.")
+            return {"sesion": session_id}
         return None
 
     def _dispatch(self, action) -> None:
@@ -137,10 +150,12 @@ class TenderoHandler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port: int, inventory: Inventory | None = None, orders: OrderBook | None = None) -> ThreadingHTTPServer:
+def make_server(port: int, inventory: Inventory | None = None, orders: OrderBook | None = None,
+                sessions: SessionStore | None = None) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(("127.0.0.1", port), TenderoHandler)
     server.inventory = inventory or Inventory()
     server.orders = orders or OrderBook(server.inventory.path)
+    server.sessions = sessions or SessionStore()
     return server
 
 

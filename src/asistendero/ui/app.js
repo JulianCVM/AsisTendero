@@ -26,7 +26,7 @@
   let turnNumber = 0;
   const nodeNames = ['validate', 'interpret', 'retrieve', 'respond'];
   const nodeLabels = {validate:'Validar mensaje', interpret:'Grok decide', retrieve:'Ejecutar herramienta', respond:'Resolver y verificar'};
-  const stateLabels = {order_pending:'Pedido por confirmar', order_confirmed:'Pedido confirmado', pickup_scheduled:'Recogida agendada', order_cancelled:'Pedido cancelado', order_status:'Estado del pedido', order_issue:'Pedido con novedad', informed:'Información de la tienda', refused:'Pedido no permitido', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
+  const stateLabels = {order_pending:'Pedido por confirmar', order_confirmed:'Pedido confirmado', pickup_scheduled:'Recogida agendada', order_cancelled:'Pedido cancelado', order_status:'Estado del pedido', order_issue:'Pedido con novedad', informed:'Información de la tienda', refused:'Pedido no permitido', blocked:'Mensaje bloqueado', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
@@ -166,7 +166,7 @@
     if (event.type === 'model_request') return 'Solicitud a Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
     if (event.type === 'model_response') return 'Respuesta de Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
     return ({input:'Mensaje recibido', route:'Ruta decidida', final:'Resultado final', error:'Error de ejecución',
-      session:'Memoria de la sesión'})[event.type] || event.type;
+      session:'Memoria de la sesión', ban:'Conversación bloqueada'})[event.type] || event.type;
   }
   function subtitleOf(event) {
     if (event.type === 'node' && event.node === 'retrieve' && event.status === 'complete') {
