@@ -6,7 +6,7 @@ corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es
 
 ## Qué se mide
 
-146 casos nuevos en ocho suites (ver `docs/HARNESS.md`, «Evaluación»), que se suman a los 43 de S2 y S3:
+214 casos nuevos en doce suites (ver `docs/HARNESS.md`, «Evaluación»), que se suman a los 43 de S2 y S3:
 
 | Suite | Casos | Qué prueba |
 |---|---|---|
@@ -16,12 +16,196 @@ corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es
 | `concurrencia` | 2 | Clientes que escriben a la vez a la misma tienda (K-01: dos piden 6 de los 9 bultos) |
 | `extremos` | 24 | Regateo, cantidad 0 o 2000, un rollo cuando se vende por metro, docena, domicilio, Nequi, jerga, inglés, voz a texto, inyección, SQL |
 | `flujos` | 15 | Cambiar o agregar a un pedido, cancelar todo, nota con datos personales o una orden, recogida de noche, tres clientes por 4 galones |
+| `natural` | 14 | Conversaciones como las del visor: «buenas tubos pbc tiene?» y «dame del primero», «el de 12, deme 4», quitar y agregar a la lista, apartar sin prisa, productos agotados con o sin surtido |
+| `surtido` | 10 | «¿cuándo le llegan más?», «¿ya no lo van a traer?», sin dato, con existencias y sin pregunta, pedir uno agotado |
 | `variados` | 38 | Otras familias y unidades (libra, par, bolsa, rollo, cuñete), listas, «3x», descuento, presupuesto, seis conversaciones, dos clientes por los dos últimos bombillos |
+| `memoria` | 6 | La conversación real del 23-10 (tubo conduit y mangueras), una cantidad dicha cinco turnos antes, quitar, cambiar una cantidad, empezar de nuevo, «deme 4» y «¿cuánto sería todo?» |
 | `inyeccion` | 45 | Cada tipo de inyección y cada disfraz (invisibles, homoglifos, base64, ROT13, invertido…), baneo tras un pedido, orden partida en dos turnos, dos clientes, seis mensajes legítimos parecidos |
+| `fallas` | 38 | Casos pensados para que el agente se equivoque: fracciones, «dos o tres», referencias sin antecedente, negar un atributo, IVA y factura, si algo sirve para una obra, subir un pedido por encima de las existencias, quitar un producto de un pedido, «no» a la confirmación, «dame 3 de ese» tras dos productos |
 
-Sin Grok, `tests/test_eval_sessions.py` recorre los 101 casos con un Grok guionizado y `tests/test_chaos.py` corre
+Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guionizado y `tests/test_chaos.py` corre
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
+
+## Suite `fallas`: buscar dónde se equivoca el agente (corridas 33 a 37, 24-10-2026)
+
+Pedido de Julian: una tanda de pruebas pensada para que el agente falle, no para confirmar que acierta. Se escribieron
+38 casos (`fallas`, Z-01 a Z-38) cuya expectativa es la conducta correcta de un tendero cuidadoso, y cada respuesta
+de la corrida 33 se leyó entera, también las que pasaron, para encontrar fallas que la expectativa no veía. Son 257
+casos en diecisiete suites. El prompt pasó a `s4-conversacion-v10` (tema `facturacion`).
+
+**Commits.** Las corridas 24 a 37 se hicieron sobre un árbol de trabajo encima de `31fd646` (`src_dirty=true` en cada reporte). Ese árbol, con los arreglos posteriores a cada corrida, quedó confirmado el 24-10-2026 en `0cfd35d` (visor y castillo) y `85e28dc` (agente). Ninguna corrida se repitió sobre esos commits.
+
+| Corrida | Código y prompt | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 33 | árbol de trabajo sobre `31fd646`, `s4-conversacion-v9` | `fallas` | 30/38 | 158 | 0.215824 | `eval-20261024T050317750903Z` |
+| 34 | ídem, tras los arreglos de la 33, `s4-conversacion-v10` | `fallas` | 36/38 | 139 | 0.192450 | `eval-20261024T054515895871Z` |
+| 35 | ídem, tras los arreglos de la 34 | regresión de los 257 casos; se detuvo en el 111 (ver abajo) | 110/111 | 461 | 0.553030 | `eval-20261024T054857295056Z.partial.jsonl` |
+| 36 | ídem | M-03, para ver su respuesta | 0/1 | 5 | 0.004751 | `eval-20261024T055321491416Z` |
+| 37 | ídem, tras el arreglo de M-03 | M-03 | **1/1** | 4 | 0.003497 | `eval-20261024T055715123717Z` |
+
+- **Corrida 33, las 8 que fallaron:**
+  - Z-32: ante «mejor que sean 20» con 9 bultos en bodega, Grok canceló el pedido de 2 y el cliente se quedó sin
+    nada.
+  - Z-33: con «sí, pero quítale el cemento» registró solo el cemento.
+  - Z-36: «dame 3 de ese» tras la brocha y el rodillo cotizó la brocha sin preguntar.
+  - Z-17: «la pintura que no es la blanca» buscó y mostró la blanca.
+  - Z-03, Z-15, Z-37 y Z-38 tenían una expectativa demasiado estrecha frente a una respuesta correcta y se ajustaron.
+    Z-15 y Z-38 dicen ahora «para agua»: sin eso hay dos tubos de 1/2 y preguntar es lo correcto.
+- **Corrida 33, defectos en respuestas que pasaron:**
+  - Z-01 y Z-04: «2.5 metros» y «un galón y medio» contaban 2 y 5 o 1 como cantidad.
+  - Z-11: «deme 3 de esos» sin conversación buscaba «3» y ofrecía duchas y bisagras.
+  - Z-14: «el codo de 90» contaba 90 como cantidad.
+  - Z-18 y Z-19: el IVA y la factura se contestaban sin consultar la tienda.
+  - Z-22: «¿sirve para fundir la placa de una casa de 3 pisos?» abría con «Sí, tenemos» y pedía cotizar 50 bultos
+    por «el de 50».
+  - Z-25: el «no tengo fecha» del martillo se decía también del candado.
+  - Z-33: las opciones salían repetidas.
+  - Z-34: ante un «no» a la confirmación, el pedido siguió apartando el martillo.
+- **Lo que cambió** (cada arreglo con su prueba, que falla sin él; detalle en `docs/HARNESS.md`):
+  - un cambio de pedido ya no cancela primero: el servidor reemplaza el pedido anterior en la misma transacción solo
+    si el nuevo alcanza (`reemplaza`, `CHANGE_BY_REGISTERING`, `ORDER_AMBIGUOUS`);
+  - `PRODUCT_REMOVED`, `AMBIGUOUS_REFERENCE`, `VAGUE_SEARCH` y `NEGATED_ATTRIBUTE` son rechazos nuevos;
+  - un «no» suelto a la confirmación cancela el pedido pendiente;
+  - las fracciones y los números de la obra o de la variante ya no son cantidades;
+  - la idoneidad no se afirma (`SUITABILITY_CLAIM`);
+  - el surtido se dice solo del producto por el que se pregunta;
+  - las búsquedas repetidas se muestran una vez;
+  - el tema `facturacion` cubre el IVA y la factura (`IVA_CLAIM`).
+- **Corrida 34:** 36/38. Las dos fallas, corregidas con su prueba:
+  - Z-38: «¿y si llevo 10 me hace precio?» registró un pedido de 10 metros. Un supuesto en pregunta ya no es
+    intención de compra (`HYPOTHETICAL`).
+  - Z-11: sin conversación, Grok intentó registrar y la respuesta decía «abre una conversación». Ahora pregunta de
+    qué producto habla.
+- **Corrida 35:** Claude Code detuvo el proceso por falta de memoria en la máquina; no fue una falla del agente ni de
+  la pasarela. Alcanzó 111 de los 257 casos: completos s2, catálogo, tienda, seguridad, conversación, ruido, pedidos,
+  sesión larga, concurrencia, extremos y flujos, y 5 de `variados`. Pasaron 110. Los nueve casos que se bloquean antes
+  de Grok no gastaron.
+  - La única falla, M-03, no venía de esta tanda: el código de antes de la 33 también la rechazaba. Tras «¿cuál?» con
+    los cables blanco, negro y rojo, «Negro, 15 metros» no respaldaba el negro y la cotización se rechazó dos veces
+    con `SKU_NOT_GROUNDED`. En la 29 pasó porque Grok volvió a buscar.
+  - Una respuesta suelta que nombra la variante de una sola opción ahora la elige (`choices._bare_answer`), si el
+    mensaje no dice nada más que la cantidad con su unidad. «necesito cable negro de 14», «negro, y un taladro» y
+    «blanco y negro» no eligen.
+- **Sin medir tras los arreglos:** los 146 casos que la 35 no alcanzó (33 de `variados`, `inyeccion`, `memoria`,
+  `natural`, `surtido` y `fallas`). `fallas` pasó 36/38 en la 34 y sus dos fallas tienen prueba, pero no se repitió
+  con Grok real.
+- **Discutible, sin cambiar:**
+  - Z-07 («dos o tres bultos») acepta preguntar o cotizar 3.
+  - Comparar dos variantes en un mensaje («el codo de 90 o el de 45») depende de que Grok busque cada una con su
+    medida; con un solo texto de búsqueda, ninguna queda respaldada.
+
+## Surtido, conversaciones naturales y regresión de los 195 casos (corridas 26 a 32, 23-10-2026)
+
+Pedido de Julian: más pruebas con el formato del visor, preguntas como «veci, ¿cuándo le llegan más?» o «¿ya no van a
+traer de ese?» (que se respondan solo cuando hace falta y nunca con una fecha supuesta) y corridas grandes con un tope
+de USD 5. Se agregaron el surtido (`restock.py`, la tabla `restocks` y su edición en el panel del tendero) y dos
+suites: `natural` (14 conversaciones como las del visor) y `surtido` (10 mensajes). Son 219 casos en dieciséis
+suites. El prompt pasó a `s4-conversacion-v9`.
+
+| Corrida | Código y prompt | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 26 | árbol de trabajo sobre `31fd646`, `s4-conversacion-v9` | `natural`, `surtido` | 14/24 | 140 | 0.219329 | `eval-20261024T001347053515Z` |
+| 27 | ídem, tras los arreglos de la 26 | `natural`, `surtido` | 8/24 (16 sin respuesta de la pasarela) | 105 | 0.093644 | `eval-20261024T002542521374Z` |
+| 28 | ídem | los 16 que la 27 no alcanzó | **16/16** | 66 | 0.108751 | `eval-20261024T024112763932Z` |
+| 29 | ídem | los 195 casos anteriores (catorce suites) | 191/195 | 705 | 0.826112 | `eval-20261024T024324551003Z` |
+| 30 | ídem, tras los arreglos de la 29 | R-03, X-22, Q-13 y W-03 | 2/4 | 25 | 0.027285 | `eval-20261024T025809359926Z` |
+| 31 | ídem, tras los arreglos de la 30 | X-22 y Q-13 | 1/2 | 11 | 0.012020 | `eval-20261024T030200670371Z` |
+| 32 | ídem, tras el arreglo de la 31 | X-22 | **1/1** | 5 | 0.004846 | `eval-20261024T030437035902Z` |
+
+- **Corrida 26, lo que se corrigió antes de la 27** (cada arreglo con su prueba, que falla sin él):
+  - los casos de un turno leían la base compartida sin la tabla `restocks` y respondían «no tengo fecha» del martillo
+    que llega los martes; la terminal y el evaluador ahora actualizan la base al abrirla;
+  - Grok escribió «Tenemos 27 unidades disponibles» sin que se lo preguntaran: una cifra de existencias mayor a 5 no
+    pedida hace usar la salida determinista;
+  - «pintura para pared color beige» elegía el cuñete de $249.000, el único con «beige» en la variante; ahora pregunta
+    entre galón, cuarto y cuñete;
+  - «el de 12, deme 4» y «la talla L» eligen por el atributo que solo tiene una opción (`choices.py`), y un rechazo
+    `SKU_NOT_GROUNDED` le recuerda a Grok lo que el cliente eligió;
+  - el surtido concuerda en género y número («La cinta aislante … está agotada»).
+- **Corrida 27:** desde H-09 la pasarela respondió `MODEL_UNAVAILABLE` a todo; los 8 casos anteriores pasaron. Se
+  comprobó que la pasarela seguía en línea y la 28 corrió solo los 16 que no tuvieron respuesta: los 16 pasaron.
+  `natural` y `surtido` quedan en **24/24** entre las corridas 27 y 28.
+- **Corrida 29, regresión de los 195 casos anteriores: 191/195.** Las cuatro fallas, corregidas con su prueba:
+  - R-03 «x fa 4 bombiyos led d 9 w»: Grok puso measure="9w" y el servidor la descartaba porque el mensaje decía
+    «9 w»; ahora se comparan como medida (`search.py`).
+  - X-22 «2 brochas de 3 pulgadas y un taladro»: Grok cotizó BRO-3 con un «TALADRO» inventado. El rechazo ahora
+    nombra el SKU que sobra y, si Grok responde con un total sin cotizar, un segundo aviso `QUOTE_REQUIRED` le pide
+    cotizar solo lo identificado (corrida 32).
+  - Q-13 «agrégale 1 galón más» a un pedido de 4: la suma (5) ya cuenta como cantidad dicha
+    (`order_rules.added_quantities`). En la corrida 30 la cotización no alcanzaba y, sin búsqueda en el turno, la
+    respuesta decía «No pude consultar el catálogo»; ahora dice que no hay esa cantidad y que lo apartado cuenta.
+  - W-03 «mejor que sean blancos, no amarillos»: tras el aviso, Grok canceló y preguntó por los blancos; el cliente
+    quedó sin pedido. Un segundo aviso `ORDER_REQUIRED` pide registrar el nuevo. Pasó en la corrida 30.
+  - En la corrida 30 una búsqueda repetida de «taladro» decía dos veces «no lo manejo»; ahora se responde una vez.
+- **Costo de estas siete corridas:** 1.057 llamadas, USD 1.291987, dentro del tope de USD 5. Todas sobre código **sin
+  confirmar** (`src_dirty=true`, árbol de trabajo sobre `31fd646`), con `grok-4.20-0309-non-reasoning`.
+- Lo que no se volvió a correr: los 191 casos que pasaron en la 29 no se repitieron tras los arreglos de las
+  corridas 29 a 31. La suite sin Grok (657 pruebas) sí cubre cada arreglo.
+
+## Memoria de la conversación y formato de respuesta (corridas 24 y 25, 23-10-2026)
+
+Una conversación real en el visor mostró dos fallas. «agrega una manguera de abasto de 40 cm, ¿cuánto sería todo y a qué
+hora puedo pasar?» cotizó solo la manguera, olvidó el metro de tubo conduit y no dio el horario. Luego «yo quiero la
+manguera cotizada con el tubo que te dije» volvió a preguntar qué manguera. Para corregirlo:
+
+- la sesión guarda la **lista de la conversación** (lo cotizado con su cantidad, `shopping_list.py`);
+- el aviso `LIST_QUOTE_REQUIRED` pide cotizar la lista entera;
+- «a qué hora puedo pasar» cuenta como pregunta de la tienda;
+- la respuesta se escribe como un tendero por chat: sin SKU ni «COP», una línea por producto, «Total: $X» y la nota
+  de demostración solo en el primer mensaje.
+
+La suite `memoria` suma 6 conversaciones (195 casos en total).
+
+| Corrida | Código y prompt | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 24 | árbol de trabajo sobre `31fd646`, `s4-conversacion-v6` | `memoria` | 4/6 | 80 | 0.135300 | `eval-20261023T214758815132Z` |
+| 25 | árbol de trabajo sobre `31fd646`, `s4-conversacion-v7` | `memoria`, `conversacion`, `sesion_larga`, `pedidos`, `flujos` | 33/34 terminados (de 36) | 305 | 0.421844 | `eval-20261023T215519326954Z.partial.jsonl` |
+
+- **N-01 pasó en las dos corridas.** Es la conversación del visor completa, con Grok real:
+  - tubo conduit y mangueras;
+  - «agrega una manguera… ¿cuánto sería todo y a qué hora paso?»: $13.800 y el horario;
+  - «con el tubo que te dije»: $13.800 sin repreguntar;
+  - «me llevo todo», confirmar y agendar.
+- **Corrida 24, dos fallas nuevas, corregidas antes de la 25:**
+  - N-02: con el cemento consultado dos turnos antes, «agrégale 2 brochas» cotizó 2 bultos de cemento, y el 2 era de
+    las brochas. Ahora una cantidad pegada a otro producto no vale para uno recordado (`validation.quantity_of_other`).
+  - N-05: «empecemos de nuevo: necesito 2 brochas» cotizó también el tubo de antes. Ahora, en ese turno, lo que el
+    cliente quitó o dejó atrás no respalda ni la cantidad ni el SKU (`shopping_list.usable_lines`).
+  - Las dos fallas tienen su prueba en `tests/test_shopping_list.py`, y cada prueba falla sin su arreglo. El prompt
+    pasó a `s4-conversacion-v7`.
+- **Corrida 25:** N-01, N-02, N-03 y N-05 pasaron, y también todas las conversaciones de `conversacion`,
+  `sesion_larga` y `pedidos` y 14 de los 15 casos de `flujos`. **Q-13 falló** («agrégale 1 galón más» con los 4
+  galones ya apartados). El reporte parcial no guarda el motivo y no se repitió: queda por validar.
+- **La corrida 25 no terminó.** El sistema la detuvo por falta de memoria del equipo cuando faltaban N-04 y N-06, y
+  solo quedó la bitácora parcial. N-04 y N-06 sí pasaron en la corrida 24.
+- Las dos corridas se hicieron sobre código **sin confirmar** (`src_dirty=true`). El código de la 25 es el de
+  `s4-conversacion-v7`; después cambiaron `src/` y el prompt por los arreglos de la sección siguiente, que no tienen
+  corrida real.
+
+## Tono, opciones y apartado tras otra conversación del visor (23-10-2026, sin corrida real)
+
+Julian probó el visor con Grok real. Lo que falló, y qué cambió:
+
+- **Existencias sin preguntar:** cada opción decía «quedan 12 metros». Ahora la respuesta dice cuánto queda solo si el
+  cliente lo pregunta, si quedan 5 o menos, si no alcanza o si está agotado, y la redacción de Grok ya no tiene que
+  decirlo para usarse. Un producto cotizado va en una frase; varios, en lista con su total.
+- **«la primera dame 3 metros» sin sesión** buscó productos de «3 m» (flexómetros). Un artículo que solo dice una
+  cantidad se rechaza antes del catálogo.
+- **«dame del primero 3 metros»** tras listar tres tubos cotizó el tubo sanitario de 3 pulgadas: la búsqueda leyó el 3
+  como medida y nadie sabía cuál era «el primero». La búsqueda ya ignora la cantidad del texto, y la sesión guarda las
+  opciones mostradas en orden (`choices.py`).
+- **El «PVC» de los tubos llegó a las mangueras** («Es de otro material»). En una conversación, un atributo de un turno
+  anterior vale solo para el mismo producto.
+- **«de esa manguera la segunda… ¿cuánto queda todo?»** cotizó solo el tubo. La opción elegida por su orden entra en
+  el aviso `LIST_QUOTE_REQUIRED`.
+- **«¿cuánto tiempo tengo para llegar? vivo a media hora»** recibió «tienes hasta las 17:47 para llegar, ¡apúrate!».
+  Los 5 minutos son para confirmar; ya confirmado, el pedido se guarda hasta 24 horas. El registro lo explica, y con un
+  pedido pendiente se descarta la redacción que le mete prisa al cliente.
+
+El prompt pasó a `s4-conversacion-v8`. La conversación completa está reproducida con un Grok de guion en
+`tests/test_shopping_list.py`, y cada arreglo tiene una prueba que falla sin él. **No se volvió a correr con Grok real**:
+no hay resultado medido de estos cambios, y el tono de la redacción de Grok con `v8` queda por validar.
 
 ## Inyección de instrucciones y baneo (corridas 22 y 23, 23-10-2026)
 
@@ -197,5 +381,10 @@ Cómo se comprueba cada parte de la definición:
 - La base es local y sus datos son ficticios. Que sean ficticios no la vuelve «datos fijos»: el agente lee y
   escribe la misma base que el tendero administra.
 
-**Consumo S4 medido (corridas 1 a 21):** 1.935 llamadas, USD 2.821944. Las corridas 11 a 21 sumaron 1.112
+**Consumo S4 medido (corridas 1 a 37):** 4.213 llamadas, USD 5.735986. Las corridas 33 a 37 sumaron 767 llamadas y
+USD 0.969552, y las 26 a 32, 1.057 llamadas y USD 1.291987.
+
+**Hasta la corrida 25:** 2.389 llamadas, USD 3.474447. Las corridas 22 y 23 sumaron 69 llamadas y USD 0.095359; la 24 y la 25 (parcial), 385 llamadas y USD 0.557144, sobre código sin confirmar.
+
+**Hasta la corrida 21:** 1.935 llamadas, USD 2.821944. Las corridas 11 a 21 sumaron 1.112
 llamadas y USD 1.375933; cada una se hizo sobre código confirmado (`src_dirty=false`).
