@@ -24,6 +24,9 @@ class TraceHandler(BaseHTTPRequestHandler):
         "/assets/conversacion.css": ("conversacion.css", "text/css; charset=utf-8"),
         "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
         "/assets/harness.js": ("harness.js", "text/javascript; charset=utf-8"),
+        "/assets/iso.css": ("iso.css", "text/css; charset=utf-8"),
+        "/assets/castillo.css": ("castillo.css", "text/css; charset=utf-8"),
+        "/assets/castillo.js": ("castillo.js", "text/javascript; charset=utf-8"),
     }
 
     def _is_local_host(self) -> bool:

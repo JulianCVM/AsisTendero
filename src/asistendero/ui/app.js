@@ -21,6 +21,16 @@
   const newSession = document.querySelector('#new-session');
   const sessionLabel = document.querySelector('#session-label');
   const history = document.querySelector('#chat-history');
+  const scroller = document.querySelector('#chat-scroll');
+  const thread = document.querySelector('#chat-thread');
+  const jumpLatest = document.querySelector('#jump-latest');
+  // En celular, Enter es salto de línea y el mensaje se manda con el botón, como en las apps de chat.
+  const touch = window.matchMedia('(pointer: coarse)');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const MAX_INPUT_HEIGHT = 180;
+  const SEND_LABEL = 'Enviar ↗';
+  // Si quien lee subió a ver mensajes anteriores, un mensaje nuevo no lo arrastra al final: aparece el botón.
+  let followLatest = true;
   // El servidor crea el identificador de la sesión; el visor solo lo devuelve en el turno siguiente.
   let sessionId = null;
   let turnNumber = 0;
@@ -90,6 +100,22 @@
   function updateCount() {
     document.querySelector('#char-count').textContent = query.value.length + ' / 2000';
   }
+  function fitInput() {
+    query.style.height = 'auto';
+    query.style.height = Math.min(query.scrollHeight + 2, MAX_INPUT_HEIGHT) + 'px';
+  }
+  function atBottom() {
+    return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  }
+  function toLatest(smooth = false) {
+    scroller.scrollTo({top:scroller.scrollHeight, behavior:smooth && !reducedMotion.matches ? 'smooth' : 'auto'});
+    followLatest = true;
+    jumpLatest.hidden = true;
+  }
+  function followThread() {
+    if (followLatest) toLatest();
+    else jumpLatest.hidden = false;
+  }
   function historyRow(role, text) {
     const row = document.createElement('div');
     row.className = 'chat-row ' + role;
@@ -142,6 +168,7 @@
     counter.textContent = '0 eventos · expande uno para ver sus parámetros.';
     answer.textContent = 'Estoy revisando tu consulta…';
     responseBox.classList.remove('is-empty');
+    responseBox.classList.add('is-typing');
     setStatus('Ejecutando', 'warning');
     document.querySelector('#metric-route').textContent = '—';
     document.querySelector('#metric-calls').textContent = '—';
@@ -245,6 +272,7 @@
       const result = event.details || {};
       currentAnswer = result.respuesta || '';
       answer.textContent = currentAnswer;
+      responseBox.classList.remove('is-typing');
       document.querySelector('#metric-calls').textContent = String(result.model_calls ?? '—');
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
       renderCost(result.cost, true);
@@ -262,6 +290,7 @@
       if (event.code && event.code.startsWith('SESSION_')) clearSession();
       setStatus('Error de ejecución', 'error');
       answer.textContent = event.message || 'No se pudo completar la prueba.';
+      responseBox.classList.remove('is-typing');
       if (runningNode) setStep(runningNode, 'error');
       responseBox.classList.remove('is-empty');
       renderCost(null, true);
@@ -291,7 +320,20 @@
   }
   setInterval(pollNotices, 10000);
 
-  query.addEventListener('input', updateCount);
+  query.addEventListener('input', () => { updateCount(); fitInput(); });
+  query.addEventListener('keydown', event => {
+    // isComposing: con un teclado de acentos o predictivo, Enter confirma la palabra y no envía.
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || touch.matches) return;
+    event.preventDefault();
+    if (!run.disabled && query.value.trim()) form.requestSubmit();
+  });
+  scroller.addEventListener('scroll', () => {
+    followLatest = atBottom();
+    if (followLatest) jumpLatest.hidden = true;
+  }, {passive:true});
+  jumpLatest.addEventListener('click', () => toLatest(true));
+  // Las burbujas cambian por textContent y por avisos del servidor: se observa el hilo, no cada función.
+  new MutationObserver(followThread).observe(thread, {childList:true, subtree:true, characterData:true});
   sessionMode.addEventListener('change', clearSession);
   newSession.addEventListener('click', () => {
     clearSession();
@@ -304,6 +346,7 @@
   document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => {
     query.value = button.dataset.example;
     updateCount();
+    fitInput();
     query.focus();
   }));
   filterButtons.forEach(button => button.addEventListener('click', () => {
@@ -338,15 +381,21 @@
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!query.value.trim()) return;
+    if (!query.value.trim() || run.disabled) return;
+    const sent = query.value;
     reset();
+    // Como en un chat, el cuadro queda libre para el siguiente mensaje mientras el agente responde.
+    query.value = '';
+    updateCount();
+    fitInput();
+    toLatest();
     run.disabled = true;
-    run.textContent = 'Ejecutando…';
+    run.textContent = 'Enviando…';
     try {
       const response = await fetch('/api/trace', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify(sessionMode.checked ?
-          {consulta:query.value, sesion:true, session_id:sessionId} : {consulta:query.value})
+          {consulta:sent, sesion:true, session_id:sessionId} : {consulta:sent})
       });
       if (!response.ok) {
         const data = await response.json();
@@ -369,11 +418,19 @@
         throw new Error('La traza terminó sin resultado.');
       }
     } catch (error) {
-      show({type:'error', message:error.message, elapsed_ms:0});
+      // fetch solo lanza TypeError cuando no hay conexión: su texto («Failed to fetch») no le dice nada a quien prueba.
+      const message = error instanceof TypeError ?
+        'No pude conectar con el visor. Revisa que siga abierto en la terminal y vuelve a enviar el mensaje.' : error.message;
+      show({type:'error', message, elapsed_ms:0});
+      // Si no llegó a responder, el mensaje vuelve al cuadro para reenviarlo sin escribirlo de nuevo.
+      if (!query.value) { query.value = sent; updateCount(); fitInput(); }
     } finally {
       run.disabled = false;
-      run.textContent = 'Ejecutar prueba ↗';
+      run.textContent = SEND_LABEL;
+      const idle = [document.body, query, run].includes(document.activeElement);
+      if (idle && !touch.matches) query.focus();
     }
   });
   updateCount();
+  fitInput();
 })();

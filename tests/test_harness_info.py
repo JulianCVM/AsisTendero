@@ -98,3 +98,71 @@ def test_visual_server_serves_harness_map_only_to_local_host(monkeypatch, tmp_pa
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def _castle_data(name: str) -> dict:
+    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    match = re.search(rf'data-{name}="([^"]+)"', page)
+    assert match, f"el castillo no trae data-{name}"
+    return json.loads(match.group(1).replace("&quot;", '"').replace("&amp;", "&"))
+
+
+def test_the_castle_animates_every_node_of_the_graph():
+    source = (SRC / "graph.py").read_text(encoding="utf-8")
+    nodes = set(re.findall(r'add_node\("([a-z_]+)"', source))
+    script = (SRC / "ui" / "castillo.js").read_text(encoding="utf-8")
+    assert nodes == {"validate", "interpret", "retrieve", "respond"}
+    for node in nodes:
+        assert f"event.node === '{node}'" in script, f"el castillo no muestra el nodo {node}"
+
+
+def test_the_castle_route_only_joins_stations_that_exist():
+    route = _castle_data("route")
+    points = set(route["points"])
+    assert {"cliente", "puerta", "torre", "cruce", "aduana", "bodega", "balanza", "mostrador", "salida"} <= points
+    assert route["edges"] and all(a in points and b in points for a, b in route["edges"])
+    script = (SRC / "ui" / "castillo.js").read_text(encoding="utf-8")
+    walked = set(re.findall(r"go\('([a-z]+)'", script)) | set(re.findall(r"live\('([a-z]+)'", script))
+    assert walked and walked <= points, walked - points
+    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    for name in ("token", "portcullis", "barrier", "sign", "beam", "pan-left", "pan-right", "strings", "flag",
+                 "lantern", "crates", "lock"):
+        assert f'data-part="{name}"' in page, f"falta la pieza {name} que mueve castillo.js"
+
+
+def test_visual_server_serves_the_castle_without_unsafe_html(tmp_path):
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            connection.request("GET", "/assets/castillo.js")
+        except PermissionError:
+            pytest.skip("Este entorno restringe conexiones a sockets locales")
+        response = connection.getresponse()
+        script = response.read().decode("utf-8")
+        assert response.status == 200
+        assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
+        for path in ("/assets/castillo.css", "/assets/iso.css"):
+            connection.request("GET", path)
+            sheet = connection.getresponse()
+            assert sheet.status == 200 and "text/css" in sheet.getheader("Content-Type")
+            sheet.read()
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_the_chat_script_finds_every_element_it_uses():
+    # El chat se rearmó (hilo con desplazamiento propio, Enter para enviar): un id que app.js busca y la página ya
+    # no tiene rompe el visor sin que ninguna otra prueba lo note.
+    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    script = (SRC / "ui" / "app.js").read_text(encoding="utf-8")
+    used = set(re.findall(r"querySelector\('#([\w-]+)'\)", script))
+    assert {"chat-scroll", "chat-thread", "jump-latest", "query", "run", "form"} <= used
+    missing = [name for name in sorted(used) if f'id="{name}"' not in page]
+    assert missing == [], f"app.js busca ids que index.html no tiene: {missing}"
+    assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
