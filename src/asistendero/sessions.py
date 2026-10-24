@@ -5,7 +5,10 @@ Cada turno corre el mismo grafo; la sesión solo aporta contexto. Lo que se guar
 - los últimos ``MAX_CONTEXT_TURNS`` turnos, con el texto del cliente ya filtrado por ``guardrails`` (sin
   frases delicadas ni datos personales) y la respuesta con los montos tapados, porque un precio de un turno
   anterior puede no estar vigente;
-- los productos identificados (SKU, nombre, variante y unidad), nunca su precio ni sus existencias.
+- los productos identificados (SKU, nombre, variante y unidad), nunca su precio ni sus existencias;
+- la lista de lo que el cliente ha ido cotizando, con la cantidad que dijo (``shopping_list.py``), para que
+  «¿cuánto es todo?» sume lo de hace diez mensajes;
+- las opciones de la última respuesta que mostró alguna, en orden (``choices.py``), para entender «del primero».
 
 Precio y existencias se vuelven a leer del catálogo en cada turno. Una sesión vence a las
 ``SESSION_TTL`` sin actividad y se borra al crear la siguiente: no hay historial indefinido.
@@ -69,6 +72,12 @@ def remembered_products(reference: str, calls: list[dict]) -> list[dict]:
             products.setdefault(line["sku"], known[line["sku"]])
     remembered = {p.sku: {"sku": p.sku, "nombre": p.name, "variante": p.variant, "unidad": p.unit}
                   for p in products.values()}
+    # Una cotización sin búsqueda en el turno («la de galón, deme 2») también deja el producto identificado: si no,
+    # «mejor que sean 3» no tenía qué cotizar (suite natural, H-02).
+    for line in (quote or {}).get("lines", []):
+        if all(isinstance(line.get(key), str) for key in ("name", "variant", "unit")):
+            remembered.setdefault(line["sku"], {"sku": line["sku"], "nombre": line["name"],
+                                                "variante": line["variant"], "unidad": line["unit"]})
     # Lo que entró a un pedido también queda identificado: «agrégale otro de esos» se refiere a eso.
     for _, order in order_results(calls):
         for line in order["lineas"]:
@@ -101,7 +110,16 @@ class SessionStore:
                        created_at TEXT NOT NULL, text TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);
                    CREATE TABLE IF NOT EXISTS bans (
                        session_id TEXT PRIMARY KEY, banned_at TEXT NOT NULL, code TEXT NOT NULL,
-                       technique TEXT NOT NULL, excerpt TEXT NOT NULL, lifted_at TEXT);"""
+                       technique TEXT NOT NULL, excerpt TEXT NOT NULL, lifted_at TEXT);
+                   CREATE TABLE IF NOT EXISTS session_list (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       position INTEGER NOT NULL, sku TEXT NOT NULL, name TEXT NOT NULL, variant TEXT NOT NULL,
+                       unit TEXT NOT NULL, quantity INTEGER NOT NULL, PRIMARY KEY (session_id, sku));
+                   CREATE TABLE IF NOT EXISTS session_options (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
+                       name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                       PRIMARY KEY (session_id, grupo, position));"""
             )
 
     @contextmanager
@@ -154,6 +172,19 @@ class SessionStore:
                 "ORDER BY last_turn DESC, sku LIMIT ?",
                 (session_id, MAX_REMEMBERED_PRODUCTS),
             ).fetchall()
+            listed = connection.execute(
+                "SELECT sku, name, variant, unit, quantity FROM session_list WHERE session_id = ? ORDER BY position",
+                (session_id,),
+            ).fetchall()
+            shown = connection.execute(
+                "SELECT grupo, label, sku, name, variant, unit FROM session_options WHERE session_id = ? "
+                "ORDER BY grupo, position", (session_id,),
+            ).fetchall()
+        options: dict[int, dict] = {}
+        for group, label, sku, name, variant, unit in shown:
+            block = options.setdefault(group, {"grupo": label, "opciones": []})
+            block["opciones"].append({"n": len(block["opciones"]) + 1, "sku": sku, "nombre": name,
+                                      "variante": variant, "unidad": unit})
         return {
             "turnos": [
                 {"cliente": _clip(customer), "asistente": _clip(MONEY.sub("[precio]", assistant))}
@@ -161,6 +192,9 @@ class SessionStore:
             ],
             "productos": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit}
                           for sku, name, variant, unit in products],
+            "lista": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit, "cantidad": quantity}
+                      for sku, name, variant, unit, quantity in listed],
+            "opciones": list(options.values()),
         }
 
     def notify(self, session_id: str, text: str) -> bool:
@@ -180,8 +214,12 @@ class SessionStore:
             connection.executemany("UPDATE notices SET delivered = 1 WHERE rowid = ?", [(row[0],) for row in rows])
         return [row[1] for row in rows]
 
-    def record(self, session_id: str, customer: str, assistant: str, status: str, products: list[dict]) -> int:
-        """Guarda el turno ya filtrado y devuelve su número."""
+    def record(self, session_id: str, customer: str, assistant: str, status: str, products: list[dict],
+               shopping: list[dict] | None = None, options: list[dict] | None = None) -> int:
+        """Guarda el turno ya filtrado y devuelve su número.
+
+        ``shopping`` reemplaza la lista de la sesión; ``options``, si trae grupos, reemplaza las opciones mostradas.
+        """
         now = self.clock().isoformat()
         with self._connect() as connection:
             number = self._check(connection, session_id) + 1
@@ -193,6 +231,21 @@ class SessionStore:
                 [(session_id, item["sku"], item["nombre"], item["variante"], item["unidad"], number)
                  for item in products],
             )
+            if shopping is not None:
+                connection.execute("DELETE FROM session_list WHERE session_id = ?", (session_id,))
+                connection.executemany(
+                    "INSERT INTO session_list VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [(session_id, position, item["sku"], item["nombre"], item["variante"], item["unidad"],
+                      item["cantidad"]) for position, item in enumerate(shopping)],
+                )
+            if options:
+                connection.execute("DELETE FROM session_options WHERE session_id = ?", (session_id,))
+                connection.executemany(
+                    "INSERT INTO session_options VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(session_id, group, position, block["grupo"], item["sku"], item["nombre"], item["variante"],
+                      item["unidad"]) for group, block in enumerate(options)
+                     for position, item in enumerate(block["opciones"])],
+                )
             connection.execute("UPDATE sessions SET turns = ?, updated_at = ? WHERE id = ?", (number, now, session_id))
         return number
 

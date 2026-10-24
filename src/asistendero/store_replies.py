@@ -20,7 +20,12 @@ POLICY_CLAIMS = {
     "domicilios": re.compile(r"\b(?:domicilios?|envios?|enviamos|despachamos)\b"),
     "garantias": re.compile(r"\b(?:garantias?|devoluci\w+)\b"),
     "ubicacion": re.compile(r"\b(?:calle|carrera|direccion)\b"),
+    "facturacion": re.compile(r"\b(?:iva|impuestos?|factura\s+electronica|facturamos|facturar\w*|emit\w+\s+factura)\b"),
 }
+
+# Si un precio lleva IVA no lo dice ningún tema de la tienda: ni consultando «facturacion» se puede afirmar.
+IVA_CLAIM = re.compile(r"\b(?:incluy\w*|incluid\w*|traen|trae|llevan|lleva|tienen|sin|mas|con)\s+(?:el\s+)?iva\b"
+                       r"|\biva\s+(?:incluid\w*|aparte|adicional)")
 
 
 def _hour(value: str) -> str:
@@ -38,7 +43,7 @@ def _schedule_text(days: dict) -> str:
             groups.append(([day], hours))
     parts = []
     for names, hours in groups:
-        label = DAY_NAMES[names[0]] if len(names) == 1 else f"{DAY_NAMES[names[0]]} a {DAY_NAMES[names[-1]]}"
+        label = f"el {DAY_NAMES[names[0]]}" if len(names) == 1 else f"de {DAY_NAMES[names[0]]} a {DAY_NAMES[names[-1]]}"
         parts.append(f"{label} de {_hour(hours[0])} a {_hour(hours[1])}" if hours else f"{label} cerrado")
     return ", ".join(parts[:-1]) + " y " + parts[-1] if len(parts) > 1 else parts[0]
 
@@ -48,8 +53,8 @@ def store_lines(calls: list[ToolCall]) -> list[str]:
     lines = []
     for topic, data in store_info_by_topic(calls).items():
         if topic == "horario" and isinstance(data.get("dias"), dict):
-            now = "Ahora está abierta." if data.get("abierto_ahora") else "Ahora está cerrada."
-            lines.append(f"Horario de la tienda: {_schedule_text(data['dias'])}. {data.get('festivos', '')} {now}"
+            now = "Ahora mismo estamos abiertos." if data.get("abierto_ahora") else "Ahora mismo estamos cerrados."
+            lines.append(f"Atendemos {_schedule_text(data['dias'])}. {data.get('festivos', '')} {now}"
                          .replace("  ", " "))
         elif isinstance(data.get("texto"), str):
             lines.append(data["texto"])
@@ -88,6 +93,8 @@ def store_reply_is_consistent(
     amounts, hours, open_now = store_allowances(calls)
     consulted = set(store_info_by_topic(calls)) | ({"medios_pago"} if paid_at_pickup else set())
     if any(topic not in consulted and pattern.search(normalized_reply) for topic, pattern in POLICY_CLAIMS.items()):
+        return False, amounts
+    if IVA_CLAIM.search(normalized_reply):
         return False, amounts
     said_hours = {_hour(value) for value in re.findall(r"\b\d{1,2}:\d{2}\b", normalized_reply)}
     if not said_hours <= hours:

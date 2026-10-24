@@ -45,9 +45,30 @@ STORE_INFO = {
                          "mientras lo confirmas; ya confirmado, se guarda hasta 2 horas después de la hora de recogida "
                          "acordada (o 24 horas si no acuerdas hora). El pago se hace en el mostrador al recoger: este "
                          "chat no cobra, no recibe pagos ni fía."},
+    # Z-18 y Z-19 (suite fallas): sin este tema, «¿los precios incluyen IVA?» se respondía con los medios de pago.
+    "facturacion": {"texto": "Por este chat no se emite factura. La factura electrónica (a tu nombre o al de tu "
+                             "empresa) y el IVA de cada producto se piden en el mostrador al pagar."},
 }
 # Temas agregados después de crear una base: upgrade_db los escribe en bases existentes.
-UPGRADED_TOPICS = ("contacto", "pedidos")
+UPGRADED_TOPICS = ("contacto", "pedidos", "facturacion")
+
+# Surtido que anota el tendero (restock.py): día del proveedor, fecha o «descontinuado». Sin fila, sin dato.
+RESTOCK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS restocks (
+    business_id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (business_id, store_id, sku)
+);
+"""
+# Surtidos ficticios de demostración: unos agotados con día, otros que ya no se traen y otros sin dato (el serrucho,
+# la cerradura), para que la conversación tenga los tres casos.
+RESTOCKS = {
+    "MAR-16": "martes", "FLX-8": "viernes", "CON-100": "jueves", "BOM-15": "martes", "NIV-24": "descontinuado",
+    "ESM-GRI-G": "descontinuado", "PVC-050": "viernes", "CEM-050": "lunes", "MAR-20": "martes",
+}
 
 # Pedidos para recoger en tienda (orders.py). Lo apartado se descuenta de las existencias que ve el agente.
 ORDER_SCHEMA = """
@@ -87,7 +108,7 @@ CREATE INDEX IF NOT EXISTS orders_by_session ON orders (session_id);
 
 
 def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
-    """Agrega a una base existente las tablas de pedidos y los temas nuevos de la tienda; es idempotente."""
+    """Agrega a una base existente las tablas de pedidos y de surtido y los temas nuevos de la tienda; es idempotente."""
     path = path.resolve()
     if not path.is_file():
         raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
@@ -95,6 +116,16 @@ def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
     try:
         with connection:
             connection.executescript(ORDER_SCHEMA)
+            # Los surtidos de demostración entran solo al crear la tabla: si el tendero borra uno, no vuelve.
+            if not connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'restocks'").fetchone():
+                connection.executescript(RESTOCK_SCHEMA)
+                known = {row[0] for row in connection.execute("SELECT sku FROM products WHERE business_id = ? AND "
+                                                              "store_id = ?", (DEMO_BUSINESS_ID, DEMO_STORE_ID))}
+                connection.executemany(
+                    "INSERT INTO restocks VALUES (?, ?, ?, ?, ?)",
+                    [(DEMO_BUSINESS_ID, DEMO_STORE_ID, sku, plan, UPDATED_AT) for sku, plan in RESTOCKS.items()
+                     if sku in known],
+                )
             connection.executemany(
                 "INSERT OR REPLACE INTO store_info VALUES (?, ?, ?, ?)",
                 [(DEMO_BUSINESS_ID, DEMO_STORE_ID, topic, json.dumps(STORE_INFO[topic], ensure_ascii=False))

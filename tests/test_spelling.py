@@ -64,7 +64,7 @@ def test_misspelled_order_is_quoted_when_grok_understood_it(executor):
                      Decision("respond", "productos", None, None, ""))
     result = build_graph(executor, planner).invoke({"consulta": "nesesito 3 metros de tuvo pbc de 1/2 pa l agua"})
     assert result["estado"] == "quoted"
-    assert "Total informativo: $25.500 COP" in result["respuesta"]
+    assert "te salen en $25.500" in result["respuesta"]
 
 
 def test_misspelling_never_fills_in_what_the_customer_did_not_say(executor):

@@ -8,7 +8,7 @@ import sqlite3
 
 from asistendero.measures import canonical_text, measures
 from asistendero.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
-from asistendero.search import ProductQuery
+from asistendero.search import ProductQuery, without_quantities
 
 
 # Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
@@ -18,6 +18,11 @@ RESERVED_SQL = (
     "COALESCE((SELECT SUM(l.quantity) FROM order_lines l JOIN orders o ON o.id = l.order_id "
     "WHERE o.business_id = products.business_id AND o.store_id = products.store_id AND l.sku = products.sku "
     "AND o.status IN ('pendiente', 'confirmado')), 0)"
+)
+
+RESTOCK_SQL = (
+    "COALESCE((SELECT r.plan FROM restocks r WHERE r.business_id = products.business_id "
+    "AND r.store_id = products.store_id AND r.sku = products.sku), '')"
 )
 
 STOPWORDS = {
@@ -103,6 +108,8 @@ class Product:
     price_cop: int
     stock: int
     updated_at: str
+    # Surtido anotado por el tendero (restock.py): día, fecha ISO, «descontinuado» o "" sin dato.
+    restock: str = ""
 
     def facts_for_model(self) -> dict[str, str]:
         # Grok identifica una variante; precio y stock solo salen del renderizador.
@@ -129,13 +136,16 @@ class MockCatalog:
     def search(self, request: ProductQuery, limit: int = 3) -> SearchResult:
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
-        query_words = tokens(request.text)
-        query_measures = measures(request.text)
+        # «tubo PVC 3 metros»: el 3 es la cantidad, no la medida (visor, 23-10: salía el tubo de 3 pulgadas).
+        text = without_quantities(request.text)
+        query_words = tokens(text)
+        query_measures = measures(text)
         if not query_words:
             return SearchResult((), ())
 
         rows = self._rows(
-            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, search_terms, updated_at
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, search_terms, updated_at,
+                      {restock} AS restock
                FROM products WHERE business_id = ? AND store_id = ?""",
             (),
         )
@@ -203,7 +213,7 @@ class MockCatalog:
 
     def get(self, sku: str) -> Product | None:
         rows = self._rows(
-            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, updated_at
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, updated_at, {restock} AS restock
                FROM products WHERE business_id = ? AND store_id = ? AND sku = ?""",
             (sku,),
         )
@@ -214,6 +224,7 @@ class MockCatalog:
 
         ``{stock}`` en la consulta se reemplaza por las existencias disponibles: las físicas menos lo apartado
         en pedidos pendientes o confirmados. Una base sin tablas de pedidos (la de S2) usa las físicas.
+        ``{restock}`` se reemplaza por el surtido del producto, o "" en una base sin tabla de surtido.
         """
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
@@ -223,7 +234,11 @@ class MockCatalog:
             has_orders = connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'order_lines'").fetchone()
             stock = f"MAX(products.stock - {RESERVED_SQL}, 0)" if has_orders else "products.stock"
-            return connection.execute(sql.replace("{stock}", stock), (self.business_id, self.store_id, *params)).fetchall()
+            has_restocks = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'restocks'").fetchone()
+            restock = RESTOCK_SQL if has_restocks else "''"
+            sql = sql.replace("{stock}", stock).replace("{restock}", restock)
+            return connection.execute(sql, (self.business_id, self.store_id, *params)).fetchall()
         finally:
             connection.close()
 

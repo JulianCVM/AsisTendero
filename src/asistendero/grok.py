@@ -28,7 +28,7 @@ TOOL_NAMES = (
     "buscar_productos", "consultar_disponibilidad", "calcular_cotizacion_informativa",
     "consultar_info_tienda", "explorar_categoria", *ORDER_TOOLS,
 )
-STORE_TOPICS = ("horario", "ubicacion", "medios_pago", "domicilios", "garantias", "contacto", "pedidos")
+STORE_TOPICS = ("horario", "ubicacion", "medios_pago", "domicilios", "garantias", "contacto", "pedidos", "facturacion")
 INTENTS = ("productos", "pedido", "tienda", "saludo", "otro")
 # Con varios clientes atendidos en hilos, cada hilo puede usar otro modelo sin tocar GROK_MODEL.
 MODEL_OVERRIDE: ContextVar[str | None] = ContextVar("grok_model_override", default=None)

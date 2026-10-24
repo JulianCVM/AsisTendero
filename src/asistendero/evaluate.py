@@ -26,12 +26,13 @@ from asistendero.grok import (
     ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, current_model, decide_with_grok, decision_from_raw,
 )
 from asistendero.pricing import run_cost
+from asistendero.seed import DEFAULT_DB_PATH, upgrade_db
 from asistendero.tracing import run_traced
 
 
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
 SUITES = ("s2", "catalogo", "tienda", "seguridad", "conversacion", "ruido", "pedidos", "sesion_larga", "concurrencia",
-          "extremos", "flujos", "variados", "inyeccion")
+          "extremos", "flujos", "variados", "inyeccion", "memoria", "natural", "surtido", "fallas")
 # Más hilos no prueban nada nuevo y en S3 cinco corridas en paralelo agotaron la memoria del equipo.
 MAX_CONCURRENCY = 6
 INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"
@@ -263,9 +264,11 @@ def main() -> int:
     load_dotenv()
     if args.model:
         os.environ["GROK_MODEL"] = args.model
-    catalog = MockCatalog()
-    if not catalog.path.is_file():
+    if not DEFAULT_DB_PATH.is_file():
         parser.error("Falta la base mock. Ejecuta: python -m asistendero.seed")
+    # Corrida 26: los casos de un turno leían la base sin la tabla de surtido y todo salía «sin fecha»; las
+    # conversaciones sí la tenían porque el libro de pedidos actualiza su copia.
+    catalog = MockCatalog(upgrade_db(DEFAULT_DB_PATH))
     all_cases = json.loads(DEFAULT_CASES_PATH.read_text(encoding="utf-8"))
     if args.suite:
         all_cases = [case for case in all_cases if case.get("suite") in set(args.suite)]

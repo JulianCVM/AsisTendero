@@ -8,7 +8,9 @@ from asistendero.graph import Planner, ToolExecutor
 from asistendero.grok import decide_with_grok
 from asistendero.guardrails import redact_personal_data
 from asistendero.orders import ACTIVE, WEEKDAYS, OrderBook
+from asistendero.choices import shown_options
 from asistendero.sessions import SessionStore, remembered_products
+from asistendero.shopping_list import updated_list
 from asistendero.tracing import run_traced
 
 
@@ -68,13 +70,18 @@ def run_turn(
         tool_executor = catalog_executor(catalog, orders, session_id)
     result = run_traced(message, emit, tool_executor, planner, context=context)
     products = remembered_products(result.get("referencia", ""), result.get("tool_calls", []))
-    turn = store.record(session_id, result["consulta"], result["respuesta"], result["estado"], products)
+    shopping = updated_list(context.get("lista") or [], result["consulta"], result.get("tool_calls", []))
+    options = shown_options(result.get("referencia", ""), result.get("tool_calls", []), result["consulta"])
+    turn = store.record(session_id, result["consulta"], result["respuesta"], result["estado"], products, shopping,
+                        options)
     injection = result.get("inyeccion")
     if injection:
         cancelled = ban_session(store, session_id, injection, message, orders)
         emit({"type": "ban", "run_id": result["run_id"], "session_id": session_id,
               "details": {**injection, "pedidos_cancelados": cancelled}})
     emit({"type": "session", "run_id": result["run_id"], "session_id": session_id, "turno": turn,
-          "productos_recordados": [item["sku"] for item in products], "bloqueada": bool(injection)})
+          "productos_recordados": [item["sku"] for item in products],
+          "lista": [{"sku": item["sku"], "cantidad": item["cantidad"]} for item in shopping],
+          "bloqueada": bool(injection)})
     result.update(session_id=session_id, turno=turn)
     return result

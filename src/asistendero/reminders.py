@@ -11,11 +11,17 @@ from asistendero.observations import ToolCall, order_results
 from asistendero.order_rules import mentioned_hours, order_action_pending
 from asistendero.catalog import tokens
 from asistendero.grok import ORDER_TOOLS
-from asistendero.validation import foreign_unit, grounded_products, normalize_text, quantities_in_message, sale_units
+from asistendero.restock import asks_restock
+from asistendero.shopping_list import missing_from_quote
+from asistendero.validation import (foreign_unit, grounded_products, naming_numbers, normalize_text, quantities_in_message,
+                                    sale_units)
 
 # Con cualquiera de estas el turno ya trató de productos; consultar la tienda no cuenta.
 PRODUCT_TOOLS = {"buscar_productos", "consultar_disponibilidad", "calcular_cotizacion_informativa", "explorar_categoria",
                  *ORDER_TOOLS}
+
+
+OFFER_QUESTION = re.compile(r"¿[^?¿]*\b(?:apart|reserv|llev)\w*[^?¿]*\?")
 
 
 def _reminder(code: str, message: str) -> dict:
@@ -42,12 +48,21 @@ INFO_REMINDER = _reminder(
     "El mensaje pregunta por la tienda (horario, ubicación, pagos, domicilios o garantías): llama a "
     "consultar_info_tienda con el tema antes de responder.",
 )
+# La conversación del 23-10 con Grok real: tras cotizar un metro de tubo conduit, «agrega una manguera de abasto de
+# 40 cm, ¿cuánto sería todo?» cotizó solo la manguera, y «yo quiero la manguera cotizada con el tubo» volvió a
+# preguntar qué manguera. La lista de la conversación (shopping_list.py) guarda lo cotizado con su cantidad.
+LIST_REMINDER = _reminder(
+    "LIST_QUOTE_REQUIRED",
+    "El cliente pide el total de lo que lleva: llama a calcular_cotizacion_informativa en UNA llamada con todas las "
+    "líneas de \"lista\" (mismo SKU y cantidad) más lo que agregó ahora. Si nombró un producto nuevo que no has "
+    "buscado, búscalo primero.",
+)
 # Un «sí, confirmo» respondido con «¡Listo, quedó confirmado!» sin la herramienta sería un pedido inventado.
 # En la primera corrida S4 un aviso genérico no bastó: Grok confirmó un pedido vencido en vez de registrarlo de
 # nuevo y preguntó «¿quieres que lo registre?» después de «me llevo». El aviso dice qué herramienta falta.
 ORDER_HINTS = {
     "registrar_pedido": "El cliente ya dijo que se lo lleva: llama a registrar_pedido con los SKU y las cantidades "
-                        "identificados, sin preguntar antes; el servidor aparta 5 minutos y le pide confirmar. Si su "
+                        "identificados (si dice «todo», las líneas de \"lista\"), sin preguntar antes; el servidor aparta 5 minutos y le pide confirmar. Si su "
                         "pedido anterior venció o se canceló, registra uno nuevo.",
     "confirmar_pedido": "El cliente confirmó: llama a confirmar_pedido con el código del pedido pendiente.",
     "agendar_recogida": "El cliente dio la hora de recogida: llama a agendar_recogida con el pedido, la fecha y la "
@@ -56,28 +71,47 @@ ORDER_HINTS = {
     "cancelar_todos": "El cliente pidió cancelar todo: llama a cancelar_pedido con cada pedido activo que queda, uno "
                       "por llamada, sin volver a preguntar.",
     # No es una herramienta: cambiar un pedido es cancelarlo y registrar el nuevo.
-    "cambiar_pedido": "El cliente cambió su pedido: cancela el pedido activo con cancelar_pedido; si cambió el "
-                      "producto, búscalo con buscar_productos, y registra el nuevo con registrar_pedido con lo que "
-                      "dijo ahora; no dejes los dos apartados.",
+    "cambiar_pedido": "El cliente cambió su pedido: si cambió el producto, búscalo con buscar_productos, y registra "
+                      "el nuevo con registrar_pedido con lo que dijo ahora. No canceles el anterior: el servidor lo "
+                      "reemplaza solo si alcanza, y si no alcanza el pedido actual se queda igual.",
+    "registrar_cambio": "Ya cancelaste el pedido anterior: si cambió el producto, búscalo con buscar_productos, y "
+                        "registra el nuevo con registrar_pedido con lo que dijo ahora (la misma cantidad si no dijo "
+                        "otra), sin preguntar antes.",
     "consultar_pedido": "El cliente pregunta por su pedido: llama a consultar_pedido; \"pedidos\" no trae precios "
                         "ni el total.",
 }
+# «veci, ¿cuándo le llegan más?» sin consultar el producto deja a Grok inventando una fecha.
+RESTOCK_REMINDER = _reminder("RESTOCK_REQUIRED",
+                             "El cliente pregunta cuándo llega o si se sigue trayendo un producto: consúltalo "
+                             "(consultar_disponibilidad con su SKU, o búscalo) y responde solo con su dato \"restock\"; "
+                             "si está vacío, di que no tienes la fecha.")
 REMINDERS = {
-    **{item["error"]["code"]: item for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)},
+    **{item["error"]["code"]: item
+       for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER)},
     # La clave interna lleva la herramienta que falta; Grok recibe siempre el código ORDER_REQUIRED.
     **{f"ORDER_REQUIRED:{tool}": _reminder("ORDER_REQUIRED", f"{hint} No afirmes la acción sin la herramienta.")
        for tool, hint in ORDER_HINTS.items()},
+    # X-22 (corridas 29 a 31): rechazada la cotización por un «TALADRO» inventado junto a BRO-3, Grok respondió con
+    # un total que nadie calculó. La clave interna es otra para que este segundo aviso salga una vez.
+    "QUOTE_REQUIRED:retry": _reminder(
+        "QUOTE_REQUIRED",
+        "La cotización se rechazó por un SKU que no identificaste: vuelve a llamar a calcular_cotizacion_informativa "
+        "solo con los SKU que sí están en las observaciones y sus cantidades; lo que no encontraste, dilo así. No "
+        "des un total sin la herramienta.",
+    ),
 }
 # Para el mapa del harness: un renglón por código, no por herramienta.
 REMINDER_CODES = [
-    *(item["error"] for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER)),
+    *(item["error"] for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER)),
     {"code": "ORDER_REQUIRED", "message": "El mensaje pide una acción de pedido que Grok no intentó; el aviso nombra "
                                           f"la herramienta que falta ({', '.join(ORDER_HINTS)})."},
 ]
 STORE_QUESTION = re.compile(
     r"\b(?:horario|atiend\w*|abiert[oa]s?|abren|cierran|cerrad[oa]s?|domicilio\w*|direccion|ubicad[oa]s?|donde\s+quedan"
     r"|donde\s+estan|medios?\s+de\s+pago|pago\s+con|reciben\s+(?:tarjeta|transferencia|nequi|efectivo)|garantia\w*"
-    r"|devoluci\w+|cambios?\s+de\s+producto)\b"
+    r"|devoluci\w+|cambios?\s+de\s+producto|iva|impuestos?|factura\w*"
+    # «¿a qué hora puedo pasar a recogerlo?» pregunta el horario (conversación del 23-10: quedó sin respuesta).
+    r"|a\s+que\s+horas?\s+(?:abren|cierran|atienden|puedo|podria|paso|pasar|voy|recog\w*)|hasta\s+que\s+horas?)\b"
 )
 
 
@@ -100,8 +134,16 @@ def pending_reminder(
     if asks_store and "consultar_info_tienda" not in tools and "INFO_REQUIRED" not in sent:
         return "INFO_REQUIRED"
     order_tool = order_action_pending(message, reference, calls, context)
-    if order_tool and not any(code.startswith("ORDER_REQUIRED") for code in sent):
+    # Cambiar un pedido son dos pasos: si tras el primer aviso Grok solo canceló, un segundo aviso pide registrar.
+    follow_up = order_tool == "registrar_cambio" and f"ORDER_REQUIRED:{order_tool}" not in sent
+    if order_tool and (follow_up or not any(code.startswith("ORDER_REQUIRED") for code in sent)):
         return f"ORDER_REQUIRED:{order_tool}"
+    if "LIST_QUOTE_REQUIRED" not in sent and missing_from_quote(message, calls, context):
+        return "LIST_QUOTE_REQUIRED"
+    looked_up = any(call["requested_tool"] in {"buscar_productos", "consultar_disponibilidad"}
+                    and call["response"]["status"] == "ok" for call in calls)
+    if "RESTOCK_REQUIRED" not in sent and asks_restock(normalize_text(message)) and not looked_up:
+        return "RESTOCK_REQUIRED"
     # «2 bultos» pide productos aunque Grok marque la intención como «tienda»: en X-10 («me mandan a domicilio 2
     # bultos de cemento») consultó los domicilios y ofreció cotizar en vez de buscar.
     asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
@@ -111,12 +153,16 @@ def pending_reminder(
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
     units = {sku: f"{product.unit} {product.variant}" for sku, product in grounded_products(reference, calls).items()}
+    # Z-22 (suite fallas): con «¿el cemento gris de 50 sirve para…?» el aviso pedía cotizar 50 bultos.
+    quantities -= naming_numbers(message, list(grounded_products(reference, calls).values()))
     remembered = (context or {}).get("productos") or []
     # Q-11: tras «¿tienen silicona transparente?», «dame 2» no se cotizaba porque el turno no volvió a buscar. Con un
     # solo producto recordado no hay duda de cuál es; una hora («paso a las 10») no es una cantidad que cotizar.
     counts = quantities - mentioned_hours(message)
     if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
         units = {remembered[0].get("sku"): f"{remembered[0].get('unidad') or ''} {remembered[0].get('variante') or ''}"}
+    if "QUOTE_REQUIRED:retry" not in sent and _retry_quote(calls, set(units), quantities):
+        return "QUOTE_REQUIRED:retry"
     said = message
     if not quantities:
         said, quantities = _answered_question(message, context, grounded_products(reference, calls))
@@ -130,6 +176,18 @@ def pending_reminder(
     return None
 
 
+def _retry_quote(calls: list[ToolCall], known: set[str], quantities: set[int]) -> bool:
+    """La última cotización se rechazó por un SKU no identificado, pero traía otro identificado con su cantidad."""
+    quotes = [call for call in calls if call["requested_tool"] == "calcular_cotizacion_informativa"]
+    if not quotes or any(call["executed"] for call in quotes):
+        return False
+    if (quotes[-1]["response"].get("error") or {}).get("code") != "SKU_NOT_GROUNDED":
+        return False
+    lines = (quotes[-1].get("requested_arguments") or {}).get("lines") or []
+    return any(isinstance(line, dict) and line.get("sku") in known and line.get("quantity") in quantities
+               for line in lines)
+
+
 def _answered_question(message: str, context: dict | None, products: dict) -> tuple[str, set[int]]:
     """Mensaje y cantidades del turno anterior si este solo contesta qué producto era.
 
@@ -138,7 +196,9 @@ def _answered_question(message: str, context: dict | None, products: dict) -> tu
     nombrado el producto encontrado: tras cotizar 2 brochas, «¿y tienen cemento?» no hereda el 2.
     """
     turns = (context or {}).get("turnos") or []
-    if not turns or "?" not in (turns[-1].get("asistente") or ""):
+    # «¿Quieres que te lo aparte?» cierra una cotización; no es la pregunta de qué producto era.
+    asked = OFFER_QUESTION.sub("", (turns[-1].get("asistente") or "") if turns else "")
+    if "?" not in asked:
         return message, set()
     previous = turns[-1].get("cliente") or ""
     named = any(tokens(product.name.split()[0], synonyms=False) & tokens(previous) for product in products.values())

@@ -64,7 +64,7 @@ def test_second_turn_quotes_the_product_identified_in_the_first(store, executor)
     assert context["productos"] == [{"sku": "PVC-050", "nombre": "Tubo PVC presión para agua",
                                      "variante": "1/2 pulgada", "unidad": "metro"}]
     assert second["estado"] == "quoted"
-    assert "Total informativo: $25.500 COP" in second["respuesta"]
+    assert "te salen en $25.500" in second["respuesta"]
 
 
 def test_without_a_session_the_reference_turn_is_not_grounded(executor):
@@ -163,3 +163,32 @@ def test_the_ban_excerpt_is_bounded(store):
     excerpt = store.bans()[0]["mensaje"]
     assert len(excerpt) == MAX_BAN_EXCERPT and excerpt.endswith("…")
 
+
+
+def test_a_quote_without_a_search_leaves_the_product_remembered():
+    # Suite natural (H-02): «la de galón, deme 2» cotizó sin buscar; «mejor que sean 3» ya no tenía producto.
+    from asistendero.sessions import remembered_products
+
+    quote = {"requested_tool": "calcular_cotizacion_informativa", "executed": True,
+             "arguments": {"lines": [{"sku": "PIV-BEI-G", "quantity": 2}]},
+             "response": {"status": "ok", "error": None, "source": "mock", "observed_at": "2026-10-21T09:00:00-05:00",
+                          "data": {"lines": [{"sku": "PIV-BEI-G", "name": "Pintura vinilo beige", "variant": "galón",
+                                              "unit": "unidad", "quantity": 2, "unit_price_cop": 58900,
+                                              "subtotal_cop": 117800}],
+                                   "total_cop": 117800, "currency": "COP", "reservation_created": False}}}
+    assert remembered_products("la de galón, deme 2", [quote]) == [
+        {"sku": "PIV-BEI-G", "nombre": "Pintura vinilo beige", "variante": "galón", "unidad": "unidad"}]
+
+
+def test_an_attribute_from_an_earlier_turn_only_backs_the_same_product():
+    # Visor, 23-10: el «PVC» de los tubos llegó a la búsqueda de «mangueras» y respondió «Es de otro material».
+    from asistendero.validation import validate_request
+
+    tube = validate_request("buscar_productos", {"items": [{"text": "tubo PVC de 3/4", "product": "tubo", "material": "PVC",
+                                                            "measure": "3/4 pulgada"}]},
+                            "Busco tubo PVC de 1/2 para agua\n¿y el de 3/4?", [], current="¿y el de 3/4?")
+    assert tube["items"][0]["material"] == "PVC" and tube["items"][0]["measure"] == "3/4 pulgada"
+    hoses = validate_request("buscar_productos", {"items": [{"text": "mangueras PVC", "product": "manguera",
+                                                             "material": "PVC"}]},
+                             "Busco tubo PVC de 1/2 para agua\n¿y mangueras?", [], current="¿y mangueras?")
+    assert hoses["items"][0] == {"text": "mangueras PVC", "product": "manguera"}

@@ -1,4 +1,4 @@
-"""Inventario que administra el tendero: consultar, corregir precio y existencias y agregar productos.
+"""Inventario que administra el tendero: consultar, corregir precio, existencias y surtido y agregar productos.
 
 Es la única vía que escribe precio o stock; las herramientas del agente siguen en solo lectura. Cada cambio queda
 en ``inventory_events`` con el valor anterior y el nuevo, para que el tendero sepa quién movió qué y cuándo
@@ -10,8 +10,9 @@ from pathlib import Path
 import re
 import sqlite3
 
-from asistendero.catalog import RESERVED_SQL
+from asistendero.catalog import RESERVED_SQL, RESTOCK_SQL
 from asistendero.orders import local_text
+from asistendero.restock import valid_plan
 from asistendero.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID, upgrade_db
 from asistendero.validation import SKU_PATTERN
 
@@ -79,8 +80,8 @@ class Inventory:
     def products(self, query: str = "", category: str = "", low_only: bool = False) -> list[dict]:
         """Productos con existencias físicas, apartadas en pedidos y disponibles para vender por el chat."""
         words = [word for word in re.split(r"\s+", query.strip().casefold()) if word][:6]
-        sql = (f"SELECT sku, name, variant, unit, price_cop, stock, category, updated_at, {RESERVED_SQL} AS reserved "
-               "FROM products WHERE business_id = ? AND store_id = ?")
+        sql = (f"SELECT sku, name, variant, unit, price_cop, stock, category, updated_at, {RESERVED_SQL} AS reserved, "
+               f"{RESTOCK_SQL} AS restock FROM products WHERE business_id = ? AND store_id = ?")
         params: list[object] = [self.business_id, self.store_id]
         for word in words:
             sql += " AND lower(sku || ' ' || name || ' ' || variant || ' ' || search_terms) LIKE ?"
@@ -94,7 +95,7 @@ class Inventory:
         result = [{"sku": row["sku"], "nombre": row["name"], "variante": row["variant"], "unidad": row["unit"],
                    "precio_cop": row["price_cop"], "stock": row["stock"], "apartado": row["reserved"],
                    "disponible": max(row["stock"] - row["reserved"], 0), "categoria": row["category"],
-                   "actualizado": row["updated_at"]} for row in rows]
+                   "actualizado": row["updated_at"], "surtido": row["restock"]} for row in rows]
         return [item for item in result if item["disponible"] <= LOW_STOCK] if low_only else result
 
     def categories(self) -> list[str]:
@@ -104,10 +105,19 @@ class Inventory:
         return [row[0] for row in rows]
 
     def update(self, sku: str, changes: dict) -> dict:
-        """Corrige precio y/o existencias físicas; las existencias no pueden quedar por debajo de lo apartado."""
-        if not isinstance(changes, dict) or not changes or not set(changes) <= {"precio_cop", "stock"}:
-            raise InventoryError("INVALID_ARGUMENT", "Solo se pueden cambiar precio_cop y stock.")
+        """Corrige precio, existencias físicas y/o surtido; las existencias no pueden quedar por debajo de lo apartado.
+
+        ``surtido`` es un día de la semana, una fecha AAAA-MM-DD, «descontinuado» o "" para borrarlo (``restock.py``).
+        """
+        if not isinstance(changes, dict) or not changes or not set(changes) <= {"precio_cop", "stock", "surtido"}:
+            raise InventoryError("INVALID_ARGUMENT", "Solo se pueden cambiar precio_cop, stock y surtido.")
         clean = {}
+        plan = None
+        if "surtido" in changes:
+            try:
+                plan = valid_plan(changes["surtido"])
+            except ValueError as error:
+                raise InventoryError("INVALID_ARGUMENT", str(error)) from None
         if "precio_cop" in changes:
             clean["price_cop"] = _int(changes["precio_cop"], "El precio", MAX_PRICE_COP)
         if "stock" in changes:
@@ -122,6 +132,8 @@ class Inventory:
             if "stock" in clean and clean["stock"] < row["reserved"]:
                 raise InventoryError("STOCK_BELOW_RESERVED", f"Hay {row['reserved']} unidades apartadas en pedidos; "
                                                              "entrega o cancela esos pedidos antes de bajar tanto.")
+            if plan is not None:
+                self._set_restock(connection, sku, plan)
             for column, value in clean.items():
                 if row[column] == value:
                     continue
@@ -133,6 +145,21 @@ class Inventory:
 
         self._run(apply)
         return self._one(sku)
+
+    def _set_restock(self, connection: sqlite3.Connection, sku: str, plan: str) -> None:
+        before = connection.execute("SELECT plan FROM restocks WHERE business_id = ? AND store_id = ? AND sku = ?",
+                                    (self.business_id, self.store_id, sku)).fetchone()
+        if (before[0] if before else "") == plan:
+            return
+        if plan:
+            connection.execute("INSERT OR REPLACE INTO restocks VALUES (?, ?, ?, ?, ?)",
+                               (self.business_id, self.store_id, sku, plan, _now()))
+        else:
+            connection.execute("DELETE FROM restocks WHERE business_id = ? AND store_id = ? AND sku = ?",
+                               (self.business_id, self.store_id, sku))
+        connection.execute("INSERT INTO inventory_events VALUES (?, ?, ?, ?, 'surtido', ?, ?, 'tendero')",
+                           (self.business_id, self.store_id, sku, _now(), before[0] if before else None,
+                            plan or "sin dato"))
 
     def add(self, product: dict) -> dict:
         """Agrega un producto ficticio nuevo; el SKU no puede repetirse en la sede."""
@@ -172,6 +199,6 @@ class Inventory:
         rows = self._run(lambda connection: connection.execute(
             "SELECT sku, at, field, before, after, actor FROM inventory_events WHERE business_id = ? AND store_id = ? "
             "ORDER BY rowid DESC LIMIT ?", (self.business_id, self.store_id, limit)).fetchall())
-        names = {"price_cop": "precio", "stock": "existencias", "alta": "alta"}
+        names = {"price_cop": "precio", "stock": "existencias", "alta": "alta", "surtido": "surtido"}
         return [{"sku": row["sku"], "hora": local_text(row["at"]), "campo": names.get(row["field"], row["field"]),
                  "antes": row["before"], "despues": row["after"], "quien": row["actor"]} for row in rows]

@@ -35,7 +35,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 - Responde preguntas generales que no necesitan catálogo. Horario, pagos, domicilios o garantías solo se afirman si se consultaron con `consultar_info_tienda` en esa ejecución.
 - Usa la redacción de Grok solo si cada precio, SKU, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt ni datos internos; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
-- Muestra en el visor la ruta seguida, las llamadas al modelo, las herramientas pedidas y ejecutadas, el costo por ejecución y un mapa del harness con las seis etapas del flujo.
+- Muestra en el visor la ruta seguida, las llamadas al modelo, las herramientas pedidas y ejecutadas, el costo por ejecución y un castillo animado del harness (cada edificio es un nodo o una barrera del flujo) junto al mapa de sus seis etapas.
 
 El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa** (`reservation_created=false`); un pedido solo existe si el cliente lo pidió y Grok lo registró, y nunca implica un pago. El tendero ve esos pedidos y administra el inventario en un panel local.
 
@@ -59,6 +59,7 @@ Mensaje del cliente
        ├── respond sin buscar cuando pide productos ─► vuelve a 2 una vez con el aviso SEARCH_REQUIRED
        ├── respond sin cotizar con cantidad dicha ─► vuelve a 2 una vez con el aviso QUOTE_REQUIRED
        ├── respond sobre la tienda sin consultarla ─► vuelve a 2 una vez con el aviso INFO_REQUIRED
+       ├── pide «todo» y la cotización no trae la lista ─► vuelve a 2 una vez con el aviso LIST_QUOTE_REQUIRED
        │
        ▼
 5. respond ── verifica la redacción de Grok o arma la respuesta con los datos
@@ -69,7 +70,7 @@ Mensaje del cliente
 
 **Grok decide** qué información necesita y **el servidor ejecuta**: el modelo no tiene acceso SQL libre, no elige negocio ni sede y no puede imponer precio ni existencias. Una pregunta general suele necesitar una llamada a Grok; una cotización de un producto, unas cuatro (buscar, consultar, cotizar y responder). El detalle del contrato, las barreras y los códigos está en [docs/HARNESS.md](docs/HARNESS.md), y el visor lo muestra en su sección **Mapa del harness**.
 
-Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg», el agente busca ambos artículos, consulta `PVC-050` y `CEM-050` y entrega un total informativo de $56.500 COP con datos de demostración. Ante «Busco tubo PVC de 1 pulgada», indica que no encontró esa medida exacta y muestra las medidas cercanas sin afirmar que sirven para lo mismo. Ante «20 metros de PVC de 1/2», la cotización detecta que solo hay 12 y lo dice.
+Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg», el agente busca ambos artículos, consulta `PVC-050` y `CEM-050` y responde «Te quedaría así: • 2 metros de tubo PVC presión para agua de 1/2 pulgada (a $8.500 el metro): $17.000 • 1 bulto de cemento gris de 50 kg: $39.500 · Total: $56.500», con precios de demostración y sin anunciar cuánto queda si el cliente no lo pregunta. En una conversación recuerda lo que el cliente va cotizando: tras «un metro de tubo conduit» y «agrega una manguera de abasto, ¿cuánto sería todo?» cotiza las dos cosas juntas, y tras listar tres tubos entiende «dame del primero 3 metros». Ante «Busco tubo PVC de 1 pulgada», indica que no encontró esa medida exacta y muestra las medidas cercanas sin afirmar que sirven para lo mismo. Ante «20 metros de PVC de 1/2», la cotización detecta que solo hay 12 y lo dice.
 
 ## Tecnologías
 
@@ -151,7 +152,7 @@ Para una conversación de varios turnos con memoria de sesión (por ejemplo, «B
 .\.venv\Scripts\python.exe -m asistendero.visual
 ```
 
-Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
+Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **castillo del harness** muestra el flujo como un castillo isométrico que recorre el mensaje: repite recorridos de ejemplo y, durante una prueba, el recorrido real. Debajo, el **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. En el chat, **Enter** envía y **Shift + Enter** hace un salto de línea; el hilo se desplaza dentro de su caja. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
 
 ### Panel del tendero
 
@@ -208,12 +209,15 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/injection.py` | Detecta inyecciones de instrucciones (también disfrazadas) antes de Grok; la sesión queda baneada. |
 | `src/asistendero/guardrails.py` | Barreras ante preguntas trampa, datos personales y fugas del prompt. |
 | `src/asistendero/sessions.py` y `chat.py` | Sesiones de chat con memoria acotada en SQLite local. |
+| `src/asistendero/shopping_list.py` | Lista de la conversación: lo cotizado con su cantidad, para «¿cuánto es todo?». |
+| `src/asistendero/choices.py` | Opciones mostradas al cliente, en orden, para entender «dame del primero», «la segunda» o «el de 12». |
+| `src/asistendero/restock.py` | Surtido que anota el tendero: cuándo vuelve a llegar un producto o si ya no se trae, y qué puede afirmar Grok. |
 | `src/asistendero/store_replies.py` | Respuestas y comprobaciones de la información de la tienda. |
-| `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar o sin cotizar. |
+| `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar, sin cotizar, sin la lista o sin consultar el surtido. |
 | `src/asistendero/validation.py` | Reglas que una solicitud de Grok cumple antes de ejecutarse. |
 | `src/asistendero/product_fit.py` | Cuál de varios productos distintos describe el cliente con sus palabras. |
 | `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
-| `src/asistendero/answers.py` | Respuesta final verificada contra lo que devolvieron las herramientas. |
+| `src/asistendero/answers.py` y `reply_text.py` | Respuesta final verificada contra lo que devolvieron las herramientas, redactada como un tendero por chat. |
 | `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |
 | `src/asistendero/tools.py` | Las cinco herramientas del servidor (`execute_tool`) sobre el catálogo. |
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
@@ -224,6 +228,7 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
 | `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |
 | `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |
+| `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
 | `src/asistendero/tracing.py` y `pricing.py` | Trazas, uso y costos de ejecución. |
 | `tests/` | Pruebas automatizadas. |
 | `evaluation/` | Casos y evidencia de verificaciones. |
@@ -242,4 +247,4 @@ AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el r
 
 ## Licencia
 
-Código bajo [licencia MIT](LICENSE). Según las reglas del reto, Platica recibe una licencia no exclusiva y la titularidad del código sigue siendo de sus autores. Los datos del catálogo de demostración son ficticios.
+Código bajo [licencia MIT](LICENSE). Según las reglas del reto, Platica recibe una licencia no exclusiva y la titularidad del código sigue siendo de sus autores. Los datos del catálogo de demostración son ficticios. El castillo del visor usa el kit isométrico de anatomy (MIT, © 2026 Ryan), copiado con su licencia en `tools/castillo/vendor/`.

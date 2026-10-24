@@ -38,7 +38,7 @@ ORDER_ID = re.compile(r"^P-[0-9A-F]{6}$")
 ACTIVE = ("pendiente", "confirmado")
 WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
 BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
-PAYMENT = "El pago se hace en el mostrador al recoger; este chat no cobra, no recibe pagos ni fía."
+PAYMENT = "Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
 
 
 class OrderError(Exception):
@@ -131,13 +131,23 @@ class OrderBook:
             "pago": PAYMENT,
         }
 
-    def create(self, session_id: str, lines: list[tuple[str, int]]) -> dict:
-        """Aparta las líneas HOLD_MINUTES con el precio vigente; falla si alguna no alcanza."""
+    def create(self, session_id: str, lines: list[tuple[str, int]], replaces: str | None = None) -> dict:
+        """Aparta las líneas HOLD_MINUTES con el precio vigente; falla si alguna no alcanza.
+
+        Con ``replaces`` el pedido nuevo reemplaza a ese pedido activo de la sesión en la misma transacción: lo que
+        tenía apartado cuenta como disponible y, si algo no alcanza, el anterior queda igual. Z-32 (suite fallas):
+        con «mejor que sean 20» y 9 en bodega, Grok canceló el pedido de 2 y el cliente se quedó sin nada.
+        """
         now = self.clock()
         with self.transaction() as connection:
             self._expire(connection)
+            freed: dict[str, int] = {}
+            if replaces is not None:
+                self._active(connection, replaces, session_id)
+                freed = {line["sku"]: line["quantity"] for line in connection.execute(
+                    "SELECT sku, quantity FROM order_lines WHERE order_id = ?", (replaces,)).fetchall()}
             active = connection.execute("SELECT COUNT(*) FROM orders WHERE session_id = ? AND status IN (?, ?)",
-                                        (session_id, *ACTIVE)).fetchone()[0]
+                                        (session_id, *ACTIVE)).fetchone()[0] - (replaces is not None)
             if active >= MAX_ACTIVE_PER_SESSION:
                 raise OrderError("TOO_MANY_ORDERS", f"Ya hay {active} pedidos activos en esta conversación.")
             order_id = f"P-{uuid4().hex[:6].upper()}"
@@ -150,8 +160,13 @@ class OrderBook:
                 ).fetchone()
                 if product is None:
                     raise OrderError("NOT_FOUND", f"No existe el SKU {sku} en el catálogo de esta sede.")
-                if quantity > product["available"]:
-                    raise OrderError("INSUFFICIENT_STOCK", f"Para {sku} hay {max(product['available'], 0)} "
+                available = product["available"] + freed.get(sku, 0)
+                if quantity > available and replaces is not None:
+                    raise OrderError("INSUFFICIENT_STOCK", f"De {product['name']} {product['variant']} solo hay "
+                                                           f"{max(available, 0)} contando lo de tu pedido {replaces}, y "
+                                                           f"pediste {quantity}. Tu pedido {replaces} sigue igual.")
+                if quantity > available:
+                    raise OrderError("INSUFFICIENT_STOCK", f"Para {sku} hay {max(available, 0)} "
                                                            f"{product['unit']} disponibles; pediste {quantity}.")
                 stored.append((order_id, sku, product["name"], product["variant"], product["unit"], quantity,
                                product["price_cop"], product["price_cop"] * quantity))
@@ -162,7 +177,12 @@ class OrderBook:
             )
             connection.executemany("INSERT INTO order_lines VALUES (?, ?, ?, ?, ?, ?, ?, ?)", stored)
             self._event(connection, order_id, "pendiente", "registrado por el agente")
-            return self.view(connection, self._load(connection, order_id))
+            if replaces is None:
+                return self.view(connection, self._load(connection, order_id))
+            connection.execute("UPDATE orders SET status = 'cancelado', updated_at = ? WHERE id = ?",
+                               (utc_text(now), replaces))
+            self._event(connection, replaces, "cancelado", f"reemplazado por {order_id} a pedido del cliente")
+            return {**self.view(connection, self._load(connection, order_id)), "reemplaza": replaces}
 
     def _active(self, connection: sqlite3.Connection, order_id: str, session_id: str | None) -> sqlite3.Row:
         self._expire(connection)

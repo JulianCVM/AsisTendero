@@ -29,6 +29,13 @@ def test_structured_filters_narrow_exact_match_and_keep_nearby_apart(catalog):
     assert {item.sku for item in other_size.nearby} == {"PVC-050", "PVC-075"}
 
 
+def test_a_measure_written_together_matches_the_spaced_one():
+    # R-03 (corrida 29): «d 9 w» y measure="9w" son la misma medida; sin ella se preguntaba entre 9, 18 y 20 W.
+    message = "x fa 4 bombiyos led d 9 w luz calida"
+    assert q("bombillos led de 9w", product="bombillo", measure="9w").grounded(message, tokens).measure == "9w"
+    assert q("bombillos led de 12w", product="bombillo", measure="12w").grounded(message, tokens).measure is None
+
+
 def test_invented_structured_measure_is_dropped_by_grounding():
     request = q("tubo PVC para agua", product="tubo", material="PVC", measure="1/2")
     assert request.grounded("Busco tubo PVC para agua", tokens).measure is None
@@ -164,3 +171,21 @@ def test_with_two_items_each_attribute_is_backed_by_its_part_of_the_message(cata
     call = {"requested_tool": "buscar_productos", "arguments": arguments, "response": response, "executed": True}
     assert sorted(grounded_products(message, [call])) == ["BRO-3", "PIN-BLA"]
 
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("tubo PVC 3 metros", "tubo PVC"), ("cinco metros de manguera", "manguera"),
+    # «de 15 metros» es la medida de la manguera, y el galón es la presentación que se busca.
+    ("manguera de 15 metros", "manguera de 15 metros"), ("2 galones de pintura vinilo", "galones pintura vinilo"),
+])
+def test_a_quantity_said_in_the_text_does_not_search_for_a_measure(text, expected):
+    from asistendero.search import without_quantities
+
+    assert tokens(without_quantities(text)) == tokens(expected)
+
+
+def test_a_tube_searched_with_its_quantity_is_not_the_three_inch_one(catalog):
+    # Visor, 23-10: «tubo PVC 3 metros» elegía el tubo sanitario de 3 pulgadas.
+    said = catalog.search(ProductQuery("tubo PVC 3 metros", product="tubo", material="PVC"), limit=10)
+    sized = catalog.search(ProductQuery("tubo PVC 3 pulgadas", product="tubo", material="PVC"), limit=10)
+    assert said.matches[0].sku != "SAN-3" and sized.matches[0].sku == "SAN-3"

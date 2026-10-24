@@ -94,6 +94,7 @@ def _check_availability(arguments: dict, catalog: MockCatalog) -> dict:
         "unit": product.unit,
         "stock": product.stock,
         "updated_at": product.updated_at,
+        "restock": product.restock,
     })
 
 

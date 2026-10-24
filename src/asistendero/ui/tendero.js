@@ -153,15 +153,36 @@
     priceLabel.append(price);
     const stockLabel = el('label', '', 'En bodega');
     stockLabel.append(stockInput);
+    // Surtido: lo que el agente responde a «¿cuándo le llega más?». Vacío es «sin dato»: el agente no inventa.
+    const restock = el('select');
+    restock.setAttribute('aria-label', 'Surtido de ' + product.sku);
+    [['', 'Sin dato'], ['lunes', 'Llega los lunes'], ['martes', 'Llega los martes'], ['miercoles', 'Llega los miércoles'],
+     ['jueves', 'Llega los jueves'], ['viernes', 'Llega los viernes'], ['sabado', 'Llega los sábados'],
+     ['descontinuado', 'Ya no se trae']].forEach(([value, text]) => {
+      const option = el('option', '', text);
+      option.value = value;
+      restock.append(option);
+    });
+    const dated = /^\d{4}-\d{2}-\d{2}$/.test(product.surtido || '');
+    const dateInput = el('input');
+    Object.assign(dateInput, {type:'date', value: dated ? product.surtido : ''});
+    dateInput.setAttribute('aria-label', 'Fecha de surtido de ' + product.sku);
+    restock.value = dated ? '' : (product.surtido || '');
+    const restockLabel = el('label', '', 'Surtido');
+    restockLabel.append(restock);
+    const dateLabel = el('label', '', 'O llega el');
+    dateLabel.append(dateInput);
     const save = el('button', 'secondary', 'Guardar cambios');
     save.type = 'submit';
-    save.setAttribute('aria-label', 'Guardar precio y existencias de ' + product.sku);
-    form.append(priceLabel, stockLabel, save);
+    save.setAttribute('aria-label', 'Guardar precio, existencias y surtido de ' + product.sku);
+    form.append(priceLabel, stockLabel, restockLabel, dateLabel, save);
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const changes = {sku:product.sku};
       if (Number(price.value) !== product.precio_cop) changes.precio_cop = Number(price.value);
       if (Number(stockInput.value) !== product.stock) changes.stock = Number(stockInput.value);
+      const plan = dateInput.value || restock.value;
+      if (plan !== (product.surtido || '')) changes.surtido = plan;
       if (Object.keys(changes).length === 1) { say('No hay cambios en ' + product.sku + '.'); return; }
       try {
         await api('/api/inventario/actualizar', changes);

@@ -73,7 +73,13 @@ REJECTIONS = {
     "CONFIRMATION_NOT_STATED": "Confirmar sin un «sí» del cliente en este mensaje, o en el mismo turno del registro.",
     "TIME_NOT_GROUNDED": "Agendar una hora o un día que el cliente no dijo.",
     "CANCEL_NOT_STATED": "Cancelar sin que el cliente lo pida.",
-    "ORDER_UNCHANGED": "Registrar igual el pedido que se acaba de cancelar en el mismo turno.",
+    "ORDER_UNCHANGED": "Registrar igual el pedido que se acaba de cancelar en el mismo turno, o el mismo que cambia.",
+    "PRODUCT_REMOVED": "Registrar un producto que el cliente quitó en ese mismo mensaje.",
+    "CHANGE_BY_REGISTERING": "Cancelar un pedido que el cliente solo cambia: el nuevo lo reemplaza si alcanza.",
+    "ORDER_AMBIGUOUS": "Cambiar un pedido cuando hay más de uno activo y no se sabe cuál.",
+    "AMBIGUOUS_REFERENCE": "Cotizar «ese» cuando el turno anterior mostró varios productos.",
+    "VAGUE_SEARCH": "Buscar un texto sin producto («3», «esos»).",
+    "NEGATED_ATTRIBUTE": "Buscar con la palabra que el cliente dijo que no quiere («que no es la blanca»).",
 }
 
 ERRORS = {

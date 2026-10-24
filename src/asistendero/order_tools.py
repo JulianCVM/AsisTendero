@@ -21,9 +21,17 @@ def _order_id(arguments: dict) -> str:
     return order_id
 
 
+def _replaced(arguments: dict) -> str | None:
+    """El pedido que reemplaza el nuevo: lo pone ``order_rules`` cuando el cliente cambia su pedido."""
+    if "reemplaza" not in arguments:
+        return None
+    return _order_id({"pedido": arguments["reemplaza"]})
+
+
 def _lines(arguments: dict) -> list[tuple[str, int]]:
     lines = arguments.get("lines")
-    if set(arguments) != {"lines"} or not isinstance(lines, list) or not 1 <= len(lines) <= MAX_ITEMS:
+    if (not {"lines"} <= set(arguments) <= {"lines", "reemplaza"} or not isinstance(lines, list)
+            or not 1 <= len(lines) <= MAX_ITEMS):
         raise OrderError("INVALID_ARGUMENT", f"Se requieren de 1 a {MAX_ITEMS} líneas.")
     clean: list[tuple[str, int]] = []
     for line in lines:
@@ -60,7 +68,7 @@ def execute_order_tool(name: str, arguments: dict, *, book: OrderBook, session_i
         return error_envelope("error", "INVALID_ARGUMENT", "Los argumentos deben ser un objeto.", SOURCE)
     try:
         if name == "registrar_pedido":
-            return _ok(book.create(session_id, _lines(arguments)))
+            return _ok(book.create(session_id, _lines(arguments), _replaced(arguments)))
         if name == "consultar_pedido":
             if not set(arguments) <= {"pedido"}:
                 raise OrderError("INVALID_ARGUMENT", "consultar_pedido acepta solo pedido.")

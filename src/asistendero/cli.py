@@ -13,6 +13,7 @@ from asistendero.graph import build_graph
 from asistendero.grok import decide_with_grok
 from asistendero.order_watch import last_event, sweep
 from asistendero.orders import OrderBook
+from asistendero.seed import DEFAULT_DB_PATH, upgrade_db
 from asistendero.sessions import SessionError, SessionStore
 
 
@@ -73,7 +74,9 @@ def main() -> int:
         consulta = input("Consulta del cliente: ")
 
     try:
-        result = build_graph(catalog_executor(MockCatalog()), decide_with_grok).invoke({"consulta": consulta})
+        # Una base creada antes del surtido no tiene la tabla: sin actualizarla, todo salía «sin fecha».
+        catalog = MockCatalog(upgrade_db(DEFAULT_DB_PATH))
+        result = build_graph(catalog_executor(catalog), decide_with_grok).invoke({"consulta": consulta})
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

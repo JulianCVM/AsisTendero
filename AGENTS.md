@@ -76,9 +76,19 @@ propio.
    - `normalize_text`, `is_distinguished`, `grounded_products`, `quantities_in_message` y `foreign_unit`
      (`validation.py`); `closest_named` (`product_fit.py`).
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
-   - `format_cop` y `reply_is_grounded` (`answers.py`); `next_node` (`graph.py`).
+   - `reply_is_grounded` (`answers.py`); `format_cop`, `found_sentence`, `item_line`, `quote_block` y
+     `short_stock_text` (`reply_text.py`); `next_node` (`graph.py`).
+   - `list_lines`, `usable_lines`, `updated_list`, `removed_now` y `missing_from_quote` (`shopping_list.py`);
+     `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount` y `without_negated`
+     (`validation.py`); `without_quantities` y `negated_words` (`search.py`).
+   - `shown_options`, `chosen_options`, `ambiguous_reference` y `check_reference` (`choices.py`); `asks_stock`,
+     `stock_note`, `gender_of`, `of_the`, `asks_suitability` y `whole_units_question` (`reply_text.py`);
+     `rushes_the_customer` (`order_replies.py`).
+   - `valid_plan`, `plan_of`, `asks_restock`, `restock_sentence`, `restock_subjects` y `restock_reply_ok`
+     (`restock.py`).
    - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
-   - `OrderBook` (`orders.py`), `validate_order_request` y `order_action_pending` (`order_rules.py`), `order_reply`
+   - `OrderBook` (`orders.py`), `validate_order_request`, `order_action_pending`, `added_quantities`, `cancels` y
+     `changes_order` (`order_rules.py`), `order_reply`
      (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
    - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
    - `record` y `verdict` (`eval_checks.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
@@ -117,7 +127,11 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Cambiar qué decide Grok o su formato de salida | `grok.py` (`AGENT_PROMPT`, `parse_decision`), subiendo `PROMPT_VERSION` |
 | Una regla antes de ejecutar una herramienta (límites, SKU o cantidad respaldados) | `validate_request` de `validation.py`, con su prueba en `tests/test_graph.py` |
 | Leer un dato nuevo de la respuesta de una herramienta | `observations.py` y su docstring |
-| Cambiar cómo se redacta o verifica la respuesta final | `answers.py` |
+| Cambiar cómo se verifica la respuesta final | `answers.py` |
+| Cambiar el texto de la respuesta (frases, líneas de cotización, opciones) | `reply_text.py` |
+| Qué recuerda la conversación de lo cotizado y cuándo se exige cotizar «todo» | `shopping_list.py`, con su prueba en `tests/test_shopping_list.py` |
+| Qué opciones se le mostraron al cliente y cómo se elige una por su orden o su atributo | `choices.py` (la tabla, en `sessions.py`), con su prueba en `tests/test_shopping_list.py` |
+| Cuándo vuelve a llegar un producto o si ya no se trae, y qué puede decir Grok de eso | `restock.py` (la tabla, en `seed.py`; la edición, en `inventory.py`), con su prueba en `tests/test_restock.py` |
 | Un nodo o una ruta del flujo | `graph.py` (la traza usa `next_node`) |
 | Un aviso del servidor cuando Grok responde sin un paso que el mensaje exige | `reminders.py` (`pending_reminder`), con su prueba en `tests/test_graph.py` |
 | Una herramienta del servidor o un código de error de negocio | `tools.py` (`execute_tool`), con su prueba aislada |

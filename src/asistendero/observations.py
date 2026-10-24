@@ -6,7 +6,8 @@ lee este módulo (si cambian, solo hay que ajustar ``search_findings`` y ``lates
 
 - buscar_productos: ``{"results": [{"matches": [producto], "nearby": [producto]}]}``, un
   resultado por artículo en el orden de ``items``.
-- consultar_disponibilidad: ``{"sku", "stock", "unit", ...}``.
+- consultar_disponibilidad: ``{"sku", "stock", "unit", "restock", ...}``; ``restock`` es el surtido
+  (``restock.py``).
 - calcular_cotizacion_informativa: ``{"lines": [{"sku", "quantity", "unit_price_cop",
   "subtotal_cop", ...}], "total_cop", "reservation_created": false}``.
 - consultar_info_tienda: ``{"tema", "texto"}``; con ``tema="horario"``: ``{"dias": {día: [abre,
@@ -18,7 +19,7 @@ lee este módulo (si cambian, solo hay que ajustar ``search_findings`` y ``lates
   "total_cop", "aparta_hasta", "recogida", "nota", "creado", "pago"}`` (``orders.OrderBook``);
   consultar_pedido: ``{"pedidos": [pedido]}``. ``order_results`` los lee.
 
-``producto`` usa los campos de ``catalog.Product``.
+``producto`` usa los campos de ``catalog.Product``, con ``restock`` (el surtido) opcional.
 """
 
 from collections.abc import Callable
@@ -60,11 +61,13 @@ def error_envelope(status: str, code: str, message: str, source: str) -> dict:
 def _product(raw: object) -> Product | None:
     if not isinstance(raw, dict):
         return None
+    # «restock» tiene valor por omisión: una respuesta sin surtido (base de S2) sigue siendo un producto.
     try:
-        product = Product(**{field: raw[field] for field in Product.__dataclass_fields__})
+        product = Product(**{field: raw[field] for field in Product.__dataclass_fields__
+                             if field in raw or field != "restock"})
     except (KeyError, TypeError):
         return None
-    if not isinstance(product.price_cop, int) or not isinstance(product.stock, int):
+    if not isinstance(product.price_cop, int) or not isinstance(product.stock, int) or not isinstance(product.restock, str):
         return None
     return product
 

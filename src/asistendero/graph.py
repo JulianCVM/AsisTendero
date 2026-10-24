@@ -16,8 +16,10 @@ from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.injection import INJECTION_CODES, blocked_reply, detect_injection
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
-from asistendero.order_rules import validate_order_request
+from asistendero.choices import check_reference, chosen_options
+from asistendero.order_rules import added_quantities, validate_order_request
 from asistendero.reminders import pending_reminder, with_reminders
+from asistendero.shopping_list import list_lines, usable_lines
 from asistendero.validation import Rejected, quantities_in_message, validate_request
 
 
@@ -137,23 +139,39 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             "requested_arguments": decision.arguments, "executed": False, "arguments": None,
             "response": {}, "duration_ms": 0,
         }
+        # «dame del primero»: la opción elegida por su orden cuenta como producto identificado.
+        picked = chosen_options(state["consulta"], state.get("contexto"))
         try:
             # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
             quantities = quantities_in_message(state["consulta"]) or quantities_in_message(state["referencia"])
+            quantities |= added_quantities(state["consulta"], state.get("contexto"))
+            check_reference(decision.tool, decision.arguments, state["consulta"], calls, state.get("contexto"))
             if decision.tool in ORDER_TOOLS and isinstance(decision.arguments, dict):
                 # Los pedidos miran el mensaje del turno: confirmar o cancelar lo tiene que decir ahora el cliente.
                 arguments = validate_order_request(decision.tool, decision.arguments, current=state["consulta"],
                                                    reference=state["referencia"], calls=calls,
                                                    context=state.get("contexto"))
             else:
-                remembered = {item.get("sku") for item in (state.get("contexto") or {}).get("productos") or []}
+                context = state.get("contexto")
+                listed = usable_lines(state["consulta"], context)
+                # Lo que el cliente quitó o dejó atrás al empezar de nuevo tampoco vale como producto recordado.
+                dropped = set(list_lines(context)) - set(listed)
+                known = [*((context or {}).get("productos") or []), *picked]
+                remembered = {item.get("sku"): f"{item.get('nombre', '')} {item.get('variante', '')} {item.get('unidad', '')}"
+                              for item in known if item.get("sku") not in dropped}
                 arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities,
-                                             remembered)
+                                             remembered, listed, state["consulta"])
             if any(previous["executed"] and previous["requested_tool"] == decision.tool
                    and previous["arguments"] == arguments for previous in calls):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")
         except Rejected as exc:
-            call["response"] = error_envelope("rejected", exc.code, str(exc), "agent_validation")
+            message = str(exc)
+            if exc.code == "SKU_NOT_GROUNDED" and picked:
+                # Corrida 26: Grok leyó «del primero» como la primera manguera, el rechazo no decía cuál era y la
+                # conversación perdió el tubo. Se nombra lo que el cliente eligió de las opciones que vio.
+                message += " De las opciones que vio, el cliente eligió: " + "; ".join(
+                    f"{item['sku']} ({item.get('nombre', '')} {item.get('variante', '')})".strip() for item in picked) + "."
+            call["response"] = error_envelope("rejected", exc.code, message, "agent_validation")
         else:
             call.update(executed=True, arguments=arguments, response=execute_safely(tool_executor, decision.tool, arguments))
         call["duration_ms"] = round((perf_counter() - started) * 1000)
@@ -192,7 +210,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             estado = {"MODEL_INVALID_OUTPUT": "model_invalid", "TOOL_CALL_LIMIT": "limit_reached"}.get(error["code"], "model_error")
             if calls:
                 # Lo ya consultado es verificable; se muestra aunque el modelo haya fallado.
-                _, answer = render_answer(message, calls)
+                _, answer = render_answer(message, calls, state.get("contexto"), state["consulta"])
             elif estado == "model_invalid":
                 answer = "No pude interpretar bien tu mensaje. ¿Puedes contarme de nuevo qué producto necesitas?"
             else:
@@ -202,8 +220,8 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
 
         if not calls:
             return {**common, "estado": "answered", "respuesta": direct_response(state["consulta"], decision)}
-        status, answer = render_answer(message, calls)
-        if reply_is_grounded(decision.reply, message, calls, state.get("contexto")):
+        status, answer = render_answer(message, calls, state.get("contexto"), state["consulta"])
+        if reply_is_grounded(decision.reply, message, calls, state.get("contexto"), state["consulta"]):
             answer = decision.reply.strip()
         return {**common, "estado": status, "respuesta": answer}
 

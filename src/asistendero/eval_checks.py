@@ -31,6 +31,9 @@ def verdict(check: dict, result: dict, selected_skus: list[str]) -> list[str]:
     response = result["respuesta"].casefold()
     reasons += [f"no dice «{text}»" for text in check.get("must_include", []) if text.casefold() not in response]
     reasons += [f"dice «{text}»" for text in check.get("must_not_include", []) if text.casefold() in response]
+    # Varias formas válidas de decir lo mismo (corrida 26: «ya no lo vamos a traer» o «está descontinuado»).
+    reasons += [f"no dice ninguna de {' | '.join(options)}" for options in check.get("must_include_any", [])
+                if not any(option.casefold() in response for option in options)]
     if "max_model_calls" in check and result["model_calls"] > check["max_model_calls"]:
         reasons.append(f"{result['model_calls']} llamadas a Grok")
     injection = result.get("inyeccion") or {}
