@@ -1,14 +1,29 @@
 """Lectura acotada del catálogo mock; el modelo no construye SQL."""
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import sqlite3
-import unicodedata
 
+from asistendero.measures import canonical_text, measures
 from asistendero.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
-from asistendero.search import ProductQuery
+from asistendero.search import ProductQuery, without_quantities
 
+
+# Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
+MAX_MATCHES = 8
+# Lo apartado en pedidos pendientes o confirmados (orders.py) no está disponible para otro cliente.
+RESERVED_SQL = (
+    "COALESCE((SELECT SUM(l.quantity) FROM order_lines l JOIN orders o ON o.id = l.order_id "
+    "WHERE o.business_id = products.business_id AND o.store_id = products.store_id AND l.sku = products.sku "
+    "AND o.status IN ('pendiente', 'confirmado')), 0)"
+)
+
+RESTOCK_SQL = (
+    "COALESCE((SELECT r.plan FROM restocks r WHERE r.business_id = products.business_id "
+    "AND r.store_id = products.store_id AND r.sku = products.sku), '')"
+)
 
 STOPWORDS = {
     "a", "al", "busco", "como", "con", "cual", "cuales", "cuanto", "cuantos",
@@ -28,8 +43,8 @@ SYNONYMS = {
     "canos": "tubo",
     "tornillos": "tornillo",
     "tirafondos": "tirafondo",
-    "chazo": "tornillo",
-    "chazos": "tornillo",
+    "chazos": "chazo",
+    "tacos": "chazo",
     "goloso": "tornillo",
     "golosos": "tornillo",
     "bultos": "bulto",
@@ -46,36 +61,42 @@ SYNONYMS = {
     "pulgadas": "pulgada",
     "kilo": "kg",
     "kilos": "kg",
+    # Unidades de venta en plural, para que «2 metros» puntúe contra los productos que se venden por metro.
+    "metros": "metro",
+    "unidades": "unidad",
+    "libras": "libra",
+    "rollos": "rollo",
+    "pares": "par",
+    "pliegos": "pliego",
+    "bolsas": "bolsa",
+    "cajas": "caja",
 }
 
 
-def tokens(value: str) -> set[str]:
-    normalized = unicodedata.normalize("NFKD", value.casefold())
-    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
-    # Normalizar expresiones de medidas habituales en ferretería.
-    ascii_text = re.sub(r"\bmedia\s+pulgada\b", "1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bmedio\s+pulgada\b", "1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bde\s+media\b", "de 1/2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\btres\s+cuartos(?:\s+de\s+pulgada)?\b", "3/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\btres\s+cuarto(?:\s+de\s+pulgada)?\b", "3/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bun\s+cuarto(?:\s+de\s+pulgada)?\b", "1/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bcuarto\s+de\s+pulgada\b", "1/4 pulgada", ascii_text)
-    ascii_text = re.sub(r"\buna\s+pulgada\b", "1 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bdos\s+pulgadas?\b", "2 pulgada", ascii_text)
-    ascii_text = re.sub(r"\bcincuenta\s+kilos?\b", "50 kg", ascii_text)
-    ascii_text = re.sub(r"\b([0-9]+(?:/[0-9]+)?)\s*\"", r"\1 pulgada", ascii_text)
-    ascii_text = re.sub(r"\b(\d+(?:/\d+)?)(kg|cm|mm)\b", r"\1 \2", ascii_text)
+def _raw_words(value: str) -> list[str]:
+    return [word for word in re.findall(r"[a-z0-9]+(?:/[0-9]+)?", canonical_text(value)) if word not in STOPWORDS]
 
-    raw_words = [
-        word
-        for word in re.findall(r"[a-z0-9]+(?:/[0-9]+)?", ascii_text)
-        if word not in STOPWORDS
-    ]
-    result = set(raw_words)
-    for word in raw_words:
-        if word in SYNONYMS:
-            result.add(SYNONYMS[word])
-    return result
+
+def _forms(word: str, synonyms: bool = True) -> set[str]:
+    forms = {word}
+    # Plural regular («bisagras», «galones»): con cientos de productos no cabe un sinónimo por palabra.
+    if (len(word) >= 5 and word.endswith("s") and not word[-2].isdigit()) or (len(word) == 4 and word.endswith("es")):
+        forms.add(word[:-1])
+        if word.endswith("es") and len(word) >= 6:
+            forms.add(word[:-2])
+    if synonyms and word in SYNONYMS:
+        forms.add(SYNONYMS[word])
+    return forms
+
+
+def tokens(value: str, synonyms: bool = True) -> set[str]:
+    """Palabras normalizadas con su singular; ``synonyms=False`` sirve para comparar variantes entre sí."""
+    return set().union(*(_forms(word, synonyms) for word in _raw_words(value)))
+
+
+def covers(value: str, words: set[str]) -> bool:
+    """Cada palabra de ``value`` está en ``words`` en alguna de sus formas: «galones» cubre «galón»."""
+    return all(_forms(word) & words for word in _raw_words(value))
 
 
 @dataclass(frozen=True)
@@ -87,6 +108,8 @@ class Product:
     price_cop: int
     stock: int
     updated_at: str
+    # Surtido anotado por el tendero (restock.py): día, fecha ISO, «descontinuado» o "" sin dato.
+    restock: str = ""
 
     def facts_for_model(self) -> dict[str, str]:
         # Grok identifica una variante; precio y stock solo salen del renderizador.
@@ -113,20 +136,19 @@ class MockCatalog:
     def search(self, request: ProductQuery, limit: int = 3) -> SearchResult:
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
-        query_words = tokens(request.text)
+        # «tubo PVC 3 metros»: el 3 es la cantidad, no la medida (visor, 23-10: salía el tubo de 3 pulgadas).
+        text = without_quantities(request.text)
+        query_words = tokens(text)
+        query_measures = measures(text)
         if not query_words:
             return SearchResult((), ())
 
-        connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
-        connection.row_factory = sqlite3.Row
-        try:
-            rows = connection.execute(
-                """SELECT sku, name, variant, unit, price_cop, stock, search_terms, updated_at
-                   FROM products WHERE business_id = ? AND store_id = ?""",
-                (self.business_id, self.store_id),
-            ).fetchall()
-        finally:
-            connection.close()
+        rows = self._rows(
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, search_terms, updated_at,
+                      {restock} AS restock
+               FROM products WHERE business_id = ? AND store_id = ?""",
+            (),
+        )
 
         type_words = tokens(request.product or "")
         for field in (request.material, request.measure, request.presentation, request.color, request.brand):
@@ -144,44 +166,103 @@ class MockCatalog:
             constraints = {
                 "use": (request.use, product_words),
                 "material": (request.material, product_words),
-                "measure": (request.measure, tokens(row["variant"])),
+                # La medida puede estar en el nombre («Cable THHN calibre 12 AWG»), no solo en la variante.
+                "measure": (request.measure, name_words),
                 "presentation": (request.presentation, product_words),
                 "color": (request.color, product_words),
                 "brand": (request.brand, product_words),
             }
+            # Una medida también se cumple por sus átomos: «20 amperios» es el «20 A» de la variante y «2x16», el
+            # «2 x 16 AWG» (suite variados: los dos quedaban como opciones cercanas).
+            atoms = measures(request.measure or "")
             missing = [
                 field for field, (value, words) in constraints.items()
-                if value and not tokens(value) <= words
+                if value and not covers(value, words)
+                and not (field == "measure" and atoms and atoms <= measures(f"{row['name']} {row['variant']}"))
             ]
             score = 3 * len(query_words & name_words) + len(query_words & alias_words)
             score += 4 * (sum(bool(value) for value, _ in constraints.values()) - len(missing))
+            # La misma medida exacta («1/4x2», «50kg») pesa más que palabras sueltas: entre 16 pernos, sube
+            # el que el cliente pidió al top de matches.
+            score += 5 * len(query_measures & measures(f"{row['name']} {row['variant']}"))
             product = Product(**{key: row[key] for key in Product.__dataclass_fields__})
             entry = (score, product)
             if missing:
-                # Mostrar otras presentaciones de la misma categoría solo si no hubo exactos.
-                nearby.append(entry)
+                # Mostrar otras presentaciones de la misma categoría solo si no hubo exactos. Una cercana que
+                # cambia el uso o el material (conduit eléctrico frente a tubo para agua) va detrás de una que
+                # solo cambia la medida, aunque coincida en la medida.
+                nearby.append((score - 20 * len({"use", "material"} & set(missing)), product))
             else:
                 exact.append(entry)
 
         sort_key = lambda item: (-item[0], item[1].stock == 0, item[1].sku)
         exact.sort(key=sort_key)
         nearby.sort(key=sort_key)
+        shown = exact[:limit]
+        # Una variante empatada con otra que sí se muestra no puede quedar oculta por el tope: con «broca para
+        # concreto», la de 1/4 aparecía sola y se elegía sin que el cliente diera la medida.
+        for score, product in exact[limit:]:
+            if len(shown) >= MAX_MATCHES:
+                break
+            if any(other.name == product.name and other_score == score for other_score, other in shown):
+                shown.append((score, product))
         return SearchResult(
-            tuple(product for _, product in exact[:limit]),
+            tuple(product for _, product in shown),
             tuple(product for _, product in nearby[:2]) if not exact else (),
         )
 
     def get(self, sku: str) -> Product | None:
+        rows = self._rows(
+            """SELECT sku, name, variant, unit, price_cop, {stock} AS stock, updated_at, {restock} AS restock
+               FROM products WHERE business_id = ? AND store_id = ? AND sku = ?""",
+            (sku,),
+        )
+        return Product(**dict(rows[0])) if rows else None
+
+    def _rows(self, sql: str, params: tuple) -> list[sqlite3.Row]:
+        """Consulta parametrizada en solo lectura, siempre filtrada por el negocio y la sede del servidor.
+
+        ``{stock}`` en la consulta se reemplaza por las existencias disponibles: las físicas menos lo apartado
+        en pedidos pendientes o confirmados. Una base sin tablas de pedidos (la de S2) usa las físicas.
+        ``{restock}`` se reemplaza por el surtido del producto, o "" en una base sin tabla de surtido.
+        """
         if not self.path.is_file():
             raise FileNotFoundError("No existe la base mock. Ejecuta: python -m asistendero.seed")
         connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
         try:
-            row = connection.execute(
-                """SELECT sku, name, variant, unit, price_cop, stock, updated_at
-                   FROM products WHERE business_id = ? AND store_id = ? AND sku = ?""",
-                (self.business_id, self.store_id, sku),
-            ).fetchone()
+            has_orders = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'order_lines'").fetchone()
+            stock = f"MAX(products.stock - {RESERVED_SQL}, 0)" if has_orders else "products.stock"
+            has_restocks = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'restocks'").fetchone()
+            restock = RESTOCK_SQL if has_restocks else "''"
+            sql = sql.replace("{stock}", stock).replace("{restock}", restock)
+            return connection.execute(sql, (self.business_id, self.store_id, *params)).fetchall()
         finally:
             connection.close()
-        return Product(**dict(row)) if row else None
+
+    def categories(self) -> list[dict]:
+        rows = self._rows(
+            """SELECT category, COUNT(*) AS variants, SUM({stock} > 0) AS available FROM products
+               WHERE business_id = ? AND store_id = ? GROUP BY category ORDER BY category""",
+            (),
+        )
+        return [{"categoria": row["category"], "variantes": row["variants"], "con_existencias": row["available"]}
+                for row in rows]
+
+    def category_overview(self, category: str) -> list[dict]:
+        """Productos de una categoría con cuántas variantes tienen; sin precios, que salen de la búsqueda."""
+        rows = self._rows(
+            """SELECT name, COUNT(*) AS variants, SUM({stock} > 0) AS available FROM products
+               WHERE business_id = ? AND store_id = ? AND category = ? GROUP BY name ORDER BY name""",
+            (category,),
+        )
+        return [{"nombre": row["name"], "variantes": row["variants"], "con_existencias": row["available"]}
+                for row in rows]
+
+    def store_info(self, topic: str) -> dict | None:
+        rows = self._rows(
+            "SELECT content FROM store_info WHERE business_id = ? AND store_id = ? AND topic = ?", (topic,),
+        )
+        return json.loads(rows[0]["content"]) if rows else None

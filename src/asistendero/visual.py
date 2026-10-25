@@ -4,9 +4,15 @@ import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 import json
+from urllib.parse import parse_qs, urlsplit
 
 from dotenv import load_dotenv
 
+from asistendero.chat import run_turn
+from asistendero.harness_info import describe_harness
+from asistendero.order_watch import Watcher
+from asistendero.orders import OrderBook
+from asistendero.sessions import SESSION_ID, SessionError, SessionStore
 from asistendero.tracing import run_traced
 
 
@@ -17,7 +23,14 @@ class TraceHandler(BaseHTTPRequestHandler):
         "/assets/Inter.ttf": ("Inter.ttf", "font/ttf"),
         "/assets/conversacion.css": ("conversacion.css", "text/css; charset=utf-8"),
         "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
+        "/assets/harness.js": ("harness.js", "text/javascript; charset=utf-8"),
+        "/assets/iso.css": ("iso.css", "text/css; charset=utf-8"),
+        "/assets/castillo.css": ("castillo.css", "text/css; charset=utf-8"),
+        "/assets/castillo.js": ("castillo.js", "text/javascript; charset=utf-8"),
     }
+
+    def _is_local_host(self) -> bool:
+        return self.headers.get("Host") == f"127.0.0.1:{self.server.server_port}"
 
     def _headers(self, status: int, content_type: str, length: int | None = None) -> None:
         self.send_response(status)
@@ -42,6 +55,28 @@ class TraceHandler(BaseHTTPRequestHandler):
             self._headers(200, content_type, len(body))
             self.wfile.write(body)
             return
+        if self.path == "/api/harness":
+            if not self._is_local_host():
+                self._json_error(403, "Origen local no permitido.")
+                return
+            body = json.dumps(describe_harness(), ensure_ascii=False).encode("utf-8")
+            self._headers(200, "application/json; charset=utf-8", len(body))
+            self.wfile.write(body)
+            return
+        url = urlsplit(self.path)
+        if url.path == "/api/avisos":
+            # Avisos del servidor para una conversación (pedido por vencer o vencido); se entregan una vez.
+            if not self._is_local_host():
+                self._json_error(403, "Origen local no permitido.")
+                return
+            session_id = (parse_qs(url.query).get("sesion") or [""])[0]
+            if not SESSION_ID.match(session_id):
+                self._json_error(400, "Sesión inválida.")
+                return
+            body = json.dumps({"avisos": self.server.sessions.take_notices(session_id)}, ensure_ascii=False).encode("utf-8")
+            self._headers(200, "application/json; charset=utf-8", len(body))
+            self.wfile.write(body)
+            return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
             return
@@ -54,7 +89,7 @@ class TraceHandler(BaseHTTPRequestHandler):
             self._json_error(404, "Ruta no encontrada.")
             return
         expected_origin = f"http://127.0.0.1:{self.server.server_port}"
-        if self.headers.get("Host") != f"127.0.0.1:{self.server.server_port}" or self.headers.get("Origin") not in (None, expected_origin):
+        if not self._is_local_host() or self.headers.get("Origin") not in (None, expected_origin):
             self._json_error(403, "Origen local no permitido.")
             return
         if self.headers.get_content_type() != "application/json":
@@ -68,6 +103,10 @@ class TraceHandler(BaseHTTPRequestHandler):
             query = request["consulta"]
             if not isinstance(query, str) or len(query) > 2000:
                 raise ValueError
+            in_session = request.get("sesion") is True
+            session_id = request.get("session_id")
+            if session_id is not None and not isinstance(session_id, str):
+                raise ValueError
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres.")
             return
@@ -80,7 +119,13 @@ class TraceHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            run_traced(query, emit)
+            if in_session:
+                store = self.server.sessions
+                run_turn(store, session_id or store.create(), query, emit, orders=self.server.orders)
+            else:
+                run_traced(query, emit)
+        except SessionError as exc:
+            emit({"type": "error", "code": exc.code, "message": str(exc)})
         except (ValueError, RuntimeError, FileNotFoundError) as exc:
             emit({"type": "error", "message": str(exc)})
         except (BrokenPipeError, ConnectionResetError):
@@ -94,8 +139,12 @@ class TraceHandler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port: int) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(("127.0.0.1", port), TraceHandler)
+def make_server(port: int, sessions: SessionStore | None = None, orders: OrderBook | None = None) -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer(("127.0.0.1", port), TraceHandler)
+    # La sesión vive en el servidor; el visor solo guarda el identificador que este le entrega.
+    server.sessions = sessions or SessionStore()
+    server.orders = orders
+    return server
 
 
 def main() -> None:
@@ -105,13 +154,17 @@ def main() -> None:
     if not 1 <= args.port <= 65535:
         parser.error("--port debe estar entre 1 y 65535")
     load_dotenv()
-    with make_server(args.port) as server:
+    with make_server(args.port, orders=OrderBook()) as server:
+        # Vence los pedidos sin confirmar a los 5 minutos y deja el aviso para cada cliente, sin llamar a Grok.
+        watcher = Watcher(server.orders, server.sessions).start()
         print(f"Visor local: http://127.0.0.1:{server.server_port}/")
         print("Ctrl+C para detenerlo. Cada mensaje llama a Grok y puede consumir cupo.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+        finally:
+            watcher.stop()
 
 
 if __name__ == "__main__":

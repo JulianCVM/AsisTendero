@@ -1,0 +1,275 @@
+"""Sesiones de chat con memoria acotada, guardadas en SQLite local.
+
+Cada turno corre el mismo grafo; la sesión solo aporta contexto. Lo que se guarda y se le muestra a Grok:
+
+- los últimos ``MAX_CONTEXT_TURNS`` turnos, con el texto del cliente ya filtrado por ``guardrails`` (sin
+  frases delicadas ni datos personales) y la respuesta con los montos tapados, porque un precio de un turno
+  anterior puede no estar vigente;
+- los productos identificados (SKU, nombre, variante y unidad), nunca su precio ni sus existencias;
+- la lista de lo que el cliente ha ido cotizando, con la cantidad que dijo (``shopping_list.py``), para que
+  «¿cuánto es todo?» sume lo de hace diez mensajes;
+- las opciones de la última respuesta que mostró alguna, en orden (``choices.py``), para entender «del primero».
+
+Precio y existencias se vuelven a leer del catálogo en cada turno. Una sesión vence a las
+``SESSION_TTL`` sin actividad y se borra al crear la siguiente: no hay historial indefinido.
+
+Una sesión en la que el cliente intentó inyectar instrucciones (``injection.py``) queda baneada: cada turno
+siguiente recibe ``SESSION_BANNED`` sin llegar al grafo ni a Grok. Solo el tendero levanta el baneo desde su
+panel. La sesión es la única identidad del cliente en el prototipo; con un canal real se banearía su número.
+"""
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import re
+import sqlite3
+from uuid import uuid4
+
+from asistendero.observations import latest_quote, order_results, search_findings
+from asistendero.validation import grounded_products
+
+
+DEFAULT_SESSIONS_PATH = Path(".local/sessions.sqlite3")
+MAX_CONTEXT_TURNS = 4
+MAX_TURN_CHARS = 500
+MAX_REMEMBERED_PRODUCTS = 8
+MAX_TURNS_PER_SESSION = 40
+SESSION_TTL = timedelta(hours=12)
+SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
+MAX_BAN_EXCERPT = 200
+MONEY = re.compile(r"\$\s?[\d.,]*\d(?:\s*COP)?")
+
+
+class SessionError(Exception):
+    """Sesión inexistente, vencida, llena o baneada, con un código estable."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _clip_to(text: str, limit: int) -> str:
+    # Se marca el recorte para que nadie lo tome como el texto completo.
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _clip(text: str) -> str:
+    return _clip_to(text, MAX_TURN_CHARS)
+
+
+def remembered_products(reference: str, calls: list[dict]) -> list[dict]:
+    """Productos que el turno dejó identificados: los que el cliente distinguió y los cotizados."""
+    products = {sku: product for sku, product in grounded_products(reference, calls).items()}
+    quote, _ = latest_quote(calls)
+    known = {product.sku: product for finding in search_findings(calls) for product in finding["matches"]}
+    for line in (quote or {}).get("lines", []):
+        if line["sku"] in known:
+            products.setdefault(line["sku"], known[line["sku"]])
+    remembered = {p.sku: {"sku": p.sku, "nombre": p.name, "variante": p.variant, "unidad": p.unit}
+                  for p in products.values()}
+    # Una cotización sin búsqueda en el turno («la de galón, deme 2») también deja el producto identificado: si no,
+    # «mejor que sean 3» no tenía qué cotizar (suite natural, H-02).
+    for line in (quote or {}).get("lines", []):
+        if all(isinstance(line.get(key), str) for key in ("name", "variant", "unit")):
+            remembered.setdefault(line["sku"], {"sku": line["sku"], "nombre": line["name"],
+                                                "variante": line["variant"], "unidad": line["unit"]})
+    # Lo que entró a un pedido también queda identificado: «agrégale otro de esos» se refiere a eso.
+    for _, order in order_results(calls):
+        for line in order["lineas"]:
+            if all(isinstance(line.get(key), str) for key in ("nombre", "variante", "unidad")):
+                remembered.setdefault(line["sku"], {"sku": line["sku"], "nombre": line["nombre"],
+                                                    "variante": line["variante"], "unidad": line["unidad"]})
+    return list(remembered.values())
+
+
+class SessionStore:
+    def __init__(self, path: Path = DEFAULT_SESSIONS_PATH, clock: Callable[[], datetime] = _now):
+        self.path = path.resolve()
+        self.clock = clock
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as connection:
+            connection.executescript(
+                """CREATE TABLE IF NOT EXISTS sessions (
+                       id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                       turns INTEGER NOT NULL DEFAULT 0);
+                   CREATE TABLE IF NOT EXISTS turns (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       number INTEGER NOT NULL, customer TEXT NOT NULL, assistant TEXT NOT NULL,
+                       status TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (session_id, number));
+                   CREATE TABLE IF NOT EXISTS session_products (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       sku TEXT NOT NULL, name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                       last_turn INTEGER NOT NULL, PRIMARY KEY (session_id, sku));
+                   CREATE TABLE IF NOT EXISTS notices (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       created_at TEXT NOT NULL, text TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);
+                   CREATE TABLE IF NOT EXISTS bans (
+                       session_id TEXT PRIMARY KEY, banned_at TEXT NOT NULL, code TEXT NOT NULL,
+                       technique TEXT NOT NULL, excerpt TEXT NOT NULL, lifted_at TEXT);
+                   CREATE TABLE IF NOT EXISTS session_list (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       position INTEGER NOT NULL, sku TEXT NOT NULL, name TEXT NOT NULL, variant TEXT NOT NULL,
+                       unit TEXT NOT NULL, quantity INTEGER NOT NULL, PRIMARY KEY (session_id, sku));
+                   CREATE TABLE IF NOT EXISTS session_options (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
+                       name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                       PRIMARY KEY (session_id, grupo, position));"""
+            )
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        # «with sqlite3.connect()» confirma la transacción pero no cierra: en Windows el archivo queda tomado.
+        connection = sqlite3.connect(self.path)
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    def create(self) -> str:
+        """Abre una sesión nueva con un identificador del servidor y borra las vencidas."""
+        now = self.clock()
+        session_id = uuid4().hex
+        with self._connect() as connection:
+            connection.execute("DELETE FROM sessions WHERE updated_at < ?", ((now - SESSION_TTL).isoformat(),))
+            connection.execute("INSERT INTO sessions VALUES (?, ?, ?, 0)", (session_id, now.isoformat(), now.isoformat()))
+        return session_id
+
+    def _check(self, connection: sqlite3.Connection, session_id: str) -> int:
+        if not isinstance(session_id, str) or not SESSION_ID.match(session_id):
+            raise SessionError("SESSION_NOT_FOUND", "La sesión no existe. Empieza una conversación nueva.")
+        row = connection.execute("SELECT updated_at, turns FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        if row is None:
+            raise SessionError("SESSION_NOT_FOUND", "La sesión no existe. Empieza una conversación nueva.")
+        if datetime.fromisoformat(row[0]) < self.clock() - SESSION_TTL:
+            raise SessionError("SESSION_EXPIRED", "La sesión venció por inactividad. Empieza una conversación nueva.")
+        if connection.execute("SELECT 1 FROM bans WHERE session_id = ? AND lifted_at IS NULL", (session_id,)).fetchone():
+            raise SessionError("SESSION_BANNED", "Esta conversación quedó bloqueada por un intento de cambiar las "
+                                                 "reglas del asistente. Si fue un error, pídele al tendero que la "
+                                                 "desbloquee.")
+        if row[1] >= MAX_TURNS_PER_SESSION:
+            raise SessionError("SESSION_FULL", f"La conversación llegó a {MAX_TURNS_PER_SESSION} turnos. "
+                                               "Empieza una nueva para seguir.")
+        return row[1]
+
+    def context(self, session_id: str) -> dict:
+        """Contexto que ve Grok: turnos recientes sin montos y productos identificados sin precio."""
+        with self._connect() as connection:
+            self._check(connection, session_id)
+            turns = connection.execute(
+                "SELECT customer, assistant FROM turns WHERE session_id = ? ORDER BY number DESC LIMIT ?",
+                (session_id, MAX_CONTEXT_TURNS),
+            ).fetchall()
+            products = connection.execute(
+                "SELECT sku, name, variant, unit FROM session_products WHERE session_id = ? "
+                "ORDER BY last_turn DESC, sku LIMIT ?",
+                (session_id, MAX_REMEMBERED_PRODUCTS),
+            ).fetchall()
+            listed = connection.execute(
+                "SELECT sku, name, variant, unit, quantity FROM session_list WHERE session_id = ? ORDER BY position",
+                (session_id,),
+            ).fetchall()
+            shown = connection.execute(
+                "SELECT grupo, label, sku, name, variant, unit FROM session_options WHERE session_id = ? "
+                "ORDER BY grupo, position", (session_id,),
+            ).fetchall()
+        options: dict[int, dict] = {}
+        for group, label, sku, name, variant, unit in shown:
+            block = options.setdefault(group, {"grupo": label, "opciones": []})
+            block["opciones"].append({"n": len(block["opciones"]) + 1, "sku": sku, "nombre": name,
+                                      "variante": variant, "unidad": unit})
+        return {
+            "turnos": [
+                {"cliente": _clip(customer), "asistente": _clip(MONEY.sub("[precio]", assistant))}
+                for customer, assistant in reversed(turns) if customer
+            ],
+            "productos": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit}
+                          for sku, name, variant, unit in products],
+            "lista": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit, "cantidad": quantity}
+                      for sku, name, variant, unit, quantity in listed],
+            "opciones": list(options.values()),
+        }
+
+    def notify(self, session_id: str, text: str) -> bool:
+        """Deja un aviso del servidor para el cliente (pedido por vencer o vencido); False si la sesión ya no existe."""
+        with self._connect() as connection:
+            if connection.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
+                return False
+            connection.execute("INSERT INTO notices (session_id, created_at, text) VALUES (?, ?, ?)",
+                               (session_id, self.clock().isoformat(), text))
+        return True
+
+    def take_notices(self, session_id: str) -> list[str]:
+        """Avisos aún no entregados de la sesión, en orden; quedan marcados como entregados."""
+        with self._connect() as connection:
+            rows = connection.execute("SELECT rowid, text FROM notices WHERE session_id = ? AND delivered = 0 "
+                                      "ORDER BY rowid", (session_id,)).fetchall()
+            connection.executemany("UPDATE notices SET delivered = 1 WHERE rowid = ?", [(row[0],) for row in rows])
+        return [row[1] for row in rows]
+
+    def record(self, session_id: str, customer: str, assistant: str, status: str, products: list[dict],
+               shopping: list[dict] | None = None, options: list[dict] | None = None) -> int:
+        """Guarda el turno ya filtrado y devuelve su número.
+
+        ``shopping`` reemplaza la lista de la sesión; ``options``, si trae grupos, reemplaza las opciones mostradas.
+        """
+        now = self.clock().isoformat()
+        with self._connect() as connection:
+            number = self._check(connection, session_id) + 1
+            connection.execute("INSERT INTO turns VALUES (?, ?, ?, ?, ?, ?)",
+                               (session_id, number, customer, assistant, status, now))
+            connection.executemany(
+                "INSERT INTO session_products VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(session_id, sku) DO UPDATE SET last_turn = excluded.last_turn",
+                [(session_id, item["sku"], item["nombre"], item["variante"], item["unidad"], number)
+                 for item in products],
+            )
+            if shopping is not None:
+                connection.execute("DELETE FROM session_list WHERE session_id = ?", (session_id,))
+                connection.executemany(
+                    "INSERT INTO session_list VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [(session_id, position, item["sku"], item["nombre"], item["variante"], item["unidad"],
+                      item["cantidad"]) for position, item in enumerate(shopping)],
+                )
+            if options:
+                connection.execute("DELETE FROM session_options WHERE session_id = ?", (session_id,))
+                connection.executemany(
+                    "INSERT INTO session_options VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(session_id, group, position, block["grupo"], item["sku"], item["nombre"], item["variante"],
+                      item["unidad"]) for group, block in enumerate(options)
+                     for position, item in enumerate(block["opciones"])],
+                )
+            connection.execute("UPDATE sessions SET turns = ?, updated_at = ? WHERE id = ?", (number, now, session_id))
+        return number
+
+    def ban(self, session_id: str, code: str, technique: str, excerpt: str) -> None:
+        """Banea la sesión; ``excerpt`` es el mensaje ya sin datos personales, para que el tendero lo revise."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO bans VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT(session_id) DO UPDATE SET "
+                "banned_at = excluded.banned_at, code = excluded.code, technique = excluded.technique, "
+                "excerpt = excluded.excerpt, lifted_at = NULL",
+                (session_id, self.clock().isoformat(), code, technique, _clip_to(excerpt, MAX_BAN_EXCERPT)),
+            )
+
+    def unban(self, session_id: str) -> bool:
+        """Levanta el baneo vigente; False si la sesión no estaba baneada."""
+        with self._connect() as connection:
+            lifted = connection.execute("UPDATE bans SET lifted_at = ? WHERE session_id = ? AND lifted_at IS NULL",
+                                        (self.clock().isoformat(), session_id))
+        return lifted.rowcount == 1
+
+    def bans(self, limit: int = 50) -> list[dict]:
+        """Baneos, el más reciente primero, con el código de la inyección y si siguen vigentes."""
+        with self._connect() as connection:
+            rows = connection.execute("SELECT session_id, banned_at, code, technique, excerpt, lifted_at FROM bans "
+                                      "ORDER BY banned_at DESC LIMIT ?", (limit,)).fetchall()
+        return [{"sesion": row[0], "baneada": row[1], "codigo": row[2], "tecnica": row[3], "mensaje": row[4],
+                 "vigente": row[5] is None} for row in rows]

@@ -1,0 +1,55 @@
+/* El castillo del harness: los tonos del kit isométrico (iso.css) con la paleta de DESIGN.md. */
+.castle-stage.iso,
+.castle-preview.iso {
+  --anatomy-paper: #FFFDF8; --anatomy-face: #FFFFFF; --anatomy-top: #FFFDF8;
+  --anatomy-shade-0: #E6DAC2; --anatomy-shade-1: #EDE3D0; --anatomy-shade-2: #F3ECDD; --anatomy-shade-3: #F9F4EA;
+  --anatomy-lit-top: #F6D498; --anatomy-lit-shade: #EBB65C;
+  --anatomy-hi: #173B4A; --anatomy-mid: #587074; --anatomy-lo: #A89D86; --anatomy-faint: #D9CEB8;
+  --anatomy-lit: #8B5715; --anatomy-dot: #173B4A;
+  --anatomy-halo: #6B5A3A; --anatomy-halo-opacity: .2;
+  --anatomy-red: #B23E3E; --anatomy-green: #276B52;
+  --anatomy-weight: .7px;
+}
+.castle-preview { margin: 0; padding: 16px; background: #FBF6EA; }
+.castle-spare { display: none; }
+
+/* Lo que se enciende solo cuando le toca: la linterna de Grok, las cajas y el candado de la bodega. */
+[data-part="lantern"]:not([data-active]) .iso-solid[data-lit] > .iso-top,
+[data-part="crates"]:not([data-active]) .iso-solid > .iso-top,
+[data-part="lock"]:not([data-active]) .iso-solid[data-lit] > .iso-top { fill: var(--anatomy-top); }
+[data-part="lantern"]:not([data-active]) .iso-solid[data-lit] > .iso-shade,
+[data-part="lock"]:not([data-active]) .iso-solid[data-lit] > .iso-shade { fill: var(--anatomy-shade-2); }
+[data-part="lantern"]:not([data-active]) .iso-solid[data-lit] > .iso-edge,
+[data-part="lock"]:not([data-active]) .iso-solid[data-lit] > .iso-edge { stroke: var(--anatomy-hi); }
+[data-part="lantern"][data-active],
+[data-part="crates"][data-active] { filter: drop-shadow(0 0 5px rgba(233, 162, 59, .75)); }
+[data-part="crates"][data-active] .iso-solid > .iso-top { fill: var(--anatomy-lit-top); }
+[data-part="crates"][data-active] .iso-solid > .iso-shade { fill: var(--anatomy-lit-shade); }
+
+.castle-token { transition: opacity .2s ease; }
+.castle-token[data-hidden] { opacity: 0; }
+.castle-token .iso-solid > .iso-edge { stroke: #8B5715; }
+
+.castle-grille { stroke-width: 1.1px; }
+.castle-arm { fill: none; stroke: var(--anatomy-hi); stroke-width: 3.4px; stroke-linecap: round; }
+.castle-arm-stripes { fill: none; stroke: #E9A23B; stroke-width: 2px; stroke-dasharray: 3 3; }
+.castle-beam { stroke-width: 1.8px; }
+[data-part="sign"] { stroke-width: 1.4px; }
+
+.castle-trail { stroke: var(--anatomy-faint); stroke-width: 1px; }
+.castle-trail[data-walked] { stroke: #C9851F; stroke-width: 1.6px; stroke-dasharray: 2 5; animation: castle-flow 1.4s linear infinite; }
+@keyframes castle-flow { to { stroke-dashoffset: -14; } }
+
+[data-part="flag"] .iso-top { fill: #FFFDF8; }
+[data-part="flag"] .iso-shade { fill: #F3ECDD; }
+[data-part="flag"][data-tone="success"] .iso-top, [data-part="flag"][data-tone="success"] .iso-shade { fill: #276B52; }
+[data-part="flag"][data-tone="warning"] .iso-top, [data-part="flag"][data-tone="warning"] .iso-shade { fill: #E9A23B; }
+[data-part="flag"][data-tone="error"] .iso-top, [data-part="flag"][data-tone="error"] .iso-shade { fill: #B23E3E; }
+
+[data-plaque][data-focus] .iso-top { fill: var(--anatomy-lit-top); }
+[data-plaque][data-focus] .iso-edge { stroke: #8B5715; }
+
+@media (prefers-reduced-motion: reduce) {
+  .castle-trail[data-walked] { animation: none; }
+  .castle-token { transition: none; }
+}
