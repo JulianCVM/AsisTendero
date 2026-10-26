@@ -16,9 +16,12 @@ por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asis
 administra inventario y pedidos sobre la misma base. Código, comentarios, documentación, commits y PR en **español**.
 
 Desde el 22-10-2026 el plan S4 incluye **pedidos para recoger** dentro de una conversación (registrar, confirmar,
-agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. Siguen fuera de
-alcance mientras no lo pida el plan del corte: WhatsApp, Wompi, Supabase, datos reales de un piloto, pagos, fiados y
-domicilios.
+agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. El 26-10-2026 Julian pidió
+ampliar el panel: ventas con **registro manual** del cobro (sin pasarela ni verificación bancaria, ver
+`docs/PAGOS.md`), abastecimiento con proveedores, categorías y alertas, asistente de bodega (Grok interpreta, el
+tendero confirma), supervisión de chats con atención humana, tienda de demostración (`--demo`) y página pública
+(`/inicio`). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
+datos reales de un piloto, cobros por el chat, fiados y domicilios.
 
 ## Reglas del reto (reglamento externo)
 
@@ -98,6 +101,15 @@ propio.
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
    - `asks_assortment` y `full_category_listing` (`store_replies.py`).
+   - `Payments` y `check_payment` (`payments.py`); `sales_history` y `sales_summary` (`sales_history.py`);
+     `review_reasons` (`sales.py`).
+   - `Purchasing` (`purchasing.py`); `receive_stock` y `set_restock` (`inventory.py`); `CatalogAdmin`
+     (`catalog_admin.py`) y sus umbrales (`stock_thresholds.py`); `StockAssistant` (`stock_proposal.py`), `interpret_text`
+     y `validate_interpretation` (`stock_assistant.py`), `identify` y `find_supplier` (`stock_matching.py`).
+   - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
+     (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
+   - `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
+     (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`).
 
    Duplicar es un error aunque funcione.
 3. **Haz solo lo que pide la tarea.** Nada de refactors, renombres ni reformateos fuera del alcance. Si ves algo mal,
@@ -139,7 +151,15 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Una regla antes de registrar, confirmar, agendar o cancelar un pedido | `validate_order_request` de `order_rules.py`, con su prueba en `tests/test_orders.py` |
 | Un estado, plazo o límite del pedido | `orders.py` (`OrderBook`); la herramienta, en `order_tools.py` |
 | Cómo se redacta un pedido o un aviso de vencimiento | `order_replies.py`; el barrido, en `order_watch.py` |
-| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `tendero.py` y `ui/tendero.*` |
+| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `tendero.py` y `ui/tendero*` |
+| Una ruta del panel del tendero | Lectura en `tendero_views.py` y `READS` de `tendero.py`; cambios en `ROUTES` de `tendero_actions.py`, con su prueba en `tests/test_tendero.py` |
+| Una regla del cobro (método, estado, quién confirma) | `payments.py`, con su prueba en `tests/test_payments.py`; el historial, en `sales_history.py` |
+| Proveedores, pedidos al proveedor o llegadas de mercancía | `purchasing.py` (reglas en `purchasing_rules.py`), con su prueba en `tests/test_purchasing.py` |
+| Categorías o alertas de stock bajo | `catalog_admin.py` y `stock_thresholds.py`, con su prueba en `tests/test_catalog_admin.py` |
+| Qué entiende el asistente de bodega o cómo arma su propuesta | `stock_assistant.py` (prompt y versión) y `stock_proposal.py`, con su prueba en `tests/test_stock_assistant.py` |
+| Cuándo pasa una conversación al tendero o qué puede hacer él | `handoff.py` y `supervision.py`, con su prueba en `tests/test_supervision.py` |
+| La imagen de un producto | `product_art.py` (reglas) y `product_art_shapes.py`/`product_art_tools.py` (dibujos), con su prueba en `tests/test_product_art.py` |
+| Datos de la tienda de demostración | `demo.py` (siempre ficticios y con los módulos reales), con su prueba en `tests/test_tendero.py` |
 | Entender mejor un mensaje mal escrito | `spelling.py` (`heard_as`), con su prueba en `tests/test_spelling.py` |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |

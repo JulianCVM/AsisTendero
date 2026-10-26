@@ -11,6 +11,7 @@ from threading import Thread
 import pytest
 
 from asistendero import tendero
+from asistendero.tendero_actions import ROUTES
 from asistendero.catalog import MockCatalog
 from asistendero.inventory import Inventory, InventoryError
 from asistendero.orders import BOGOTA, OrderBook
@@ -196,11 +197,56 @@ def test_shopkeeper_sees_banned_conversations_and_can_lift_a_ban(server, session
                     {"Origin": "http://sitio-externo.example"})[0] == 403
 
 
+def _panel_scripts() -> dict[str, str]:
+    return {path.name: path.read_text(encoding="utf-8") for path in sorted(UI.glob("tendero*.js"))}
+
+
 def test_ui_never_uses_inline_code_html_injection_or_blocking_dialogs():
     html = (UI / "tendero.html").read_text(encoding="utf-8")
-    script = (UI / "tendero.js").read_text(encoding="utf-8")
     assert not re.search(r"<script>(?!\s*</script>)|\son\w+=|style=", html)
-    assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
+    scripts = _panel_scripts()
+    # Cada módulo del panel lo sirve el servidor: uno nuevo sin registrar dejaría la página en blanco.
+    assert set(scripts) == {f"{name}.js" for name in tendero.MODULES}
+    for name, script in scripts.items():
+        assert "innerHTML" not in script and "insertAdjacentHTML" not in script, name
+        assert not re.search(r"\b(?:alert|confirm|prompt)\(|setAttribute\('style'", script), name
+
+
+def test_panel_scripts_only_use_what_the_page_and_the_server_have():
+    html = (UI / "tendero.html").read_text(encoding="utf-8")
+    scripts = _panel_scripts()
+    ids = set(re.findall(r'\bid="([\w-]+)"', html))
+    for name, script in scripts.items():
+        used = set(re.findall(r"\$\('#([\w-]+)'\)", script))
+        assert used <= ids, (name, used - ids)
+        # Cada módulo importado lo sirve el servidor; si falta, el panel queda en blanco sin un error visible.
+        for module in re.findall(r"from '\./([\w-]+\.js)'", script):
+            assert f"/assets/{module}" in tendero.ASSETS and module in scripts, (name, module)
+        for path in re.findall(r"api\('(/api/[a-z/]+)", script):
+            assert path in tendero.READS or path in ROUTES, (name, path)
+    symbols = set(re.findall(r'<symbol id="i-([\w-]+)"', html))
+    joined = "".join(scripts.values())
+    icons = set(re.findall(r"icon\('([a-z]+)'\)", joined)) | set(re.findall(r"icon:'([a-z]+)'", joined))
+    icons |= set(re.findall(r"button\([^)]*, '([a-z]+)'\)", joined)) | set(re.findall(r'href="#i-([\w-]+)"', html))
+    assert {"check", "x", "alert", "clock", "edit", "shield"} <= icons <= symbols, icons - symbols
+    # Un botón que solo muestra un ícono necesita un nombre para el lector de pantalla.
+    for button in re.findall(r'<button[^>]*class="icon-button"[^>]*>', html):
+        assert "aria-label=" in button, button
+    assert '<script type="module" src="/assets/tendero.js">' in html
+
+
+def test_server_serves_every_panel_module_as_javascript(server):
+    for name in _panel_scripts():
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            connection.request("GET", f"/assets/{name}")
+        except PermissionError:
+            pytest.skip("Este entorno restringe conexiones a sockets locales")
+        response = connection.getresponse()
+        assert response.status == 200 and response.getheader("Content-Type").startswith("text/javascript"), name
+        assert "script-src 'self'" in response.getheader("Content-Security-Policy")
+        response.read()
+        connection.close()
 
 
 def test_inventory_releases_the_database_file(tmp_path):
@@ -237,3 +283,143 @@ def test_a_failed_catalog_creation_leaves_no_half_built_file(tmp_path, monkeypat
         seed.create_mock_db(tmp_path / "catalog.sqlite3")
     assert not (tmp_path / "catalog.sqlite3").exists()
 
+
+
+
+def _get(server, path):
+    status, body = _request(server, "GET", path)
+    assert status == 200, (path, body)
+    return json.loads(body)
+
+
+def _post(server, path, body):
+    status, data = _request(server, "POST", path, body, {"Origin": f"http://127.0.0.1:{server.server_port}"})
+    return status, json.loads(data)
+
+
+def test_every_panel_read_answers_and_the_catalog_never_shows_purchase_costs(server):
+    for path in tendero.READS:
+        if path != "/api/conversacion":
+            _get(server, path)
+    status, data = _post(server, "/api/abastecimiento/pedido", {
+        "proveedor": "Nadie", "lineas": [{"sku": "PVC-050", "cantidad": 10, "costo_unitario": 5000}]})
+    assert status == 400 and data["code"] == "SUPPLIER_NOT_FOUND"
+    server.purchasing.add_supplier("Proveedor de prueba")
+    status, data = _post(server, "/api/abastecimiento/pedido", {
+        "proveedor": "Proveedor de prueba", "lineas": [{"sku": "PVC-050", "cantidad": 10, "costo_unitario": 5000}],
+        "fecha_estimada": "2026-10-23"})
+    assert status == 200 and data["pedido"]["estado"] == "pedido"
+    [coming] = _get(server, "/api/inventario?estado=camino")["productos"]
+    assert (coming["sku"], coming["en_camino"], coming["llega"]) == ("PVC-050", 10, "2026-10-23")
+    # Un pedido al proveedor no suma a la bodega, y el catálogo de consulta no muestra costos.
+    assert coming["stock"] == 12
+    catalog = _get(server, "/api/catalogo")
+    assert "5000" not in json.dumps(catalog) and not {"costo", "costo_unitario_cop"} & set(catalog["productos"][0])
+
+
+def test_a_receipt_is_previewed_without_writing_and_applied_only_when_confirmed(server):
+    server.purchasing.add_supplier("Proveedor de prueba")
+    lines = [{"sku": "PVC-050", "cantidad": 5}]
+    status, preview = _post(server, "/api/abastecimiento/recepcion",
+                            {"proveedor": "Proveedor de prueba", "lineas": lines, "aplicar": False})
+    assert status == 200 and preview["vista_previa"] and preview["lineas"][0]["stock_despues"] == 17
+    assert server.inventory.products("PVC-050")[0]["stock"] == 12
+    assert _post(server, "/api/abastecimiento/recepcion", {"proveedor": "Proveedor de prueba", "lineas": lines,
+                                                           "aplicar": "sí"})[0] == 400
+    status, applied = _post(server, "/api/abastecimiento/recepcion",
+                            {"proveedor": "Proveedor de prueba", "lineas": lines, "aplicar": True})
+    assert status == 200 and applied["recepcion"] == "R-0001"
+    assert server.inventory.products("PVC-050")[0]["stock"] == 17
+    [movement] = _get(server, "/api/movimientos?sku=PVC-050")["movimientos"]
+    assert movement["origen"].startswith("recepción R-0001")
+
+
+def test_a_payment_proof_is_not_income_until_the_shopkeeper_confirms_it(server, shop):
+    _, book, _ = shop
+    order = book.create("sesion-a", [("PVC-050", 2)])
+    book.confirm("sesion-a", order["pedido"])
+    book.deliver(order["pedido"])
+    # Un pantallazo no prueba el pago: un pago digital no se confirma «en el mostrador».
+    status, data = _post(server, "/api/pagos/registrar", {"pedido": order["pedido"], "metodo": "nequi",
+                                                          "estado": "confirmado", "fuente": "mostrador"})
+    assert status == 400 and data["code"] == "PAYMENT_SOURCE_MISMATCH"
+    assert _post(server, "/api/pagos/registrar", {"pedido": order["pedido"], "metodo": "nequi",
+                                                  "estado": "confirmado", "monto_cop": 1})[0] == 400
+    assert _post(server, "/api/pagos/registrar", {"pedido": order["pedido"], "metodo": "nequi",
+                                                  "estado": "comprobante_recibido", "referencia": "M123"})[0] == 200
+    summary = _get(server, "/api/ventas?desde=2026-10-21&hasta=2026-10-21")["resumen"]
+    assert summary["ventas_registradas"]["total_cop"] == order["total_cop"]
+    assert summary["ingresos_confirmados"]["total_cop"] == 0 and summary["por_verificar"]["pagos"] == 1
+    [listed] = _get(server, "/api/pedidos?revisar=1")["pedidos"]
+    assert listed["pedido"] == order["pedido"] and listed["pago"]["estado"] == "comprobante_recibido"
+    status, data = _post(server, "/api/pagos/registrar", {"pedido": order["pedido"], "metodo": "nequi",
+                                                          "estado": "confirmado", "fuente": "revision_tendero"})
+    assert status == 200 and data["pago"]["monto_cop"] == order["total_cop"]
+    assert _get(server, "/api/ventas")["resumen"]["ingresos_confirmados"]["total_cop"] == order["total_cop"]
+
+
+def test_the_shopkeeper_takes_a_chat_replies_returns_it_and_bans_by_hand(server, sessions):
+    session = sessions.create()
+    sessions.record(session, "quiero hablar con el dueño", "Le aviso al tendero.", "handoff", [])
+    listed = _get(server, "/api/conversaciones")
+    assert listed["conteo"]["total"] == 1 and listed["conversaciones"][0]["id"] == session
+    # Los pedidos muestran la conversación abreviada: el detalle la encuentra igual.
+    detail = _get(server, f"/api/conversacion?id={session[:8]}")["conversacion"]
+    assert detail["id"] == session and "tomar" in detail["acciones"]
+    status, data = _post(server, "/api/conversaciones/responder", {"sesion": session, "texto": "hola"})
+    assert status == 409 and data["code"] == "ATTENTION_NOT_TAKEN"
+    assert _post(server, "/api/conversaciones/tomar", {"sesion": session})[1]["estado"] == "tendero"
+    status, data = _post(server, "/api/conversaciones/responder", {"sesion": session, "texto": "Pasa por el mostrador"})
+    assert status == 200 and "Tendero: Pasa por el mostrador" in sessions.take_notices(session)
+    assert _post(server, "/api/conversaciones/devolver", {"sesion": session})[1]["estado"] == "ia"
+    status, data = _post(server, "/api/conversaciones/bloquear", {"sesion": session, "motivo": "Amenaza al personal"})
+    assert status == 200 and sessions.bans()[0]["tipo"] == "manual"
+    assert _request(server, "GET", "/api/conversacion?id=../../etc")[0] == 400
+
+
+def test_product_images_and_the_public_page_are_served_without_inline_code(server):
+    status, svg = _request(server, "GET", "/img/producto/PVC-050.svg")
+    assert status == 200 and svg.startswith("<svg") and "<script" not in svg
+    assert _request(server, "GET", "/img/producto/NO-EXISTE.svg")[0] == 404
+    assert _request(server, "GET", "/img/producto/..%2Fseed.svg")[0] == 404
+    status, page = _request(server, "GET", "/inicio")
+    assert status == 200 and "AsisTendero" in page and "ficticio" in page
+    assert not re.search(r"<script>(?!\s*</script>)|\son\w+=|style=", page)
+
+
+def test_extra_keys_never_slip_through_a_panel_action(server):
+    for path, body in [("/api/categorias/crear", {"nombre": "Iluminación", "orden": 1}),
+                       ("/api/alertas", {"general": 3, "sku": "PVC-050"}),
+                       ("/api/abastecimiento/cancelar", {"oc": "OC-0001"}),
+                       ("/api/asistente/aplicar", {"id": "AS-1", "forzar": True})]:
+        status, data = _post(server, path, body)
+        assert status == 400 and "Envía solo" in data["error"], path
+    assert _post(server, "/api/categorias/crear", {"nombre": "Iluminación"})[0] == 200
+    assert "Iluminación" in [item["nombre"] for item in _get(server, "/api/categorias")["categorias"]]
+
+
+def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path):
+    from asistendero.demo import build_demo
+    from asistendero.seed import DEFAULT_DB_PATH
+
+    database, sessions_path = build_demo(tmp_path / "demo")
+    assert database.parent == tmp_path / "demo" and database.resolve() != DEFAULT_DB_PATH.resolve()
+    instance = tendero.make_server(0, Inventory(database), sessions=SessionStore(sessions_path))
+    try:
+        views = instance.views
+        summary = views.summary()
+        assert summary["por_estado"]["entregado"] >= 5 and summary["por_estado"]["vencido"] == 1
+        money = summary["dinero"]
+        # Lo vendido hoy no es lo cobrado: hay comprobantes por verificar.
+        assert money["ventas_registradas"]["total_cop"] > money["ingresos_confirmados"]["total_cop"]
+        assert money["por_verificar"]["pagos"] >= 1
+        chats = views.chats({})["conteo"]
+        assert chats["requiere_humano"] == 1 and chats["tendero"] == 1 and chats["bloqueadas"] == 2
+        states = {order["estado"] for order in views.supply()["pedidos"]}
+        assert {"pedido", "parcial", "cancelada"} <= states
+        # Las cantidades cuadran: la bodega nunca queda por debajo de lo apartado.
+        assert all(product["stock"] >= product["apartado"] for product in views.inventory.products())
+    finally:
+        instance.server_close()
+    # Rehacerla no falla aunque ya exista: solo se borran sus propios archivos.
+    assert build_demo(tmp_path / "demo")[0] == database

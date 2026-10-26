@@ -2,112 +2,662 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B4A">
   <title>Panel del tendero · PulsoTienda</title>
+  <link rel="icon" href="/assets/cercania-mark.png" type="image/png">
+  <script src="/assets/tendero-theme.js"></script>
   <link rel="stylesheet" href="/assets/tendero.css">
-  <script src="/assets/tendero.js" defer></script>
+  <link rel="stylesheet" href="/assets/tendero-views.css">
+  <script type="module" src="/assets/tendero.js"></script>
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <img src="/assets/cercania-mark.png" alt="" width="40" height="40">
-      <div>
-        <h1>Panel del tendero</h1>
-        <p>PulsoTienda · Ferretería La Esquina</p>
+  <a class="skip" href="#main">Ir al contenido</a>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5.5h4V20"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/><path d="M12 12v9"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="M9.5 12.5 11 14l3.5-3.5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20.5V16h-4.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5"/><path d="M12 17.2v.1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3.5 16.5 5.5-5.5 4 4 7.5-7.5"/><path d="M15 7.5h5.5V13"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10h-8l-4.5 4v-4H4.5z"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4.5l3 1.5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M10.5 6.5 5 12l5.5 5.5"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h11v10H3z"/><path d="M14 10h4l3 3.5v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></symbol>
+    <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 9.5v5M17.5 9.5v5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.9L12 18.5l-1.8-5.8-5.7-1.9L10.2 9z"/><path d="M18.5 3.5v3M17 5h3"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12V4.5H11l9.5 9.5-7.5 7.5z"/><circle cx="7.5" cy="8.5" r="1.3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 4.5V8M9 13v.5M15 13v.5M9.5 16.5h5"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4.5 13.5 20l-2-6.5z"/><path d="m11.5 13.5 4-4"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  </svg>
+
+  <div class="app">
+    <nav class="nav" aria-label="Secciones del panel">
+      <div class="nav-brand">
+        <img src="/assets/cercania-mark.png" alt="" width="40" height="40">
+        <div>
+          <strong>PulsoTienda</strong>
+          <span>Ferretería La Esquina</span>
+        </div>
       </div>
+      <ul class="nav-list">
+        <li data-desktop><span class="nav-group">El día</span></li>
+        <li><a href="#hoy" data-view="hoy"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg><span>Hoy</span></a></li>
+        <li><a href="#pedidos" data-view="pedidos"><svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg><span>Pedidos</span>
+          <b class="nav-badge" id="badge-pedidos" hidden></b></a></li>
+        <li data-desktop><a href="#ventas" data-view="ventas"><svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg><span>Ventas</span>
+          <b class="nav-badge is-warning" id="badge-ventas" hidden></b></a></li>
+        <li data-desktop><span class="nav-group">La bodega</span></li>
+        <li><a href="#inventario" data-view="inventario"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg><span>Inventario</span>
+          <b class="nav-badge is-warning" id="badge-inventario" hidden></b></a></li>
+        <li data-desktop><a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>Catálogo</span></a></li>
+        <li data-desktop><a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span>Asistente de bodega</span></a></li>
+        <li data-desktop><span class="nav-group">Clientes</span></li>
+        <li><a href="#conversaciones" data-view="conversaciones"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Chats</span>
+          <b class="nav-badge is-danger" id="badge-chats" hidden></b></a></li>
+        <li data-mobile><button type="button" class="nav-more" id="more-toggle" aria-expanded="false" aria-controls="more-menu">
+          <svg class="icon" aria-hidden="true"><use href="#i-more"/></svg><span>Más</span></button></li>
+      </ul>
+      <div class="nav-foot">
+        <span class="env-tag">Datos simulados</span>
+        <p>Catálogo, pedidos, ventas y chats ficticios de demostración. Precios en pesos colombianos.</p>
+        <a href="/inicio">Ver la presentación del producto</a>
+      </div>
+    </nav>
+    <div class="more-menu" id="more-menu" hidden>
+      <a href="#ventas" data-view="ventas"><svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>Ventas y pagos<small id="more-ventas"></small></a>
+      <a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Catálogo</a>
+      <a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Asistente de bodega</a>
+      <a href="/inicio"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>Presentación del producto</a>
     </div>
-    <span class="env">Datos simulados</span>
-  </header>
 
-  <nav class="tabs" aria-label="Secciones">
-    <button type="button" data-tab="resumen" aria-pressed="true">Resumen</button>
-    <button type="button" data-tab="pedidos" aria-pressed="false">Pedidos</button>
-    <button type="button" data-tab="inventario" aria-pressed="false">Inventario</button>
-    <button type="button" data-tab="movimientos" aria-pressed="false">Historial</button>
-    <button type="button" data-tab="bloqueos" aria-pressed="false">Bloqueos</button>
-  </nav>
-
-  <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
-
-  <main>
-    <section id="tab-resumen" class="panel" aria-labelledby="resumen-title">
-      <h2 id="resumen-title">Hoy <span id="summary-day" class="muted"></span></h2>
-      <div class="tiles">
-        <div class="tile"><span class="tile-label">Ventas entregadas</span><strong id="tile-sales">—</strong></div>
-        <div class="tile"><span class="tile-label">Total vendido</span><strong id="tile-total">—</strong></div>
-        <div class="tile"><span class="tile-label">Por confirmar</span><strong id="tile-pending">—</strong></div>
-        <div class="tile"><span class="tile-label">Confirmados por recoger</span><strong id="tile-confirmed">—</strong></div>
-      </div>
-      <div class="columns">
-        <div class="card">
-          <h3>Por recoger</h3>
-          <ul id="pickup-list" class="plain-list"></ul>
-          <p id="pickup-empty" class="muted" hidden>No hay pedidos por recoger.</p>
+    <div class="workspace">
+      <header class="topbar">
+        <img class="topbar-mark" src="/assets/cercania-mark.png" alt="" width="32" height="32">
+        <div class="topbar-text">
+          <h1 id="view-title">Hoy</h1>
+          <p id="view-subtitle"></p>
         </div>
-        <div class="card">
-          <h3>Más vendidos hoy</h3>
-          <ul id="top-list" class="plain-list"></ul>
-          <p id="top-empty" class="muted" hidden>Todavía no hay ventas entregadas hoy.</p>
+        <span class="env-tag topbar-env">Datos simulados</span>
+        <p class="sync" id="sync-status" aria-live="off">Cargando…</p>
+        <button type="button" class="icon-button" id="theme-toggle" aria-label="Tema: igual al del equipo. Cambiar a claro">
+          <svg class="icon" aria-hidden="true"><use href="#i-auto"/></svg>
+        </button>
+        <button type="button" class="icon-button" id="refresh" aria-label="Actualizar ahora">
+          <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+        </button>
+      </header>
+      <p class="offline" id="offline" role="alert" hidden><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>
+        <span>Sin conexión con la tienda. Los datos pueden estar desactualizados; se reintenta solo.</span></p>
+
+      <main id="main" tabindex="-1">
+        <!-- ================= HOY ================= -->
+        <section id="view-hoy" class="view" aria-labelledby="view-title">
+          <div class="kpis">
+            <a class="kpi is-brand" href="#ventas">
+              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-trend"/></svg>Vendido hoy</span>
+              <strong class="kpi-value" id="kpi-total">—</strong>
+              <span class="kpi-note" id="kpi-sales"></span>
+            </a>
+            <a class="kpi" href="#pedidos" data-filter="pendiente" id="kpi-pending-card">
+              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Por confirmar</span>
+              <strong class="kpi-value" id="kpi-pending">—</strong>
+              <span class="kpi-note" id="kpi-pending-note"></span>
+            </a>
+            <a class="kpi" href="#pedidos" data-filter="confirmado">
+              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg>Por recoger</span>
+              <strong class="kpi-value" id="kpi-confirmed">—</strong>
+              <span class="kpi-note" id="kpi-confirmed-note"></span>
+            </a>
+            <a class="kpi" href="#inventario" data-filter="bajo" id="kpi-low-card">
+              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Por surtir</span>
+              <strong class="kpi-value" id="kpi-low">—</strong>
+              <span class="kpi-note" id="kpi-low-note"></span>
+            </a>
+          </div>
+
+          <section class="card attention" aria-labelledby="attention-title" id="attention-card" hidden>
+            <div class="card-head"><h2 id="attention-title"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Necesita tu revisión</h2></div>
+            <ul class="attention-list" id="attention-list"></ul>
+          </section>
+
+          <div class="today-grid">
+            <section class="card queue" aria-labelledby="queue-title">
+              <div class="card-head">
+                <h2 id="queue-title">Atiende ahora</h2>
+                <a class="link" href="#pedidos">Todos los pedidos<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+              </div>
+              <p class="card-help">Primero los apartados que están por vencer, después las recogidas agendadas.</p>
+              <div id="queue-list" class="order-stack"></div>
+              <div id="queue-empty" class="empty" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                <strong>Todo al día</strong>
+                <span>Los pedidos que lleguen por el chat aparecen aquí solos.</span>
+              </div>
+            </section>
+
+            <div class="side-stack">
+              <section class="card" aria-labelledby="money-title">
+                <div class="card-head">
+                  <h2 id="money-title">Plata del día</h2>
+                  <a class="link" href="#ventas">Ventas<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                </div>
+                <dl class="money" id="money-facts"></dl>
+              </section>
+              <section class="card" aria-labelledby="agent-title">
+                <div class="card-head">
+                  <h2 id="agent-title"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg>El asistente hoy</h2>
+                  <a class="link" href="#conversaciones">Chats<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                </div>
+                <dl class="money" id="agent-facts"></dl>
+                <ol class="timeline compact activity" id="activity-list"></ol>
+                <p id="activity-empty" class="empty-line" hidden>Sin actividad del chat todavía.</p>
+              </section>
+              <section class="card" aria-labelledby="top-title">
+                <div class="card-head"><h2 id="top-title">Más vendidos hoy</h2></div>
+                <ol id="top-list" class="rank"></ol>
+                <p id="top-empty" class="empty-line" hidden>Todavía no hay ventas entregadas hoy.</p>
+              </section>
+              <section class="card" aria-labelledby="incoming-title">
+                <div class="card-head">
+                  <h2 id="incoming-title">Mercancía en camino</h2>
+                  <a class="link" href="#inventario/abastecimiento">Abastecimiento<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                </div>
+                <ul id="incoming-list" class="mini-list"></ul>
+                <p id="incoming-empty" class="empty-line" hidden>No hay pedidos a proveedores pendientes.</p>
+              </section>
+              <section class="card" aria-labelledby="restock-title">
+                <div class="card-head">
+                  <h2 id="restock-title">Por surtir</h2>
+                  <a class="link" href="#inventario" data-filter="bajo">Ver todo<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                </div>
+                <ul id="restock-list" class="mini-list"></ul>
+                <p id="restock-empty" class="empty-line" hidden>Ningún producto está por debajo de su alerta.</p>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= PEDIDOS ================= -->
+        <section id="view-pedidos" class="view" aria-labelledby="view-title" hidden>
+          <div class="toolbar">
+            <div class="segmented" id="order-filter" role="group" aria-label="Filtrar pedidos por estado"></div>
+            <label class="search">
+              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <span class="visually-hidden">Buscar pedido</span>
+              <input id="order-search" type="search" maxlength="40" placeholder="Código, producto o nota" autocomplete="off">
+            </label>
+          </div>
+          <p class="card-help">Todos los pedidos los registró el asistente en el chat, con lo que el cliente pidió. Tú los entregas y registras el pago.</p>
+          <div id="order-list" class="order-grid"></div>
+          <div id="orders-empty" class="empty" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg>
+            <strong id="orders-empty-title">No hay pedidos</strong>
+            <span id="orders-empty-text"></span>
+          </div>
+        </section>
+
+        <!-- ================= VENTAS ================= -->
+        <section id="view-ventas" class="view" aria-labelledby="view-title" hidden>
+          <div class="callout is-soft">
+            <svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>
+            <p><strong>Vendido no es lo mismo que cobrado.</strong> Una venta queda registrada al entregar el pedido; el pago
+              solo cuenta como cobrado cuando tú lo confirmas (en el mostrador o revisando tu app o extracto). Un pantallazo
+              del cliente es solo un comprobante por verificar.</p>
+          </div>
+          <form class="filters" id="sales-filter">
+            <label class="field compact"><span>Desde</span><input type="date" id="sales-from"></label>
+            <label class="field compact"><span>Hasta</span><input type="date" id="sales-to"></label>
+            <label class="field compact"><span>Método</span><select id="sales-method"><option value="">Todos</option></select></label>
+            <label class="field compact"><span>Pago</span><select id="sales-pay"><option value="">Todos</option></select></label>
+            <label class="field compact"><span>Pedido</span><select id="sales-order"><option value="">Todos</option></select></label>
+          </form>
+          <div class="kpis" id="sales-kpis"></div>
+          <div class="sales-grid">
+            <section class="card" aria-labelledby="methods-title">
+              <div class="card-head"><h2 id="methods-title">Por método de pago</h2></div>
+              <ol class="rank" id="method-list"></ol>
+              <p id="method-empty" class="empty-line" hidden>Sin pagos en estas fechas.</p>
+            </section>
+            <section class="card" aria-labelledby="tx-title">
+              <div class="card-head"><h2 id="tx-title">Transacciones</h2><span class="result-line" id="tx-count"></span></div>
+              <div id="tx-list" class="tx-list"></div>
+              <div id="tx-empty" class="empty" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>
+                <strong>Sin transacciones</strong>
+                <span>Cambia las fechas o los filtros.</span>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ================= INVENTARIO ================= -->
+        <section id="view-inventario" class="view" aria-labelledby="view-title" hidden>
+          <div class="toolbar">
+            <nav class="segmented" aria-label="Partes del inventario">
+              <a href="#inventario" data-inv-tab="productos">Productos</a>
+              <a href="#inventario/abastecimiento" data-inv-tab="abastecimiento">Abastecimiento</a>
+              <a href="#inventario/movimientos" data-inv-tab="movimientos">Movimientos</a>
+              <a href="#inventario/categorias" data-inv-tab="categorias">Categorías y alertas</a>
+            </nav>
+            <div class="button-row">
+              <button type="button" class="secondary" id="open-receipt"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Llegó mercancía</button>
+              <button type="button" class="primary" id="new-product"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Nuevo producto</button>
+            </div>
+          </div>
+
+          <div id="inv-productos" class="inv-pane">
+            <form id="inventory-filter" class="filters" role="search">
+              <label class="search">
+                <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <span class="visually-hidden">Buscar en el inventario</span>
+                <input id="search" type="search" maxlength="60" placeholder="Nombre, medida o SKU" autocomplete="off">
+              </label>
+              <label class="select">
+                <span class="visually-hidden">Categoría</span>
+                <select id="category"><option value="">Todas las categorías</option></select>
+              </label>
+              <div class="segmented" role="group" aria-label="Existencias">
+                <button type="button" data-stock="todos" aria-pressed="true">Todos</button>
+                <button type="button" data-stock="bajo" aria-pressed="false">Por surtir</button>
+                <button type="button" data-stock="agotado" aria-pressed="false">Agotados</button>
+                <button type="button" data-stock="camino" aria-pressed="false">En camino</button>
+              </div>
+            </form>
+            <p class="result-line" id="product-count" aria-live="polite"></p>
+            <div id="product-grid" class="product-grid"></div>
+            <div id="products-empty" class="empty" hidden>
+              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <strong>Sin resultados</strong>
+              <span>Prueba con otra palabra o quita el filtro de categoría.</span>
+            </div>
+            <button type="button" class="secondary more" id="show-more" hidden></button>
+          </div>
+
+          <div id="inv-abastecimiento" class="inv-pane" hidden>
+            <p class="card-help">Registra lo que pides al proveedor (queda pendiente, sin sumar a la bodega) y lo que realmente llega
+              (solo eso suma). Una entrega puede llegar completa, por partes o con productos de más.</p>
+            <div class="button-row">
+              <button type="button" class="primary" id="new-po"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Pedido al proveedor</button>
+              <button type="button" class="secondary" id="open-receipt-2"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Registrar llegada</button>
+              <a class="ghost" href="#asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Contárselo al asistente</a>
+            </div>
+            <div class="segmented" id="po-filter" role="group" aria-label="Filtrar pedidos a proveedores"></div>
+            <div id="po-list" class="order-grid"></div>
+            <div id="po-empty" class="empty" hidden>
+              <svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>
+              <strong>Sin pedidos a proveedores</strong>
+              <span>Cuando pidas mercancía, regístrala aquí para saber qué falta por llegar.</span>
+            </div>
+            <section class="card" aria-labelledby="receipts-title">
+              <div class="card-head"><h2 id="receipts-title">Últimas llegadas</h2></div>
+              <ol id="receipt-list" class="timeline"></ol>
+              <p id="receipt-empty" class="empty-line" hidden>Todavía no se ha registrado ninguna llegada.</p>
+            </section>
+          </div>
+
+          <div id="inv-movimientos" class="inv-pane" hidden>
+            <p class="card-help">Cada cambio de precio, existencias o surtido queda registrado con la hora, el origen y quién lo hizo.</p>
+            <ol id="history-list" class="timeline timeline-box"></ol>
+            <div id="history-empty" class="empty" hidden>
+              <svg class="icon" aria-hidden="true"><use href="#i-history"/></svg>
+              <strong>Sin cambios todavía</strong>
+              <span>Cuando cambies un precio o lleguen productos, aparecerá aquí.</span>
+            </div>
+          </div>
+
+          <div id="inv-categorias" class="inv-pane" hidden>
+            <div class="cat-grid">
+              <section class="card" aria-labelledby="cats-title">
+                <div class="card-head"><h2 id="cats-title">Categorías</h2></div>
+                <p class="card-help">El orden es el de los filtros y el catálogo. Renombrar una categoría también cambia lo que el asistente
+                  dice cuando le preguntan qué venden.</p>
+                <ul id="cat-list" class="cat-list"></ul>
+                <form id="cat-form" class="cat-add">
+                  <label class="field"><span>Nueva categoría</span><input id="cat-name" maxlength="40" required placeholder="Iluminación"></label>
+                  <button type="submit" class="secondary"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Agregar</button>
+                </form>
+              </section>
+              <section class="card" aria-labelledby="alerts-title">
+                <div class="card-head"><h2 id="alerts-title">Alertas de stock bajo</h2></div>
+                <p class="card-help">Un producto pasa a «Por surtir» cuando lo que queda para vender llega a este mínimo. Cada producto puede
+                  tener el suyo desde su ficha.</p>
+                <form id="alert-form" class="cat-add">
+                  <label class="field"><span>Mínimo general</span><input id="alert-global" type="number" inputmode="numeric" min="0" max="100000" required></label>
+                  <button type="submit" class="secondary">Guardar</button>
+                </form>
+                <ul id="alert-list" class="mini-list"></ul>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= CATÁLOGO ================= -->
+        <section id="view-catalogo" class="view" aria-labelledby="view-title" hidden>
+          <div class="callout is-soft">
+            <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+            <p><strong>Vista de consulta.</strong> Es lo mismo que lee el asistente: precio y lo que queda para vender (la bodega menos lo
+              apartado). Úsala para comprobar sus respuestas; aquí no se cambia nada ni se ven costos de compra.</p>
+          </div>
+          <div class="filters">
+            <label class="search">
+              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <span class="visually-hidden">Buscar en el catálogo</span>
+              <input id="cat-search" type="search" maxlength="60" placeholder="Busca como lo pediría un cliente" autocomplete="off">
+            </label>
+          </div>
+          <div class="chips" id="cat-chips" role="group" aria-label="Categorías"></div>
+          <p class="result-line" id="cat-count" aria-live="polite"></p>
+          <div id="catalog-grid" class="catalog-grid"></div>
+          <div id="catalog-empty" class="empty" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <strong>Sin resultados</strong>
+            <span>Prueba con otra palabra o elige «Todo».</span>
+          </div>
+        </section>
+
+        <!-- ================= ASISTENTE DE BODEGA ================= -->
+        <section id="view-asistente" class="view" aria-labelledby="view-title" hidden>
+          <div class="assistant-grid">
+            <section class="card composer-card" aria-labelledby="ask-title">
+              <div class="card-head"><h2 id="ask-title"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Cuéntale qué pasó en la bodega</h2></div>
+              <p class="card-help">Escribe o dicta como hablas: «Llegaron 12 de los 20 bultos de cemento que pedimos y el proveedor mandó 5 brochas
+                de más». El asistente propone los cambios; <strong>nada se aplica hasta que confirmes</strong>.</p>
+              <form id="assist-form" class="assist-form">
+                <label class="field"><span class="visually-hidden">Mensaje para el asistente de bodega</span>
+                  <textarea id="assist-text" maxlength="1000" required placeholder="Ej.: mañana llegan 30 galones de vinilo blanco; sube el thinner de galón a 31.500"></textarea></label>
+                <div class="assist-actions">
+                  <button type="button" class="icon-button" id="assist-mic" aria-label="Dictar por voz" aria-pressed="false">
+                    <svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></button>
+                  <span class="hint" id="assist-mic-hint"></span>
+                  <span class="hint" id="assist-count">0/1000</span>
+                  <button type="submit" class="primary" id="assist-send"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Interpretar</button>
+                </div>
+              </form>
+              <div class="chips" id="assist-examples" role="group" aria-label="Ejemplos"></div>
+              <p class="hint">Interpretar llama a Grok y consume créditos del reto. El dictado usa el reconocimiento de voz del navegador.</p>
+            </section>
+            <section class="card" aria-labelledby="proposal-title" id="proposal-card" hidden>
+              <div class="card-head"><h2 id="proposal-title">Esto entendí</h2><span id="proposal-status"></span></div>
+              <p class="proposal-heard" id="proposal-heard"></p>
+              <div id="proposal-ops" class="proposal-ops"></div>
+              <ul id="proposal-warnings" class="warning-list"></ul>
+              <div class="sheet-foot inline" id="proposal-actions">
+                <button type="button" class="ghost" id="proposal-cancel">Descartar</button>
+                <button type="button" class="secondary" id="proposal-fix"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>Corregir el mensaje</button>
+                <button type="button" class="primary" id="proposal-apply"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Confirmar y aplicar</button>
+              </div>
+            </section>
+          </div>
+          <section class="card" aria-labelledby="assist-log-title">
+            <div class="card-head"><h2 id="assist-log-title">Lo que has registrado con el asistente</h2></div>
+            <ol id="assist-log" class="timeline"></ol>
+            <p id="assist-log-empty" class="empty-line" hidden>Todavía no has confirmado cambios con el asistente.</p>
+          </section>
+        </section>
+
+        <!-- ================= CONVERSACIONES ================= -->
+        <section id="view-conversaciones" class="view" aria-labelledby="view-title" hidden>
+          <div class="toolbar">
+            <div class="segmented" id="chat-filter" role="group" aria-label="Filtrar conversaciones"></div>
+            <label class="search">
+              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <span class="visually-hidden">Buscar conversación</span>
+              <input id="chat-search" type="search" maxlength="60" placeholder="Código, producto o palabra" autocomplete="off">
+            </label>
+          </div>
+          <div class="chat-layout" id="chat-layout">
+            <div class="chat-list-wrap">
+              <ul id="chat-list" class="chat-list" aria-label="Conversaciones"></ul>
+              <div id="chats-empty" class="empty" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>
+                <strong id="chats-empty-title">Sin conversaciones</strong>
+                <span id="chats-empty-text">Cuando un cliente escriba por el chat, lo verás aquí.</span>
+              </div>
+            </div>
+            <section class="chat-detail card" id="chat-detail" aria-live="polite" hidden>
+              <header class="chat-detail-head">
+                <button type="button" class="icon-button chat-back" id="chat-back" aria-label="Volver a la lista de conversaciones">
+                  <svg class="icon" aria-hidden="true"><use href="#i-back"/></svg></button>
+                <div class="chat-detail-title">
+                  <h2 id="chat-title">Conversación</h2>
+                  <p class="sheet-sub" id="chat-meta"></p>
+                </div>
+                <span id="chat-state"></span>
+              </header>
+              <div id="chat-alerts" class="chat-alerts"></div>
+              <ol id="chat-transcript" class="transcript"></ol>
+              <div id="chat-orders" class="chat-orders"></div>
+              <form id="chat-reply" class="chat-reply" hidden>
+                <label class="field"><span class="visually-hidden">Responder como tendero</span>
+                  <textarea id="chat-reply-text" maxlength="500" required placeholder="Escribe tu respuesta al cliente"></textarea></label>
+                <button type="submit" class="primary"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg>Enviar</button>
+              </form>
+              <div id="chat-actions" class="button-row chat-actions"></div>
+            </section>
+            <div class="empty chat-placeholder" id="chat-placeholder">
+              <svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>
+              <strong>Elige una conversación</strong>
+              <span>Verás los mensajes, los pedidos que salieron de ella y lo que hizo el asistente.</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <!-- Editor de producto -->
+  <dialog id="product-dialog" class="sheet" aria-labelledby="pd-title">
+    <form id="product-form" novalidate>
+      <header class="sheet-head">
+        <img class="sheet-art" id="pd-art" alt="" width="56" height="56">
+        <div>
+          <h2 id="pd-title">Producto</h2>
+          <p id="pd-meta" class="sheet-sub"></p>
         </div>
-        <div class="card">
-          <h3>Pocas existencias para vender</h3>
-          <ul id="low-list" class="plain-list"></ul>
-          <p id="low-empty" class="muted" hidden>Ningún producto está por debajo de 5 disponibles.</p>
+        <button type="button" class="icon-button" data-close aria-label="Cerrar sin guardar">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <dl class="stock-facts">
+          <div><dt>En bodega</dt><dd id="pd-now-stock">—</dd></div>
+          <div><dt>Apartado</dt><dd id="pd-now-held">—</dd></div>
+          <div><dt>Para vender</dt><dd id="pd-now-free">—</dd></div>
+          <div><dt>En camino</dt><dd id="pd-now-coming">—</dd></div>
+        </dl>
+        <div class="field">
+          <label for="pd-price">Precio de venta</label>
+          <div class="affix"><span aria-hidden="true">$</span>
+            <input id="pd-price" type="number" inputmode="numeric" min="0" max="50000000" step="1" required aria-describedby="pd-price-hint"></div>
+          <p class="hint" id="pd-price-hint"></p>
         </div>
+        <div class="field">
+          <label for="pd-stock">En bodega (conteo físico)</label>
+          <div class="stepper">
+            <button type="button" class="icon-button" id="pd-minus" aria-label="Quitar una unidad de la bodega">
+              <svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <input id="pd-stock" type="number" inputmode="numeric" min="0" max="100000" step="1" required aria-describedby="pd-stock-hint">
+            <button type="button" class="icon-button" id="pd-plus" aria-label="Sumar una unidad a la bodega">
+              <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+          <p class="hint" id="pd-stock-hint"></p>
+        </div>
+        <div class="field">
+          <label for="pd-alert">Alerta de stock bajo</label>
+          <input id="pd-alert" type="number" inputmode="numeric" min="0" max="100000" step="1" aria-describedby="pd-alert-hint">
+          <p class="hint" id="pd-alert-hint">Vacío: usa el mínimo general.</p>
+        </div>
+        <fieldset class="field">
+          <legend>Surtido</legend>
+          <p class="hint">Es lo que responde el asistente cuando un cliente pregunta cuándo llega más. Sin dato, no promete fecha.</p>
+          <div class="pair">
+            <label><span>Llega</span><select id="pd-restock"></select></label>
+            <label><span>O en la fecha</span><input id="pd-date" type="date"></label>
+          </div>
+        </fieldset>
+        <p class="form-error" id="pd-error" role="alert" hidden></p>
+        <details class="mini-history">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg>Últimos movimientos de este producto</summary>
+          <ol id="pd-history" class="timeline compact"></ol>
+          <p id="pd-history-empty" class="empty-line" hidden>Sin cambios registrados.</p>
+        </details>
       </div>
-    </section>
+      <footer class="sheet-foot">
+        <button type="button" class="secondary" data-close>Cancelar</button>
+        <button type="submit" class="primary" id="pd-save">Guardar cambios</button>
+      </footer>
+    </form>
+  </dialog>
 
-    <section id="tab-pedidos" class="panel" aria-labelledby="pedidos-title" hidden>
-      <div class="panel-head">
-        <h2 id="pedidos-title">Pedidos del chat</h2>
-        <button type="button" id="refresh-orders" class="secondary">Actualizar</button>
+  <!-- Alta de producto -->
+  <dialog id="new-dialog" class="sheet" aria-labelledby="np-title">
+    <form id="add-form" novalidate>
+      <header class="sheet-head">
+        <div>
+          <h2 id="np-title">Nuevo producto</h2>
+          <p class="sheet-sub">El asistente lo encuentra desde que lo guardas.</p>
+        </div>
+        <button type="button" class="icon-button" data-close aria-label="Cerrar sin guardar">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="grid-2">
+          <label class="field wide"><span>Nombre</span><input name="nombre" required maxlength="80" placeholder="Tubo PVC presión"></label>
+          <label class="field"><span>Variante o medida</span><input name="variante" required maxlength="80" placeholder="1/2 pulgada"></label>
+          <label class="field"><span>SKU</span><input name="sku" required maxlength="32" pattern="[A-Z0-9][A-Z0-9\-]{1,31}" placeholder="TUB-099" autocapitalize="characters" aria-describedby="np-sku-hint">
+            <small class="hint" id="np-sku-hint">Mayúsculas, números y guiones.</small></label>
+          <label class="field"><span>Categoría</span><select name="categoria" id="np-category" required></select></label>
+          <label class="field"><span>Se vende por</span><select name="unidad" id="unit-select"></select></label>
+          <label class="field"><span>Precio de venta ($)</span><input name="precio_cop" type="number" inputmode="numeric" min="0" max="50000000" step="1" required></label>
+          <label class="field"><span>En bodega</span><input name="stock" type="number" inputmode="numeric" min="0" max="100000" step="1" required></label>
+          <label class="field wide"><span>Otras palabras con que lo piden <em>(opcional)</em></span>
+            <input name="terminos" maxlength="300" placeholder="tubo pvc agua media"></label>
+        </div>
+        <p class="form-error" id="np-error" role="alert" hidden></p>
       </div>
-      <div class="chips" id="status-filter" role="group" aria-label="Filtrar por estado"></div>
-      <div id="order-list" class="order-list"></div>
-      <p id="orders-empty" class="muted" hidden>No hay pedidos con ese estado.</p>
-    </section>
+      <footer class="sheet-foot">
+        <button type="button" class="secondary" data-close>Cancelar</button>
+        <button type="submit" class="primary">Agregar producto</button>
+      </footer>
+    </form>
+  </dialog>
 
-    <section id="tab-inventario" class="panel" aria-labelledby="inventario-title" hidden>
-      <div class="panel-head">
-        <h2 id="inventario-title">Inventario</h2>
-        <span id="product-count" class="muted"></span>
+  <!-- Llegada de mercancía y pedido al proveedor comparten el editor de líneas -->
+  <dialog id="supply-dialog" class="sheet is-wide" aria-labelledby="sd-title">
+    <form id="supply-form" novalidate>
+      <header class="sheet-head">
+        <div>
+          <h2 id="sd-title">Registrar llegada</h2>
+          <p class="sheet-sub" id="sd-sub"></p>
+        </div>
+        <button type="button" class="icon-button" data-close aria-label="Cerrar sin guardar">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="grid-2">
+          <label class="field"><span>Proveedor</span><select id="sd-supplier" required></select></label>
+          <label class="field" id="sd-po-field"><span>Pedido al proveedor</span><select id="sd-po"></select></label>
+          <label class="field" id="sd-date-field" hidden><span>Llega el (estimado)</span><input type="date" id="sd-date"></label>
+          <label class="field wide"><span>Nota <em>(opcional)</em></span><input id="sd-note" maxlength="140" placeholder="Factura 4521, llegó en la mañana"></label>
+        </div>
+        <fieldset class="field">
+          <legend id="sd-lines-legend">Productos que llegaron</legend>
+          <ul class="line-editor" id="sd-lines"></ul>
+          <button type="button" class="secondary small" id="sd-add-line"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Agregar producto</button>
+          <datalist id="sku-options"></datalist>
+        </fieldset>
+        <section class="preview" id="sd-preview" hidden aria-live="polite">
+          <h3>Así quedará la bodega</h3>
+          <div id="sd-preview-rows" class="preview-rows"></div>
+        </section>
+        <p class="form-error" id="sd-error" role="alert" hidden></p>
       </div>
-      <form id="inventory-filter" class="filters">
-        <label>Buscar <input id="search" type="search" maxlength="60" placeholder="SKU, nombre o medida"></label>
-        <label>Categoría <select id="category"><option value="">Todas</option></select></label>
-        <label class="check"><input id="low-only" type="checkbox"> Solo con pocas existencias</label>
-      </form>
-      <div id="product-list" class="product-list"></div>
-      <details class="card add-product">
-        <summary>Agregar un producto</summary>
-        <form id="add-form" class="add-grid">
-          <label>SKU <input name="sku" required maxlength="32" pattern="[A-Z0-9][A-Z0-9\-]{1,31}" placeholder="TUB-099"></label>
-          <label>Nombre <input name="nombre" required maxlength="80"></label>
-          <label>Variante <input name="variante" required maxlength="80" placeholder="1/2 pulgada"></label>
-          <label>Unidad <select name="unidad" id="unit-select"></select></label>
-          <label>Categoría <input name="categoria" required maxlength="80" list="category-options"></label>
-          <label>Precio (COP) <input name="precio_cop" type="number" min="0" max="50000000" step="1" required></label>
-          <label>Existencias <input name="stock" type="number" min="0" max="100000" step="1" required></label>
-          <label class="wide">Términos de búsqueda <input name="terminos" maxlength="300" placeholder="tubo pvc agua media"></label>
-          <datalist id="category-options"></datalist>
-          <button type="submit" class="primary wide">Agregar producto</button>
-        </form>
-      </details>
-    </section>
+      <footer class="sheet-foot">
+        <button type="button" class="secondary" data-close>Cancelar</button>
+        <button type="button" class="secondary" id="sd-check">Revisar</button>
+        <button type="submit" class="primary" id="sd-save" disabled>Confirmar llegada</button>
+      </footer>
+    </form>
+  </dialog>
 
-    <section id="tab-movimientos" class="panel" aria-labelledby="movimientos-title" hidden>
-      <h2 id="movimientos-title">Cambios de inventario</h2>
-      <ul id="history-list" class="plain-list history"></ul>
-      <p id="history-empty" class="muted" hidden>Todavía no hay cambios registrados.</p>
-    </section>
+  <!-- Pago de un pedido -->
+  <dialog id="pay-dialog" class="sheet" aria-labelledby="pay-title">
+    <form id="pay-form" novalidate>
+      <header class="sheet-head">
+        <div>
+          <h2 id="pay-title">Pago del pedido</h2>
+          <p class="sheet-sub" id="pay-sub"></p>
+        </div>
+        <button type="button" class="icon-button" data-close aria-label="Cerrar sin guardar">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <label class="field"><span>Cómo pagó</span><select id="pay-method" required></select></label>
+        <fieldset class="field">
+          <legend>Qué tienes</legend>
+          <div class="radio-cards" id="pay-states"></div>
+        </fieldset>
+        <label class="field" id="pay-source-field"><span>Cómo lo verificaste</span><select id="pay-source"></select></label>
+        <label class="field"><span>Referencia <em>(opcional: número de aprobación o comprobante)</em></span>
+          <input id="pay-ref" maxlength="40" autocomplete="off"></label>
+        <p class="hint" id="pay-hint"></p>
+        <p class="form-error" id="pay-error" role="alert" hidden></p>
+      </div>
+      <footer class="sheet-foot">
+        <button type="button" class="secondary" data-close>Cancelar</button>
+        <button type="submit" class="primary">Guardar pago</button>
+      </footer>
+    </form>
+  </dialog>
 
-    <section id="tab-bloqueos" class="panel" aria-labelledby="bloqueos-title" hidden>
-      <h2 id="bloqueos-title">Conversaciones bloqueadas</h2>
-      <p class="muted">El chat bloquea una conversación cuando el cliente intenta cambiar las reglas del asistente,
-        y cancela sus pedidos apartados. Si fue un error, desbloquéala: los pedidos cancelados no vuelven.</p>
-      <div id="ban-list" class="order-list"></div>
-      <p id="bans-empty" class="muted" hidden>No hay conversaciones bloqueadas.</p>
-    </section>
-  </main>
+  <!-- Detalle de un producto en el catálogo (solo lectura) -->
+  <dialog id="catalog-dialog" class="sheet" aria-labelledby="cd-title">
+    <div class="sheet-frame">
+      <header class="sheet-head">
+        <img class="sheet-art" id="cd-art" alt="" width="56" height="56">
+        <div>
+          <h2 id="cd-title">Producto</h2>
+          <p class="sheet-sub" id="cd-meta"></p>
+        </div>
+        <button type="button" class="icon-button" data-close aria-label="Cerrar">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <dl class="stock-facts" id="cd-facts"></dl>
+        <p class="callout is-soft"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg><span id="cd-agent"></span></p>
+      </div>
+      <footer class="sheet-foot">
+        <button type="button" class="secondary" data-close>Cerrar</button>
+      </footer>
+    </div>
+  </dialog>
 </body>
 </html>

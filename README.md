@@ -160,7 +160,13 @@ Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor 
 .\.venv\Scripts\python.exe -m asistendero.tendero
 ```
 
-Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Muestra las ventas del día, los pedidos que llegaron por el chat (para marcarlos entregados o cancelarlos) el inventario, con edición de precio y existencias e historial de cambios, y las conversaciones bloqueadas por intentar inyectar instrucciones, con un botón para desbloquearlas. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
+Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Secciones: **Hoy** (vendido y cobrado, lo que hay que revisar, la cola del mostrador, la mercancía en camino), **Pedidos** (con su pago y los motivos para revisarlos), **Ventas y pagos** (vendido no es cobrado; un comprobante no es un pago confirmado), **Inventario** (tarjetas con imagen, abastecimiento con pedidos al proveedor y llegadas parciales, movimientos, categorías y alertas de stock), **Catálogo** (lo que lee el asistente, en solo lectura), **Asistente de bodega** (actualiza el inventario escribiendo o dictando; nada se aplica sin confirmar) y **Chats** (supervisión, tomar o devolver una conversación, responder y bloquear). Tema claro u oscuro; en el celular la navegación va abajo y en el computador, a la izquierda. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.tendero --demo   # tienda de demostración con ventas, pagos, proveedores y chats simulados
+```
+
+`--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio). **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
 
 ### Docker
 
@@ -223,7 +229,14 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
 | `src/asistendero/evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py` | Evaluador de casos de uno o varios turnos, conversaciones con pedidos, clientes a la vez, fallos controlados, costo por tarea y por modelo. |
 | `src/asistendero/orders.py`, `order_rules.py`, `order_tools.py`, `order_replies.py` y `order_watch.py` | Pedidos para recoger: apartado, reglas, herramientas, respuestas y avisos de vencimiento. |
-| `src/asistendero/inventory.py`, `sales.py`, `tendero.py` y `ui/tendero.*` | Panel local del tendero: inventario, pedidos y ventas. |
+| `src/asistendero/inventory.py`, `sales.py`, `sales_history.py`, `tendero.py`, `tendero_views.py`, `tendero_actions.py` y `ui/tendero*` | Panel local del tendero: inventario, pedidos, ventas y las rutas del panel. |
+| `src/asistendero/payments.py` | Registro manual del cobro: método, comprobante, confirmación del tendero; sin verificación bancaria ([PAGOS.md](docs/PAGOS.md)). |
+| `src/asistendero/purchasing.py`, `purchasing_rules.py`, `purchasing_lookup.py` y `purchasing_views.py` | Proveedores, pedidos al proveedor y llegadas completas, parciales o con productos de más. |
+| `src/asistendero/catalog_admin.py` y `stock_thresholds.py` | Categorías del tendero y alertas de stock bajo. |
+| `src/asistendero/stock_*.py` | Asistente de bodega: Grok interpreta el mensaje del tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
+| `src/asistendero/handoff.py` y `supervision.py` | Atención humana de las conversaciones y su supervisión desde el panel. |
+| `src/asistendero/product_art.py`, `product_art_shapes.py` y `product_art_tools.py` | Imágenes generadas de los productos (pictogramas, sin fotos ni marcas). |
+| `src/asistendero/demo.py` | Tienda de demostración del panel (`--demo`), con datos simulados. |
 | `src/asistendero/spelling.py` | Lectura de mensajes mal escritos para respaldar lo que Grok extrajo. |
 | `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
 | `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |

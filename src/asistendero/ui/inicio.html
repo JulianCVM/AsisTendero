@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B4A">
+  <meta name="description" content="AsisTendero responde a los clientes de una ferretería de barrio con el precio y las existencias reales del catálogo, aparta pedidos para recoger y le deja al tendero el control.">
+  <title>AsisTendero · el asistente de la ferretería de barrio</title>
+  <link rel="icon" href="/assets/cercania-mark.png" type="image/png">
+  <script src="/assets/tendero-theme.js"></script>
+  <link rel="stylesheet" href="/assets/tendero.css">
+  <link rel="stylesheet" href="/assets/inicio.css">
+</head>
+<body class="landing">
+  <a class="skip" href="#main">Ir al contenido</a>
+  <header class="land-top">
+    <a class="land-brand" href="/inicio">
+      <img src="/assets/cercania-mark.png" alt="" width="36" height="36">
+      <span>AsisTendero</span>
+    </a>
+    <nav aria-label="Secciones de la página">
+      <a href="#que-hace">Qué hace</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#limites">Lo que no hace</a>
+    </nav>
+    <a class="primary" href="/">Abrir el panel</a>
+  </header>
+
+  <main id="main">
+    <section class="land-hero" aria-labelledby="hero-title">
+      <div class="land-hero-text">
+        <p class="land-kicker">Para ferreterías de barrio</p>
+        <h1 id="hero-title">Tus clientes preguntan por el chat. AsisTendero responde con tu precio y tu bodega.</h1>
+        <p class="land-lead">Cotiza con lo que de verdad tienes, aparta pedidos para recoger y te avisa cuando un cliente necesita
+          hablar contigo. Tú decides los precios, el inventario y cuándo un pago está confirmado.</p>
+        <div class="button-row">
+          <a class="primary" href="/">Ver el panel del tendero</a>
+          <a class="secondary" href="#como">Cómo funciona</a>
+        </div>
+        <p class="land-note">Prototipo del Agent Challenge de Platica. Todo lo que ves usa un catálogo y datos <strong>ficticios</strong>.</p>
+      </div>
+      <figure class="land-chat" aria-label="Ejemplo de conversación">
+        <p class="bubble from-customer">Veci, ¿tiene cemento gris? Necesito 3 bultos.</p>
+        <p class="bubble from-agent">¡Hola! Sí, el cemento gris de 50 kg está a $32.500 el bulto y hay disponibles. Los 3 bultos te
+          quedan en $97.500. ¿Te los aparto para recoger?</p>
+        <p class="bubble from-customer">Sí, paso a las 5.</p>
+        <p class="bubble from-agent">Listo: te aparté 3 bultos para recoger hoy a las 17:00. Pagas en el mostrador.</p>
+        <figcaption>Conversación ilustrativa con datos ficticios.</figcaption>
+      </figure>
+    </section>
+
+    <section class="land-section" id="que-hace" aria-labelledby="features-title">
+      <h2 id="features-title">Qué hace por tu negocio</h2>
+      <ul class="land-features">
+        <li><h3>Responde sin inventar</h3><p>Cada precio y cada existencia sale del catálogo de tu tienda. Si el cliente no dice la medida, pregunta en vez de adivinar.</p></li>
+        <li><h3>Aparta pedidos para recoger</h3><p>Registra el pedido solo si el cliente lo pide, espera su «sí» y lo libera solo si no lo confirma a tiempo.</p></li>
+        <li><h3>Te deja el control</h3><p>Desde el panel ves cada conversación, tomas el chat cuando quieras y se lo devuelves al asistente.</p></li>
+        <li><h3>Inventario conversando</h3><p>Escribe o dicta «llegaron 12 de los 20 bultos»: el asistente de bodega propone el cambio y tú lo confirmas.</p></li>
+        <li><h3>Ventas y pagos claros</h3><p>Separa lo vendido de lo cobrado. Un pantallazo no es un pago: solo cuenta lo que tú confirmas.</p></li>
+        <li><h3>Se protege solo</h3><p>Detecta intentos de manipular al asistente, bloquea la conversación y te deja la evidencia para revisarla.</p></li>
+      </ul>
+    </section>
+
+    <section class="land-section" id="como" aria-labelledby="how-title">
+      <h2 id="how-title">Cómo funciona</h2>
+      <ol class="land-steps">
+        <li><strong>El cliente escribe</strong><span>Como habla: «¿tiene tubo de media?», «qué venden», con errores y todo.</span></li>
+        <li><strong>Grok entiende y elige</strong><span>Decide qué consultar: buscar productos, ver una categoría o registrar un pedido.</span></li>
+        <li><strong>El servidor valida y consulta</strong><span>Revisa cada solicitud contra reglas fijas y lee tu catálogo. Grok nunca toca la base.</span></li>
+        <li><strong>La respuesta se verifica</strong><span>Si una cifra no coincide con lo consultado, se responde con el texto seguro del servidor.</span></li>
+      </ol>
+    </section>
+
+    <section class="land-section" id="limites" aria-labelledby="limits-title">
+      <h2 id="limits-title">Lo que no hace (todavía)</h2>
+      <ul class="land-limits">
+        <li>No cobra ni verifica pagos con un banco: el pago es en el mostrador y lo confirma el tendero.</li>
+        <li>No está conectado a WhatsApp: el chat de prueba vive en el visor local.</li>
+        <li>No usa datos de una tienda real: el catálogo, los pedidos y las conversaciones son simulados.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="land-foot">
+    <p>AsisTendero · código abierto con licencia MIT · Agent Challenge de Platica, 2026.</p>
+  </footer>
+</body>
+</html>

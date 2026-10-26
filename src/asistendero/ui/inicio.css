@@ -1,0 +1,48 @@
+/* Página pública de presentación (/inicio). Usa los tokens y botones de tendero.css; aquí solo va su maquetación. */
+.landing { background: var(--bg); }
+.land-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  background: var(--topbar); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+.land-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.1rem; color: var(--text);
+  text-decoration: none; margin-right: auto; }
+.land-brand img { border-radius: 10px; }
+.land-top nav { display: none; gap: 18px; }
+.land-top nav a { color: var(--text-2); font-weight: 700; text-decoration: none; }
+.land-top nav a:hover { color: var(--text); text-decoration: underline; }
+.land-top .primary { min-height: 40px; padding: 0 14px; text-decoration: none; }
+
+.land-hero { display: grid; gap: 28px; padding: 32px 16px 40px; max-width: 1120px; margin: 0 auto; }
+.land-kicker { color: var(--warning); font-weight: 900; text-transform: uppercase; letter-spacing: .06em; font-size: .8rem; }
+.land-hero h1 { font-size: clamp(1.7rem, 6vw, 2.8rem); line-height: 1.12; font-weight: 900; margin: 8px 0 14px; }
+.land-lead { font-size: 1.08rem; color: var(--text-2); max-width: 60ch; margin-bottom: 20px; }
+.land-hero .button-row a { text-decoration: none; }
+.land-note { margin-top: 16px; color: var(--muted); font-size: .9rem; }
+
+.land-chat { margin: 0; display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 20px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.land-chat .bubble { max-width: 88%; padding: 10px 14px; border-radius: 16px; line-height: 1.4; }
+.land-chat .from-customer { align-self: flex-end; background: var(--success-soft); border-bottom-right-radius: 4px; }
+.land-chat .from-agent { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.land-chat figcaption { color: var(--muted); font-size: .78rem; text-align: center; }
+
+.land-section { max-width: 1120px; margin: 0 auto; padding: 32px 16px; }
+.land-section h2 { font-size: 1.5rem; font-weight: 900; margin-bottom: 18px; }
+.land-features { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.land-features li { padding: 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.land-features h3 { font-size: 1.05rem; font-weight: 900; margin-bottom: 6px; }
+.land-features p { color: var(--text-2); }
+.land-steps { list-style: none; counter-reset: step; padding: 0; margin: 0; display: grid; gap: 12px; }
+.land-steps li { counter-increment: step; display: grid; grid-template-columns: 44px 1fr; gap: 4px 12px; align-items: start; }
+.land-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 50%; background: var(--amber); color: var(--on-amber); font-weight: 900; }
+.land-steps span { color: var(--text-2); }
+.land-limits { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--text-2); }
+.land-foot { padding: 24px 16px 40px; text-align: center; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); }
+
+@media (min-width: 760px) {
+  .land-top nav { display: flex; }
+  .land-hero { grid-template-columns: 1.15fr 1fr; align-items: center; padding-top: 56px; }
+  .land-features { grid-template-columns: repeat(3, 1fr); }
+  .land-steps { grid-template-columns: repeat(4, 1fr); }
+  .land-steps li { grid-template-columns: 1fr; }
+  .land-steps li::before { grid-row: auto; }
+}
