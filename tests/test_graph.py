@@ -16,6 +16,11 @@ CATALOG = {
 }
 
 
+CATEGORIES = [{"categoria": "Eléctricos", "variantes": 58, "con_existencias": 54},
+              {"categoria": "Herramientas manuales", "variantes": 38, "con_existencias": 33},
+              {"categoria": "Plomería", "variantes": 54, "con_existencias": 54}]
+
+
 def ok(data):
     return {"status": "ok", "data": data, "error": None, "source": "mock_sqlite",
             "observed_at": "2026-10-20T12:00:00+00:00"}
@@ -54,6 +59,8 @@ class FakeExecutor:
             content = STORE_INFO[arguments["tema"]]
             extra = {"ahora": "2026-10-21 10:00", "dia_actual": "martes", "abierto_ahora": self.open_now}
             return ok({"tema": arguments["tema"], **content, **(extra if arguments["tema"] == "horario" else {})})
+        if name == "explorar_categoria" and not arguments:
+            return ok({"categorias": CATEGORIES})
         if name == "explorar_categoria":
             return ok({"categoria": "Plomería", "productos": [{"nombre": "Tubo PVC presión para agua", "variantes": 2,
                                                               "con_existencias": 2}]})
@@ -471,6 +478,46 @@ def test_search_and_quote_reminders_are_sent_once_each_in_order():
     assert [observations[i]["error"]["code"] for i in (0, 2)] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED"]
     assert result["estado"] == "quoted"
     assert result["model_calls"] == 5
+
+
+@pytest.mark.parametrize("message", ["que venden", "que vende", "hola, ¿qué productos manejan ustedes?"])
+def test_assortment_question_never_searches_and_lists_only_real_categories(message):
+    # Visor, 26-10: «que venden» buscó productos que nadie nombró hasta el límite (10 llamadas a Grok) y terminó en
+    # «No pude verificar ese producto»; «que vende» respondió «herramientas manuales y eléctricas … y más».
+    executor = FakeExecutor()
+    planner = Script(
+        tool("buscar_productos", items=[{"text": "productos de ferretería", "product": "herramienta"}]),
+        tool("explorar_categoria"),
+        say("Vendemos herramientas manuales y eléctricas, plomería y más. Precios de demostración.", "tienda"),
+    )
+    result = run(executor, planner, message)
+    assert result["tool_calls"][0]["response"]["error"]["code"] == "ASSORTMENT_QUESTION"
+    assert executor.calls == [("explorar_categoria", {})]
+    assert result["estado"] == "informed" and result["model_calls"] == 3
+    assert "• Eléctricos\n• Herramientas manuales\n• Plomería" in result["respuesta"]
+    assert not any(word in result["respuesta"] for word in ("eléctricas", "y más", "No pude verificar"))
+
+
+def test_assortment_answer_without_the_category_tool_gets_one_reminder():
+    executor = FakeExecutor()
+    planner = Script(say("Vendemos de todo: herramientas eléctricas, pinturas y más.", "productos"),
+                     tool("explorar_categoria"), say(""))
+    result = run(executor, planner, "que venden")
+    assert planner.seen[1]["observations"][0]["error"]["code"] == "CATALOG_REQUIRED"
+    assert executor.calls == [("explorar_categoria", {})]
+    assert "eléctricas" not in result["respuesta"] and "• Plomería" in result["respuesta"]
+    # Si Grok insiste en responder sin la herramienta, no sale su lista inventada.
+    stubborn = Script(say("Vendemos herramientas eléctricas y más.", "productos"),
+                      say("Vendemos herramientas eléctricas y más.", "productos"))
+    result = run(FakeExecutor(), stubborn, "que venden")
+    assert result["model_calls"] == 2 and "eléctricas" not in result["respuesta"]
+
+
+@pytest.mark.parametrize("message", ["¿qué tienen de plomería?", "¿tienen cemento?", "¿qué medidas tienen?"])
+def test_a_question_that_names_a_product_or_category_is_not_the_assortment(message):
+    from asistendero.store_replies import asks_assortment
+    from asistendero.validation import normalize_text
+    assert not asks_assortment(normalize_text(message))
 
 
 def test_greeting_gets_no_reminder():

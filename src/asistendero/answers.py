@@ -14,7 +14,7 @@ from asistendero.reply_text import (DEMO_NOTE, FEMININE, LOW_STOCK, MAX_NEARBY, 
                                     in_sentence, label, of_the, option_lines, quote_block, quote_offer, short_stock_text,
                                     units, whole_units_question)
 from asistendero.restock import asks_restock, restock_reply_ok, restock_sentence, restock_subjects
-from asistendero.store_replies import store_lines, store_reply_is_consistent
+from asistendero.store_replies import asks_assortment, full_category_listing, store_lines, store_reply_is_consistent
 from asistendero.validation import (fractional_amount, grounded_products, grounded_selection, naming_numbers,
                                     normalize_text, quantities_in_message, without_negated)
 
@@ -77,6 +77,9 @@ def direct_response(original: str, decision: Decision) -> str:
         return ("No pude verificar el horario de la tienda en este momento. "
                 "Si me dices qué producto buscas, te doy precio y disponibilidad.")
     reply = decision.reply.strip()
+    # Sin explorar_categoria, una lista de lo que vende la tienda sería inventada («herramientas eléctricas», 26-10).
+    if asks_assortment(normalize_text(original)):
+        return "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad."
     # Sin herramientas no hay precio ni existencias comprobadas que se puedan afirmar.
     if (
         not reply or len(reply) > 400 or FORBIDDEN_CLAIMS.search(reply) or "$" in reply
@@ -313,6 +316,10 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     cliente preguntó cuánto queda.
     """
     if not reply or len(reply) > 1200 or leaks(reply, AGENT_PROMPT) or rushes_the_customer(reply, calls, context):
+        return False
+    # La lista de categorías va siempre con los nombres del catálogo: en el visor (26-10) Grok la resumió como
+    # «herramientas manuales y eléctricas … y más», y no hay herramientas eléctricas.
+    if full_category_listing(calls):
         return False
     normalized = normalize_text(reply)
     orders = order_allowances(calls, context)

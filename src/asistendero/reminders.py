@@ -13,6 +13,7 @@ from asistendero.catalog import tokens
 from asistendero.grok import ORDER_TOOLS
 from asistendero.restock import asks_restock
 from asistendero.shopping_list import missing_from_quote
+from asistendero.store_replies import asks_assortment, full_category_listing
 from asistendero.validation import (foreign_unit, grounded_products, naming_numbers, normalize_text, quantities_in_message,
                                     sale_units)
 
@@ -85,9 +86,14 @@ RESTOCK_REMINDER = _reminder("RESTOCK_REQUIRED",
                              "El cliente pregunta cuándo llega o si se sigue trayendo un producto: consúltalo "
                              "(consultar_disponibilidad con su SKU, o búscalo) y responde solo con su dato \"restock\"; "
                              "si está vacío, di que no tienes la fecha.")
+# Visor, 26-10: a «que vende» Grok respondió «herramientas manuales y eléctricas … y más» sin consultar; el catálogo
+# no tiene herramientas eléctricas.
+CATALOG_REMINDER = _reminder("CATALOG_REQUIRED",
+                             "El cliente pregunta qué vende la tienda en general: llama a explorar_categoria sin "
+                             "argumentos y nombra solo esas categorías. No busques productos que no nombró.")
+BASE_REMINDERS = (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER, CATALOG_REMINDER)
 REMINDERS = {
-    **{item["error"]["code"]: item
-       for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER)},
+    **{item["error"]["code"]: item for item in BASE_REMINDERS},
     # La clave interna lleva la herramienta que falta; Grok recibe siempre el código ORDER_REQUIRED.
     **{f"ORDER_REQUIRED:{tool}": _reminder("ORDER_REQUIRED", f"{hint} No afirmes la acción sin la herramienta.")
        for tool, hint in ORDER_HINTS.items()},
@@ -102,7 +108,7 @@ REMINDERS = {
 }
 # Para el mapa del harness: un renglón por código, no por herramienta.
 REMINDER_CODES = [
-    *(item["error"] for item in (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER)),
+    *(item["error"] for item in BASE_REMINDERS),
     {"code": "ORDER_REQUIRED", "message": "El mensaje pide una acción de pedido que Grok no intentó; el aviso nombra "
                                           f"la herramienta que falta ({', '.join(ORDER_HINTS)})."},
 ]
@@ -138,6 +144,9 @@ def pending_reminder(
     follow_up = order_tool == "registrar_cambio" and f"ORDER_REQUIRED:{order_tool}" not in sent
     if order_tool and (follow_up or not any(code.startswith("ORDER_REQUIRED") for code in sent)):
         return f"ORDER_REQUIRED:{order_tool}"
+    assortment = asks_assortment(normalize_text(message))
+    if "CATALOG_REQUIRED" not in sent and assortment and not full_category_listing(calls):
+        return "CATALOG_REQUIRED"
     if "LIST_QUOTE_REQUIRED" not in sent and missing_from_quote(message, calls, context):
         return "LIST_QUOTE_REQUIRED"
     looked_up = any(call["requested_tool"] in {"buscar_productos", "consultar_disponibilidad"}
@@ -146,7 +155,9 @@ def pending_reminder(
         return "RESTOCK_REQUIRED"
     # «2 bultos» pide productos aunque Grok marque la intención como «tienda»: en X-10 («me mandan a domicilio 2
     # bultos de cemento») consultó los domicilios y ofreció cotizar en vez de buscar.
-    asks_products = decision.intent == "productos" or (quantities and decision.intent not in {"tienda", "saludo"})
+    # «¿Qué venden?» no nombra un producto que buscar: el aviso de búsqueda solo gastaba otra llamada.
+    asks_products = not assortment and (decision.intent == "productos"
+                                        or (quantities and decision.intent not in {"tienda", "saludo"}))
     asks_units = quantities and sale_units(message) and not tools & PRODUCT_TOOLS
     if "SEARCH_REQUIRED" not in sent and ((not calls and asks_products) or asks_units):
         return "SEARCH_REQUIRED"

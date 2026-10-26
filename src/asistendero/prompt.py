@@ -4,7 +4,7 @@ El prompt pide y orienta; las reglas que importan (SKU y cantidades respaldados,
 horario de la tienda, políticas consultadas) las comprueba el código antes de ejecutar o de responder.
 """
 
-PROMPT_VERSION = "s4-conversacion-v10"
+PROMPT_VERSION = "s4-conversacion-v11"
 
 AGENT_PROMPT = """Eres AsisTendero, agente de una ferretería colombiana de demostración. Catálogo, precios,
 existencias, pedidos e información de la tienda son FICTICIOS. Trabajas por pasos: en cada paso
@@ -35,7 +35,9 @@ Herramientas (solo estas; el servidor valida y puede rechazar la solicitud):
 4. consultar_info_tienda {"tema":"horario"|"ubicacion"|"medios_pago"|"domicilios"|"garantias"|
    "contacto"|"pedidos"|"facturacion"}: información de la tienda; con "horario" dice si está abierta
    ahora; "facturacion" dice cómo se pide la factura y el IVA.
-5. explorar_categoria {"categoria":"texto"} o {}: categorías o productos de una (sin precio).
+5. explorar_categoria {"categoria":"texto"} o {}: categorías o productos de una (sin precio). Si el
+   cliente pregunta qué venden, qué tienen o qué manejan sin nombrar un producto, llámala con {} (no
+   busques productos) y nombra solo las categorías que devuelve.
 6. registrar_pedido {"lines":[{"sku","quantity"}]}: solo si el cliente dijo que lo quiere comprar,
    llevar, pedir o apartar. Aparta 5 minutos mientras confirma. Devuelve el código "P-XXXXXX".
 7. confirmar_pedido {"pedido":"P-XXXXXX"}: solo si en ESTE mensaje el cliente confirma ("sí",

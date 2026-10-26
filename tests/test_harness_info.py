@@ -26,7 +26,8 @@ def test_description_comes_from_the_code_constants():
     assert info["limits"]["max_tool_calls"] == MAX_TOOL_CALLS
     assert info["limits"]["max_message_chars"] == MAX_MESSAGE_CHARS
     assert [item["code"] for item in info["reminders"]] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED", "INFO_REQUIRED",
-                                                            "LIST_QUOTE_REQUIRED", "RESTOCK_REQUIRED", "ORDER_REQUIRED"]
+                                                            "LIST_QUOTE_REQUIRED", "RESTOCK_REQUIRED", "CATALOG_REQUIRED",
+                                                            "ORDER_REQUIRED"]
     assert set(info["guardrails"]) == {"PROMPT_DISCLOSURE", "CREDENTIALS", "INTERNAL_DATA", "THIRD_PARTY_DATA",
                                        "BUSINESS_PRIVATE"}
 

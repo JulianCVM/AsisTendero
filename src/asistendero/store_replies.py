@@ -2,6 +2,7 @@
 
 import re
 
+from asistendero.catalog import tokens
 from asistendero.observations import ToolCall, category_listings, store_info_by_topic
 
 
@@ -26,6 +27,38 @@ POLICY_CLAIMS = {
 # Si un precio lleva IVA no lo dice ningún tema de la tienda: ni consultando «facturacion» se puede afirmar.
 IVA_CLAIM = re.compile(r"\b(?:incluy\w*|incluid\w*|traen|trae|llevan|lleva|tienen|sin|mas|con)\s+(?:el\s+)?iva\b"
                        r"|\biva\s+(?:incluid\w*|aparte|adicional)")
+
+
+# «¿Qué venden?» pregunta por todo el surtido, no por un producto. En el visor (26-10) Grok buscó productos
+# inventados hasta el límite (10 llamadas) y otra vez respondió «herramientas eléctricas y más», que el catálogo no
+# tiene. Lo que pregunta el surtido se responde con explorar_categoria y la lista determinista de categorías.
+ASSORTMENT_QUESTION = re.compile(
+    r"\bque\s+(?:(?:cosas|productos|articulos|clase\s+de\s+(?:cosas|productos)|tipo\s+de\s+(?:cosas|productos))\s+)?"
+    r"(?:venden|vende|vendes|tienen|tiene|tienes|manejan|maneja|manejas|ofrecen|ofrece|ofreces|hay|consigo)\b"
+    r"|\b(?:catalogo|categorias|surtido)\b"
+)
+# Lo que acompaña la pregunta sin nombrar un producto: saludos, «aquí», «la ferretería».
+ASSORTMENT_FILLER = tokens(
+    "hola buenas buenos dias tardes noches veci vecino vecina amigo amiga senor senora don dona usted ustedes aqui aca "
+    "ahi alla tienda ferreteria negocio cosas productos articulos todo muestrame mostrar ver catalogo categorias "
+    "surtido venden manejan ofrecen", synonyms=False,
+)
+
+
+def asks_assortment(normalized_message: str) -> bool:
+    """El mensaje (ya normalizado) pregunta qué vende la tienda en general, sin nombrar un producto ni categoría.
+
+    «¿qué tienen de plomería?» no cuenta: nombra la categoría y se explora esa.
+    """
+    if not ASSORTMENT_QUESTION.search(normalized_message):
+        return False
+    rest = ASSORTMENT_QUESTION.sub(" ", normalized_message)
+    return not tokens(rest, synonyms=False) - ASSORTMENT_FILLER
+
+
+def full_category_listing(calls: list[ToolCall]) -> bool:
+    """Se observó la lista completa de categorías (explorar_categoria sin argumentos)."""
+    return any("categorias" in listing for listing in category_listings(calls))
 
 
 def _hour(value: str) -> str:
@@ -60,8 +93,10 @@ def store_lines(calls: list[ToolCall]) -> list[str]:
             lines.append(data["texto"])
     for listing in category_listings(calls):
         if "categorias" in listing:
-            names = [f"{item['categoria']} ({item['variantes']} referencias)" for item in listing["categorias"]]
-            lines.append("Estas son las categorías del catálogo: " + ", ".join(names) + ". ¿Cuál te interesa?")
+            # Una línea por categoría, tal como está en el catálogo: nada de «y más» ni familias que no existen.
+            names = "\n".join(f"• {item['categoria']}" for item in listing["categorias"])
+            lines.append(f"Manejamos artículos de ferretería en {len(listing['categorias'])} categorías:\n{names}\n"
+                         "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad.")
         else:
             products = listing["productos"]
             shown = [item["nombre"] for item in products[:MAX_LISTED_PRODUCTS]]

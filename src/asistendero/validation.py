@@ -12,6 +12,7 @@ from asistendero.product_fit import closest_named, described_whole
 from asistendero.search import (CLAUSE_BREAK, NUMBER_WORDS, SALE_UNIT_NAME, ProductQuery, item_clause, negated_words,
                                without_quantities)
 from asistendero.spelling import heard_as
+from asistendero.store_replies import asks_assortment
 
 
 MAX_QUANTITY = 1000
@@ -339,6 +340,10 @@ def validate_request(
         ):
             raise Rejected("TOO_MANY_ITEMS", f"El cliente pidió más de {MAX_ITEMS} artículos: no recortes la "
                                              "lista; responde pidiéndole que la divida.")
+        # Visor, 26-10: «que venden» terminó en seis búsquedas de productos que el cliente nunca nombró.
+        if asks_assortment(normalize_text(current or message)):
+            raise Rejected("ASSORTMENT_QUESTION", "El cliente pregunta qué vende la tienda en general, sin nombrar un "
+                                                  "producto: llama a explorar_categoria sin argumentos.")
         clean = []
         for item in items:
             # quantity se tolera porque Grok la extrae con el artículo, pero la búsqueda no la usa.

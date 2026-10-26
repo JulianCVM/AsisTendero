@@ -79,6 +79,7 @@ REJECTIONS = {
     "ORDER_AMBIGUOUS": "Cambiar un pedido cuando hay más de uno activo y no se sabe cuál.",
     "AMBIGUOUS_REFERENCE": "Cotizar «ese» cuando el turno anterior mostró varios productos.",
     "VAGUE_SEARCH": "Buscar un texto sin producto («3», «esos»).",
+    "ASSORTMENT_QUESTION": "Buscar productos cuando el cliente solo preguntó qué vende la tienda («¿qué venden?»).",
     "NEGATED_ATTRIBUTE": "Buscar con la palabra que el cliente dijo que no quiere («que no es la blanca»).",
 }
 

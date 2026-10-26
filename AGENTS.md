@@ -97,6 +97,7 @@ propio.
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
+   - `asks_assortment` y `full_category_listing` (`store_replies.py`).
 
    Duplicar es un error aunque funcione.
 3. **Haz solo lo que pide la tarea.** Nada de refactors, renombres ni reformateos fuera del alcance. Si ves algo mal,
