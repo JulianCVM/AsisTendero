@@ -2,7 +2,10 @@
 
 Es la única vía que escribe precio o stock; las herramientas del agente siguen en solo lectura. Cada cambio queda
 en ``inventory_events`` con el valor anterior y el nuevo, para que el tendero sepa quién movió qué y cuándo
-(en el prototipo el único actor es «tendero»). Todo es ficticio: no hay datos de un piloto real.
+(en el prototipo el único actor es «tendero») y de dónde vino el movimiento (``origin``: «panel» si lo corrigió
+a mano, «recepción R-0001» si llegó mercancía de un proveedor por ``purchasing.py``). Las compras suman existencias
+con ``receive_stock`` dentro de su propia transacción, así que el stock solo se escribe aquí. Todo es ficticio: no
+hay datos de un piloto real.
 """
 
 from datetime import datetime, timezone
@@ -27,9 +30,11 @@ UNITS = ("unidad", "metro", "bulto", "galón", "libra", "rollo", "par", "pliego"
 INVENTORY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS inventory_events (
     business_id TEXT NOT NULL, store_id TEXT NOT NULL, sku TEXT NOT NULL, at TEXT NOT NULL,
-    field TEXT NOT NULL, before TEXT, after TEXT NOT NULL, actor TEXT NOT NULL
+    field TEXT NOT NULL, before TEXT, after TEXT NOT NULL, actor TEXT NOT NULL, origin TEXT
 );
 """
+PANEL = "panel"
+ACTOR = "tendero"
 
 
 class InventoryError(Exception):
@@ -61,7 +66,23 @@ class Inventory:
         self.path = upgrade_db(path)
         self.business_id = business_id
         self.store_id = store_id
-        self._run(lambda connection: connection.executescript(INVENTORY_SCHEMA))
+        self._run(self._migrate)
+
+    @staticmethod
+    def _migrate(connection: sqlite3.Connection) -> None:
+        connection.executescript(INVENTORY_SCHEMA)
+        # Bases creadas antes de las compras no tienen «origin»; sus eventos vinieron todos del panel.
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(inventory_events)")}
+        if "origin" not in columns:
+            connection.execute("ALTER TABLE inventory_events ADD COLUMN origin TEXT")
+
+    def _log(self, connection: sqlite3.Connection, sku: str, field: str, before: object, after: object,
+             actor: str = ACTOR, origin: str = PANEL, at: str | None = None) -> None:
+        connection.execute(
+            "INSERT INTO inventory_events (business_id, store_id, sku, at, field, before, after, actor, origin) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (self.business_id, self.store_id, sku, at or _now(), field, None if before is None else str(before),
+             str(after), actor, origin))
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -104,10 +125,11 @@ class Inventory:
             (self.business_id, self.store_id)).fetchall())
         return [row[0] for row in rows]
 
-    def update(self, sku: str, changes: dict) -> dict:
+    def update(self, sku: str, changes: dict, origin: str = PANEL) -> dict:
         """Corrige precio, existencias físicas y/o surtido; las existencias no pueden quedar por debajo de lo apartado.
 
         ``surtido`` es un día de la semana, una fecha AAAA-MM-DD, «descontinuado» o "" para borrarlo (``restock.py``).
+        ``origin`` dice de dónde vino el cambio en el historial: «panel» o «asistente AS-…» (``stock_proposal.py``).
         """
         if not isinstance(changes, dict) or not changes or not set(changes) <= {"precio_cop", "stock", "surtido"}:
             raise InventoryError("INVALID_ARGUMENT", "Solo se pueden cambiar precio_cop, stock y surtido.")
@@ -133,33 +155,52 @@ class Inventory:
                 raise InventoryError("STOCK_BELOW_RESERVED", f"Hay {row['reserved']} unidades apartadas en pedidos; "
                                                              "entrega o cancela esos pedidos antes de bajar tanto.")
             if plan is not None:
-                self._set_restock(connection, sku, plan)
+                self.set_restock(connection, sku, plan, origin=origin)
             for column, value in clean.items():
                 if row[column] == value:
                     continue
                 connection.execute(f"UPDATE products SET {column} = ?, updated_at = ? "
                                    "WHERE business_id = ? AND store_id = ? AND sku = ?",
                                    (value, _now(), self.business_id, self.store_id, sku))
-                connection.execute("INSERT INTO inventory_events VALUES (?, ?, ?, ?, ?, ?, ?, 'tendero')",
-                                   (self.business_id, self.store_id, sku, _now(), column, str(row[column]), str(value)))
+                self._log(connection, sku, column, row[column], value, origin=origin)
 
         self._run(apply)
         return self._one(sku)
 
-    def _set_restock(self, connection: sqlite3.Connection, sku: str, plan: str) -> None:
+    def set_restock(self, connection: sqlite3.Connection, sku: str, plan: str, actor: str = ACTOR,
+                    origin: str = PANEL, at: str | None = None) -> None:
+        """Escribe el surtido ya validado dentro de la transacción de quien llama, con su evento."""
         before = connection.execute("SELECT plan FROM restocks WHERE business_id = ? AND store_id = ? AND sku = ?",
                                     (self.business_id, self.store_id, sku)).fetchone()
         if (before[0] if before else "") == plan:
             return
         if plan:
             connection.execute("INSERT OR REPLACE INTO restocks VALUES (?, ?, ?, ?, ?)",
-                               (self.business_id, self.store_id, sku, plan, _now()))
+                               (self.business_id, self.store_id, sku, plan, at or _now()))
         else:
             connection.execute("DELETE FROM restocks WHERE business_id = ? AND store_id = ? AND sku = ?",
                                (self.business_id, self.store_id, sku))
-        connection.execute("INSERT INTO inventory_events VALUES (?, ?, ?, ?, 'surtido', ?, ?, 'tendero')",
-                           (self.business_id, self.store_id, sku, _now(), before[0] if before else None,
-                            plan or "sin dato"))
+        self._log(connection, sku, "surtido", before[0] if before else None, plan or "sin dato", actor, origin, at)
+
+    def receive_stock(self, connection: sqlite3.Connection, sku: str, quantity: int, actor: str, origin: str,
+                      at: str | None = None) -> tuple[int, int]:
+        """Suma mercancía recibida dentro de la transacción de quien llama y devuelve (antes, después).
+
+        No confirma ni deshace: si la recepción falla en otra línea, quien llama deshace todo junto.
+        """
+        quantity = _int(quantity, "La cantidad recibida", MAX_STOCK)
+        row = connection.execute("SELECT stock FROM products WHERE business_id = ? AND store_id = ? AND sku = ?",
+                                 (self.business_id, self.store_id, sku)).fetchone()
+        if row is None:
+            raise InventoryError("NOT_FOUND", f"No existe el SKU {sku} en esta sede.")
+        after = row["stock"] + quantity
+        if quantity == 0 or after > MAX_STOCK:
+            raise InventoryError("STOCK_LIMIT", f"Las existencias de {sku} quedarían en {after:,}; el máximo es "
+                                                f"{MAX_STOCK:,} y se recibe al menos 1.".replace(",", "."))
+        connection.execute("UPDATE products SET stock = ?, updated_at = ? WHERE business_id = ? AND store_id = ? "
+                           "AND sku = ?", (after, at or _now(), self.business_id, self.store_id, sku))
+        self._log(connection, sku, "stock", row["stock"], after, actor, origin, at)
+        return row["stock"], after
 
     def add(self, product: dict) -> dict:
         """Agrega un producto ficticio nuevo; el SKU no puede repetirse en la sede."""
@@ -186,8 +227,7 @@ class Inventory:
                                     terms.casefold(), _now(), category))
             except sqlite3.IntegrityError:
                 raise InventoryError("DUPLICATE_SKU", f"Ya existe el SKU {sku}.") from None
-            connection.execute("INSERT INTO inventory_events VALUES (?, ?, ?, ?, 'alta', NULL, ?, 'tendero')",
-                               (self.business_id, self.store_id, sku, _now(), f"{price} COP, {stock} {unit}"))
+            self._log(connection, sku, "alta", None, f"{price} COP, {stock} {unit}")
 
         self._run(insert)
         return self._one(sku)
@@ -195,10 +235,18 @@ class Inventory:
     def _one(self, sku: str) -> dict:
         return next(item for item in self.products(sku) if item["sku"] == sku)
 
-    def history(self, limit: int = 50) -> list[dict]:
-        rows = self._run(lambda connection: connection.execute(
-            "SELECT sku, at, field, before, after, actor FROM inventory_events WHERE business_id = ? AND store_id = ? "
-            "ORDER BY rowid DESC LIMIT ?", (self.business_id, self.store_id, limit)).fetchall())
+    def history(self, limit: int = 50, sku: str | None = None) -> list[dict]:
+        """Movimientos más recientes primero; con ``sku``, solo los de ese producto."""
+        limit = _int(limit, "El límite", MAX_LISTED)
+        sql = ("SELECT sku, at, field, before, after, actor, origin FROM inventory_events "
+               "WHERE business_id = ? AND store_id = ?")
+        params: list[object] = [self.business_id, self.store_id]
+        if sku is not None:
+            sql += " AND sku = ?"
+            params.append(sku)
+        rows = self._run(lambda connection: connection.execute(sql + " ORDER BY rowid DESC LIMIT ?",
+                                                               (*params, limit)).fetchall())
         names = {"price_cop": "precio", "stock": "existencias", "alta": "alta", "surtido": "surtido"}
         return [{"sku": row["sku"], "hora": local_text(row["at"]), "campo": names.get(row["field"], row["field"]),
-                 "antes": row["before"], "despues": row["after"], "quien": row["actor"]} for row in rows]
+                 "antes": row["before"], "despues": row["after"], "quien": row["actor"],
+                 "origen": row["origin"] or PANEL} for row in rows]
