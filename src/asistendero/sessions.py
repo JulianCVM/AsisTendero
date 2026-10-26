@@ -16,10 +16,15 @@ Precio y existencias se vuelven a leer del catálogo en cada turno. Una sesión 
 Una sesión en la que el cliente intentó inyectar instrucciones (``injection.py``) queda baneada: cada turno
 siguiente recibe ``SESSION_BANNED`` sin llegar al grafo ni a Grok. Solo el tendero levanta el baneo desde su
 panel. La sesión es la única identidad del cliente en el prototipo; con un canal real se banearía su número.
+El tendero también puede bloquearla a mano con un motivo (código ``MANUAL_BAN``).
+
+La atención de cada conversación (asistente, pide humano, tendero o finalizada), su historial y los mensajes del
+tendero viven en tablas de esta misma base; las reglas y la API del panel están en ``handoff.py``. Una conversación
+finalizada responde ``SESSION_CLOSED`` como una baneada: sin grafo ni Grok.
 """
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
@@ -39,6 +44,8 @@ SESSION_TTL = timedelta(hours=12)
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 MAX_BAN_EXCERPT = 200
 MONEY = re.compile(r"\$\s?[\d.,]*\d(?:\s*COP)?")
+MANUAL_BAN = "MANUAL"
+CLOSED = "finalizada"
 
 
 class SessionError(Exception):
@@ -119,7 +126,16 @@ class SessionStore:
                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                        grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
                        name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
-                       PRIMARY KEY (session_id, grupo, position));"""
+                       PRIMARY KEY (session_id, grupo, position));
+                   CREATE TABLE IF NOT EXISTS attention (
+                       session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+                       state TEXT NOT NULL, updated_at TEXT NOT NULL);
+                   CREATE TABLE IF NOT EXISTS attention_log (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, changed_at TEXT NOT NULL,
+                       from_state TEXT NOT NULL, to_state TEXT NOT NULL, reason TEXT NOT NULL, actor TEXT NOT NULL);
+                   CREATE TABLE IF NOT EXISTS staff_messages (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       created_at TEXT NOT NULL, text TEXT NOT NULL);"""
             )
 
     @contextmanager
@@ -142,7 +158,12 @@ class SessionStore:
             connection.execute("INSERT INTO sessions VALUES (?, ?, ?, 0)", (session_id, now.isoformat(), now.isoformat()))
         return session_id
 
-    def _check(self, connection: sqlite3.Connection, session_id: str) -> int:
+    def connection(self) -> AbstractContextManager[sqlite3.Connection]:
+        """Conexión a esta base para ``handoff`` y ``supervision``, que guardan y leen tablas de la misma sesión."""
+        return self._connect()
+
+    def require(self, connection: sqlite3.Connection, session_id: str) -> int:
+        """Turnos de una sesión que existe y no venció; si no, SessionError. El panel actúa también sobre baneadas."""
         if not isinstance(session_id, str) or not SESSION_ID.match(session_id):
             raise SessionError("SESSION_NOT_FOUND", "La sesión no existe. Empieza una conversación nueva.")
         row = connection.execute("SELECT updated_at, turns FROM sessions WHERE id = ?", (session_id,)).fetchone()
@@ -150,14 +171,27 @@ class SessionStore:
             raise SessionError("SESSION_NOT_FOUND", "La sesión no existe. Empieza una conversación nueva.")
         if datetime.fromisoformat(row[0]) < self.clock() - SESSION_TTL:
             raise SessionError("SESSION_EXPIRED", "La sesión venció por inactividad. Empieza una conversación nueva.")
-        if connection.execute("SELECT 1 FROM bans WHERE session_id = ? AND lifted_at IS NULL", (session_id,)).fetchone():
+        return row[1]
+
+    def _check(self, connection: sqlite3.Connection, session_id: str) -> int:
+        turns = self.require(connection, session_id)
+        ban = connection.execute("SELECT code FROM bans WHERE session_id = ? AND lifted_at IS NULL",
+                                 (session_id,)).fetchone()
+        if ban and ban[0] == MANUAL_BAN:
+            raise SessionError("SESSION_BANNED", "El tendero bloqueó esta conversación. Si fue un error, pídele en el "
+                                                 "mostrador que la desbloquee.")
+        if ban:
             raise SessionError("SESSION_BANNED", "Esta conversación quedó bloqueada por un intento de cambiar las "
                                                  "reglas del asistente. Si fue un error, pídele al tendero que la "
                                                  "desbloquee.")
-        if row[1] >= MAX_TURNS_PER_SESSION:
+        if connection.execute("SELECT 1 FROM attention WHERE session_id = ? AND state = ?",
+                              (session_id, CLOSED)).fetchone():
+            raise SessionError("SESSION_CLOSED", "El tendero dio por terminada esta conversación. Si necesitas algo "
+                                                 "más, empieza una nueva.")
+        if turns >= MAX_TURNS_PER_SESSION:
             raise SessionError("SESSION_FULL", f"La conversación llegó a {MAX_TURNS_PER_SESSION} turnos. "
                                                "Empieza una nueva para seguir.")
-        return row[1]
+        return turns
 
     def context(self, session_id: str) -> dict:
         """Contexto que ve Grok: turnos recientes sin montos y productos identificados sin precio."""
@@ -250,7 +284,7 @@ class SessionStore:
         return number
 
     def ban(self, session_id: str, code: str, technique: str, excerpt: str) -> None:
-        """Banea la sesión; ``excerpt`` es el mensaje ya sin datos personales, para que el tendero lo revise."""
+        """Banea la sesión; ``excerpt`` es el mensaje ya sin datos personales (o el motivo del bloqueo manual)."""
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO bans VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT(session_id) DO UPDATE SET "
@@ -267,9 +301,10 @@ class SessionStore:
         return lifted.rowcount == 1
 
     def bans(self, limit: int = 50) -> list[dict]:
-        """Baneos, el más reciente primero, con el código de la inyección y si siguen vigentes."""
+        """Baneos, el más reciente primero, con el código, si siguen vigentes y si fue manual o por inyección."""
         with self._connect() as connection:
             rows = connection.execute("SELECT session_id, banned_at, code, technique, excerpt, lifted_at FROM bans "
                                       "ORDER BY banned_at DESC LIMIT ?", (limit,)).fetchall()
         return [{"sesion": row[0], "baneada": row[1], "codigo": row[2], "tecnica": row[3], "mensaje": row[4],
-                 "vigente": row[5] is None} for row in rows]
+                 "vigente": row[5] is None, "tipo": "manual" if row[2] == MANUAL_BAN else "automatico"}
+                for row in rows]

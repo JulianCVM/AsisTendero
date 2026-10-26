@@ -36,7 +36,7 @@
   let turnNumber = 0;
   const nodeNames = ['validate', 'interpret', 'retrieve', 'respond'];
   const nodeLabels = {validate:'Validar mensaje', interpret:'Grok decide', retrieve:'Ejecutar herramienta', respond:'Resolver y verificar'};
-  const stateLabels = {order_pending:'Pedido por confirmar', order_confirmed:'Pedido confirmado', pickup_scheduled:'Recogida agendada', order_cancelled:'Pedido cancelado', order_status:'Estado del pedido', order_issue:'Pedido con novedad', informed:'Información de la tienda', refused:'Pedido no permitido', blocked:'Mensaje bloqueado', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas'};
+  const stateLabels = {order_pending:'Pedido por confirmar', order_confirmed:'Pedido confirmado', pickup_scheduled:'Recogida agendada', order_cancelled:'Pedido cancelado', order_status:'Estado del pedido', order_issue:'Pedido con novedad', informed:'Información de la tienda', refused:'Pedido no permitido', blocked:'Mensaje bloqueado', found:'Productos encontrados', partial:'Resultado parcial', clarify:'Falta aclaración', not_found:'Sin coincidencia', answered:'Respondido', model_invalid:'Respuesta no válida', quoted:'Cotización informativa', nearby:'Opciones cercanas', insufficient_stock:'Existencias insuficientes', quote_error:'Cotización no disponible', tool_error:'Catálogo no disponible', not_verified:'Sin verificar', model_error:'Fallo del modelo', limit_reached:'Límite de herramientas', handoff:'Avisado al tendero', staff:'Atiende el tendero'};
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
@@ -278,7 +278,7 @@
       renderCost(result.cost, true);
       setStatus(stateLabels[result.estado] || result.estado || 'Finalizado',
         ['found', 'answered', 'quoted', 'informed', 'refused', 'order_pending', 'order_confirmed', 'pickup_scheduled',
-          'order_cancelled', 'order_status'].includes(result.estado) ? 'success' : 'warning');
+          'order_cancelled', 'order_status', 'handoff', 'staff'].includes(result.estado) ? 'success' : 'warning');
       copy.disabled = !currentAnswer;
     }
     if (event.type === 'session') {

@@ -40,7 +40,7 @@ def test_every_rejection_code_in_the_flow_is_on_the_map():
 
 
 def test_every_final_state_in_the_flow_is_classified():
-    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("answers.py", "graph.py", "order_replies.py"))
+    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("answers.py", "graph.py", "order_replies.py", "chat.py"))
     patterns = [
         r'_(?:pedido|recogida)": "([a-z_]+)"',  # STATUS_BY_TOOL de order_replies
         r'if results else "([a-z_]+)"',  # estado de order_reply sin pedidos válidos
@@ -50,10 +50,12 @@ def test_every_final_state_in_the_flow_is_classified():
         r'\{\*\*common, "estado": "([a-z_]+)"',  # salida del nodo respond
         r'"[A-Z_]+": "([a-z_]+)"',  # código de error → estado en respond
         r'\.get\(error\["code"\], "([a-z_]+)"\)',
+        r'_without_grok\(store, session_id, text, "([a-z_]+)"',  # turnos que atiende el tendero (chat.py)
     ]
     states = {state for pattern in patterns for state in re.findall(pattern, source)}
     classified = {state for group in describe_harness()["outcomes"].values() for state in group["states"]}
-    assert {"quoted", "insufficient_stock", "model_error", "limit_reached", "order_confirmed", "order_issue"} <= states
+    assert {"quoted", "insufficient_stock", "model_error", "limit_reached", "order_confirmed", "order_issue",
+            "handoff", "staff"} <= states
     assert states <= classified
     # Ningún estado puede estar en dos grupos: el veredicto de la corrida sería ambiguo.
     total = sum(len(group["states"]) for group in describe_harness()["outcomes"].values())

@@ -128,6 +128,11 @@ OUTCOMES = {
         "states": {"clarify": "Falta aclaración", "partial": "Resultado parcial",
                    "order_issue": "Pedido que necesita otro dato o venció"},
     },
+    "human": {
+        "label": "Pasa al tendero",
+        "states": {"handoff": "El cliente pidió hablar con el tendero; se le avisó sin llamar a Grok",
+                   "staff": "El tendero atiende la conversación; el asistente no responde"},
+    },
     "safe_failure": {
         "label": "Fallo controlado en estado seguro",
         "states": {

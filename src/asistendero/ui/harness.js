@@ -10,7 +10,7 @@
     respond:'Ruta: pasar a verificar y responder',
     interpret:'Ruta: volver a Grok con un aviso del servidor (SEARCH_REQUIRED o QUOTE_REQUIRED)',
   };
-  const groupTones = {verified:'success', clarify:'warning', safe_failure:'error'};
+  const groupTones = {verified:'success', clarify:'warning', human:'warning', safe_failure:'error'};
   let outcomes = {};
   let visits = {};
   let lastDecision = null;
