@@ -16,7 +16,7 @@ from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.injection import INJECTION_CODES, blocked_reply, detect_injection
 from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
-from asistendero.choices import check_reference, chosen_options
+from asistendero.choices import check_reference, chosen_options, without_chosen_measures
 from asistendero.order_rules import added_quantities, validate_order_request
 from asistendero.reminders import pending_reminder, with_reminders
 from asistendero.shopping_list import list_lines, usable_lines
@@ -143,7 +143,8 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         picked = chosen_options(state["consulta"], state.get("contexto"))
         try:
             # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
-            quantities = quantities_in_message(state["consulta"]) or quantities_in_message(state["referencia"])
+            quantities = (quantities_in_message(without_chosen_measures(state["consulta"], picked))
+                          or quantities_in_message(without_chosen_measures(state["referencia"], picked)))
             quantities |= added_quantities(state["consulta"], state.get("contexto"))
             check_reference(decision.tool, decision.arguments, state["consulta"], calls, state.get("contexto"))
             if decision.tool in ORDER_TOOLS and isinstance(decision.arguments, dict):

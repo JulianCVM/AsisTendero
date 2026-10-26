@@ -485,3 +485,24 @@ def test_a_bare_answer_to_which_one_chooses_the_option_it_names(chat):
     for message in ["necesito cable negro de 14", "negro, y un taladro", "blanco y negro, 5 de cada uno", "15 metros"]:
         assert chosen_options(message, context) == [], message
     assert [item["sku"] for item in chosen_options("pues el rojo mejor, 10 metros", context)] == ["CAB-12-RO"]
+
+
+def test_a_bare_de_and_a_number_after_which_one_chooses_that_option(chat):
+    # Corrida del video (25-10): tras «¿el bulto de 25 o de 50 kg?», «de 50» no respaldaba el cemento de 50 kg y la
+    # respuesta fue «No pude verificar ese producto en el catálogo».
+    turn, sessions, _ = chat
+    session = sessions.create()
+    turn(session, "y 2 bultos de cemento gris",
+         tool("buscar_productos", items=[{"text": "cemento gris", "product": "cemento"}]), say())
+    result = turn(session, "de 50", quote(("CEM-050", 50)), quote(("CEM-050", 2)), say())
+    # El 50 es la medida que eligió, no la cantidad: 50 bultos se rechazan y se cotizan los 2 que dijo antes.
+    rejected, quoted = result["tool_calls"]
+    assert not rejected["executed"] and rejected["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
+    assert quoted["executed"] and result["estado"] == "quoted" and "$79.000" in result["respuesta"]
+
+    from asistendero.choices import chosen_options
+    context = sessions.context(session)
+    # «deme 50» es una cantidad, un número que ninguna opción tiene no elige, y «de 25 o de 50» sigue en duda.
+    for message in ["deme 50", "de 40", "de 25 o de 50", "de 50 y un taladro"]:
+        assert chosen_options(message, context) == [], message
+    assert [item["sku"] for item in chosen_options("pues de 25 kg, 3 bultos", context)] == ["CEM-025"]

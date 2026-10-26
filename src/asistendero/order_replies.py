@@ -103,7 +103,20 @@ def order_reply(calls: list[ToolCall]) -> tuple[str | None, str] | None:
     if not order_calls:
         return None
     results = order_results(calls)
-    lines = [_describe(tool, order) for tool, order in results]
+    lines = []
+    # Corrida del video (25-10): confirmar y agendar en el mismo turno daba dos textos que se contradecían (la hora
+    # del apartado de confirmar ya no valía y preguntaba la hora que el cliente acababa de dar). Ese pedido se
+    # describe una vez, como quedó al final.
+    latest = {order["pedido"]: order for _, order in results}
+    both = {code for code in latest if {"confirmar_pedido", "agendar_recogida"}
+            <= {tool for tool, order in results if order["pedido"] == code}}
+    for tool, order in results:
+        code = order["pedido"]
+        if code not in both:
+            lines.append(_describe(tool, order))
+        elif tool == "confirmar_pedido":
+            note = latest[code].get("nota")
+            lines.append(_describe(tool, latest[code]) + (f" Anoté en el pedido {code}: «{note}»." if note else ""))
     status = STATUS_BY_TOOL[results[-1][0]] if results else "order_issue"
     for call in order_calls:
         response = call["response"]

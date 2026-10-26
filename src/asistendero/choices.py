@@ -31,6 +31,8 @@ DEMONSTRATIVE = re.compile(r"\b(?:es[eao]|est[eo]|aquel(?:la|lo)?)\b")
 FILLERS = {"deme", "dame", "quiero", "necesito", "porfa", "pues", "pue", "mejor", "entonces", "listo", "ok", "unos",
            "unas", "llevo", "lleva", "seria", "sea", "sean", "favor"}
 COUNTED = re.compile(r"\b(\d+)\s+([a-z]+)")
+# «de 50» responde a «¿de 25 o de 50 kg?»; «deme 50» no, porque ahí el número es la cantidad.
+OF_NUMBER = re.compile(r"\bde\s+(\d+(?:[.,/]\d+)?)\b", re.IGNORECASE)
 
 
 def _option(product) -> dict:
@@ -79,7 +81,8 @@ def _bare_answer(text: str, group: dict) -> dict | None:
 
     M-03 (corrida 35): tras «¿cuál?» con blanco, negro y rojo, «Negro, 15 metros» no respaldaba el cable negro y la
     cotización se rechazó dos veces. La cantidad cuenta solo si va con la unidad de la opción; otro número («de 14»)
-    tiene que ser de la opción, o no se elige nada.
+    tiene que ser de la opción, o no se elige nada. En la corrida del video (25-10), tras «¿el bulto de 25 o de 50
+    kg?», «de 50» tampoco elegía: un número dicho con «de» elige la única opción que lo tiene en su variante.
     """
     options = group["opciones"]
     counted = set()
@@ -88,6 +91,9 @@ def _bare_answer(text: str, group: dict) -> dict | None:
             counted |= {number} | tokens(unit)
     said = tokens(text) - counted - FILLERS
     whole = [option for option in options if option.get("variante") and tokens(option["variante"]) <= said]
+    numbers = set(OF_NUMBER.findall(text)) - counted
+    if len(whole) != 1 and numbers:
+        whole = [option for option in options if numbers <= tokens(option.get("variante") or "")]
     if len(whole) != 1:
         return None
     option = whole[0]
@@ -125,6 +131,16 @@ def chosen_options(message: str, context: dict | None) -> list[dict]:
         option = _bare_answer(text, groups[0])
         chosen = [option] if option else []
     return chosen
+
+
+def without_chosen_measures(text: str, picked: list[dict]) -> str:
+    """El texto sin el «de 50» que eligió una opción: ese número es su medida, no la cantidad que se cotiza.
+
+    Corrida del video (25-10): con «de 50» como única cifra del turno, el 50 quedaba como cantidad dicha y tapaba los
+    «2 bultos» del turno anterior; además, Grok habría podido cotizar 50 bultos.
+    """
+    measures = set().union(*(tokens(option.get("variante") or "") for option in picked)) if picked else set()
+    return OF_NUMBER.sub(lambda match: " " if match.group(1) in measures else match.group(0), text)
 
 
 def ambiguous_reference(message: str, context: dict | None) -> list[str]:

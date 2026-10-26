@@ -227,6 +227,26 @@ def test_full_order_flow_quote_register_confirm_and_schedule_pickup(chat):
     assert order["nota"] == "Lo recoge el hermano" and order["aparta_hasta"] == "2026-10-22 18:00"
 
 
+@pytest.mark.parametrize("confirm_first", [True, False])
+def test_confirming_and_scheduling_in_one_turn_reads_as_one_answer(chat, confirm_first):
+    # Corrida del video (25-10): «sí, confirmo. paso mañana lunes a las 5» respondió «te lo guardo hasta el lunes a
+    # las 01:22. ¿Más o menos a qué hora pasas por él? Perfecto, te esperamos el lunes a las 17:00»: la hora del
+    # apartado ya no valía y la pregunta sobraba.
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    code = turn(session, "listo, me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]),
+                say())["tool_calls"][0]["response"]["data"]["pedido"]
+    steps = [tool("confirmar_pedido", pedido=code), tool("agendar_recogida", pedido=code, fecha="2026-10-22", hora="16:00")]
+    result = turn(session, "sí, confirmo. paso mañana a las 4", *(steps if confirm_first else steps[::-1]), say())
+    reply = result["respuesta"]
+    assert book.get(code)["estado"] == "confirmado" and book.get(code)["aparta_hasta"] == "2026-10-22 18:00"
+    assert f"Confirmé el pedido {code}" in reply and "te lo guardo hasta el jueves 22/10 a las 18:00" in reply
+    assert reply.lower().count("te esperamos el jueves 22/10 a las 16:00") == 1
+    # Ni la hora del apartado de 24 horas, ni la pregunta por la hora, ni un «aún falta que lo confirmes».
+    assert "a las 10:00" not in reply and "qué hora pasas" not in reply and "falta que lo confirmes" not in reply
+
+
 def test_confirmation_needs_a_yes_in_this_message_and_a_previous_summary(chat):
     turn, sessions, book, _, _ = chat
     session = sessions.create()
