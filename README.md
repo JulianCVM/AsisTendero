@@ -216,7 +216,7 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/guardrails.py` | Barreras ante preguntas trampa, datos personales y fugas del prompt. |
 | `src/asistendero/sessions.py` y `chat.py` | Sesiones de chat con memoria acotada en SQLite local. |
 | `src/asistendero/shopping_list.py` | Lista de la conversación: lo cotizado con su cantidad, para «¿cuánto es todo?». |
-| `src/asistendero/choices.py` | Opciones mostradas al cliente, en orden, para entender «dame del primero», «la segunda» o «el de 12». |
+| `src/asistendero/choices.py` y `context_resolution.py` | Opciones mostradas y paginadas, resolución anafórica de turnos breves y memoria de especificaciones por producto. |
 | `src/asistendero/restock.py` | Surtido que anota el tendero: cuándo vuelve a llegar un producto o si ya no se trae, y qué puede afirmar Grok. |
 | `src/asistendero/store_replies.py` | Respuestas y comprobaciones de la información de la tienda. |
 | `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar, sin cotizar, sin la lista o sin consultar el surtido. |

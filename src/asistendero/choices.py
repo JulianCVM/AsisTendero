@@ -11,10 +11,18 @@ una sola opción («el de 12», «la talla L», «la de galón»), como se elige
 import re
 
 from asistendero.catalog import tokens
-from asistendero.observations import ToolCall, latest_quote, search_findings
+from asistendero.context_resolution import (
+    SALE_UNIT_TOKENS, _heads_in_text, affirms_active_item, filter_matches_by_spec, is_elliptical_turn,
+    offered_short_quantity, pending_quantity_target, remembered_spec_for_item,
+)
+from asistendero.measures import SALE_UNITS, canonical_text, measures, split_atom
+from asistendero.observations import ToolCall, latest_quote, order_results, search_findings
 from asistendero.reply_text import MAX_NEARBY, MAX_OPTIONS, gender_of, in_sentence, label
-from asistendero.search import CLAUSE_BREAK
-from asistendero.validation import Rejected, grounded_products, grounded_selection, normalize_text, without_negated
+from asistendero.search import CLAUSE_BREAK, NUMBER_WORDS
+from asistendero.validation import (
+    MAX_QUANTITY, SALE_UNIT, Rejected, foreign_unit, fractional_amount, grounded_products, grounded_selection,
+    normalize_text, quantities_in_message, without_negated,
+)
 
 
 POSITIONS = {"primer": 1, "segund": 2, "tercer": 3, "cuart": 4, "quint": 5}
@@ -33,28 +41,129 @@ FILLERS = {"deme", "dame", "quiero", "necesito", "porfa", "pues", "pue", "mejor"
 COUNTED = re.compile(r"\b(\d+)\s+([a-z]+)")
 # «de 50» responde a «¿de 25 o de 50 kg?»; «deme 50» no, porque ahí el número es la cantidad.
 OF_NUMBER = re.compile(r"\bde\s+(\d+(?:[.,/]\d+)?)\b", re.IGNORECASE)
+_NUM_OR_WORD = rf"(?:\d{{1,2}}|{'|'.join(NUMBER_WORDS)})"
+_NON_PAGINATION_NOUN = (
+    r"(?:medidas?|tamanos?|calibres?|presentaciones?|marcas?|colores?|productos?|cosas?|herramientas?|materiales?)"
+)
+MORE_OPTIONS = re.compile(
+    rf"\b(?:(?:las|los|esas|esos)\s+)?(?:otr[oa]s|demas)\s+(?:{_NUM_OR_WORD}\s+)?(?:opcion(?:es)?|variantes?)\b"
+    rf"|\b(?:muestr\w+|mostrar|ver|dime|cuales\s+son|que)\s+(?:las\s+|los\s+)?(?:otr[oa]s|demas)"
+    rf"(?!\s+{_NON_PAGINATION_NOUN}\b)(?:\s+{_NUM_OR_WORD})?(?:\s+(?:opcion(?:es)?|variantes?))?\b"
+    rf"|\b(?:las|los)\s+otr[oa]s\s+{_NUM_OR_WORD}\b(?!\s+{_NON_PAGINATION_NOUN}\b)"
+    rf"|\b(?:mas|todas\s+las)\s+(?:opcion(?:es)?|variantes?)\b"
+    rf"|\b(?:cuales\s+(?:faltan|quedan)|las\s+(?:restantes|que\s+faltan)|opcion(?:es)?\s+restantes)\b"
+)
+_REQUESTED_PAGE_COUNT = re.compile(rf"\b(?:otr[oa]s|demas)\s+({_NUM_OR_WORD})\b")
 
 
 def _option(product) -> dict:
     return {"sku": product.sku, "nombre": product.name, "variante": product.variant, "unidad": product.unit}
 
 
-def shown_options(reference: str, calls: list[ToolCall], current: str | None = None) -> list[dict]:
+def _group_heads(group: dict) -> set[str]:
+    heads = set(_heads_in_text(str(group.get("grupo") or "")))
+    for item in (group.get("opciones") or []) + (group.get("restantes") or []):
+        heads.update(_heads_in_text(str(item.get("nombre") or "")))
+    return heads
+
+
+def pagination_group(message: str, context: dict | None) -> dict | None:
+    """Grupo de opciones activo del que el cliente pide ver las demás opciones, o None si no aplica."""
+    groups = (context or {}).get("opciones") or []
+    if not groups:
+        return None
+    norm = normalize_text(message)
+    if SALE_UNIT.search(norm) or "otra cosa" in norm or ORDINAL.search(norm) or not MORE_OPTIONS.search(norm):
+        return None
+    msg_heads = set(_heads_in_text(norm))
+    if len(groups) == 1:
+        group = groups[0]
+        return group if not msg_heads or msg_heads <= _group_heads(group) else None
+    if msg_heads:
+        matching = [group for group in groups if msg_heads <= _group_heads(group)]
+        return matching[0] if len(matching) == 1 else None
+    with_overflow = [group for group in groups if group.get("restantes")]
+    return with_overflow[0] if len(with_overflow) == 1 else None
+
+
+def asks_more_options(message: str, context: dict | None) -> dict | None:
+    """Grupo activo con opciones excedentes (``restantes``) que el cliente pidió mostrar."""
+    group = pagination_group(message, context)
+    return group if group and group.get("restantes") else None
+
+
+def next_options_page(group: dict, message: str = "") -> tuple[list[dict], list[dict]]:
+    """(opciones_a_mostrar_ahora, opciones_que_aun_quedan) para avanzar la paginación sin repetir las anteriores."""
+    remaining = [{k: v for k, v in item.items() if k != "n"} for item in (group.get("restantes") or [])]
+    if len(remaining) <= 5:
+        return remaining, []
+    match = _REQUESTED_PAGE_COUNT.search(normalize_text(message))
+    raw = match.group(1) if match else ""
+    wanted = (int(raw) if raw.isdigit() else NUMBER_WORDS.get(raw, 0)) if raw else 0
+    page_size = wanted if 1 <= wanted <= 5 else MAX_OPTIONS
+    return remaining[:page_size], remaining[page_size:]
+
+
+def shown_options(
+    reference: str, calls: list[ToolCall], current: str | None = None, context: dict | None = None,
+) -> list[dict]:
     """Grupos de opciones que mostró la respuesta de este turno, como los arma ``answers.render_answer``.
 
     ``current`` es el mensaje del turno: lo que el cliente dijo que no quiere tampoco se mostró.
     """
+    asked = current or reference
     quote, _ = latest_quote(calls)
+    if not quote and not order_results(calls) and (page_group := asks_more_options(asked, context)) is not None:
+        shown_now, still_left = next_options_page(page_group, asked)
+        updated_groups = []
+        for group in (context or {}).get("opciones") or []:
+            if group is page_group or group.get("grupo") == page_group.get("grupo"):
+                entry = {"grupo": group["grupo"], "opciones": shown_now}
+                if still_left:
+                    entry["restantes"] = still_left
+                updated_groups.append(entry)
+            else:
+                kept = {
+                    "grupo": group["grupo"],
+                    "opciones": [{k: v for k, v in item.items() if k != "n"} for item in (group.get("opciones") or [])],
+                }
+                if group.get("restantes"):
+                    kept["restantes"] = [{k: v for k, v in item.items() if k != "n"} for item in group["restantes"]]
+                updated_groups.append(kept)
+        return updated_groups
+
     quoted = {line["sku"] for line in (quote or {}).get("lines", [])}
+    picked_skus = {opt["sku"] for opt in chosen_options(asked, context) if opt.get("sku")}
+    if not picked_skus and (aff := affirms_active_item(asked, context)) and aff.get("sku"):
+        picked_skus = {aff["sku"]}
     groups = []
+    seen = set()
     for finding in search_findings(calls):
-        finding = without_negated(current or reference, finding)
-        matches, nearby = finding["matches"], finding["nearby"]
-        if matches and (grounded_selection(reference, finding) or any(item.sku in quoted for item in matches)):
+        finding = without_negated(asked, finding)
+        spec = remembered_spec_for_item(finding["query"], finding["request"].get("product"), asked, context)
+        matches = filter_matches_by_spec(list(finding["matches"]), spec)
+        nearby = finding["nearby"]
+        same = (tuple(item.sku for item in matches), tuple(item.sku for item in nearby)) if matches or nearby else (
+            finding["query"],
+        )
+        if same in seen:
+            continue
+        seen.add(same)
+        filtered_finding = {**finding, "matches": matches}
+        in_picked = [item for item in matches if item.sku in picked_skus]
+        if matches and (
+            grounded_selection(reference, filtered_finding)
+            or any(item.sku in quoted for item in matches)
+            or len(in_picked) == 1
+        ):
             continue
         shown = matches[:MAX_OPTIONS] if matches else nearby[:MAX_NEARBY]
+        overflow = matches[MAX_OPTIONS:] if matches else []
         if shown:
-            groups.append({"grupo": finding["query"], "opciones": [_option(item) for item in shown]})
+            entry = {"grupo": finding["query"], "opciones": [_option(item) for item in shown]}
+            if overflow:
+                entry["restantes"] = [_option(item) for item in overflow]
+            groups.append(entry)
     return groups
 
 
@@ -129,8 +238,77 @@ def chosen_options(message: str, context: dict | None) -> list[dict]:
                 chosen.append(option)
     if not chosen and len(groups) == 1:
         option = _bare_answer(text, groups[0])
-        chosen = [option] if option else []
+        if option:
+            chosen = [option]
+        elif len(groups[0].get("opciones") or []) == 1 and (affirmed := affirms_active_item(message, context)):
+            chosen = [affirmed]
     return chosen
+
+
+def unresolved_ordinal(message: str, context: dict | None) -> str | None:
+    """Pregunta de aclaración si el cliente dijo un ordinal sobre las opciones activas que no resuelve ninguna."""
+    groups = (context or {}).get("opciones") or []
+    if not groups or chosen_options(message, context):
+        return None
+    norm = normalize_text(message)
+    if not ORDINAL.search(norm) or _heads_in_text(norm):
+        return None
+    if len(groups) > 1:
+        return "¿De cuál de los productos que te mostré me hablas?"
+    count = len(groups[0].get("opciones") or [])
+    return f"Solo te mostré {count} {'opción' if count == 1 else 'opciones'}; ¿cuál de esas te sirve?"
+
+
+_ALLOWED_QTY_WORDS = (
+    set(NUMBER_WORDS)
+    | SALE_UNIT_TOKENS
+    | {
+        "m", "mt", "mts", "ud", "uds", "und", "unds", "media", "docena", "ciento",
+        "dame", "deme", "quiero", "necesito", "seria", "serian", "cotizame", "cotiza",
+        "por", "favor", "porfa", "gracias", "solo", "solamente", "unos", "unas",
+        "entonces", "pues", "bueno", "listo", "dale", "si", "claro",
+    }
+)
+
+
+def pending_quantity_quote(message: str, context: dict | None) -> tuple[dict, int] | None:
+    """(producto_en_foco, cantidad) si el asistente acaba de pedir cantidad/metraje y el cliente dio solo magnitud."""
+    target = pending_quantity_target(context)
+    if target is None or "?" in message or fractional_amount(message) is not None:
+        return None
+    norm = " ".join(canonical_text(message).split())
+    if not norm or OF_NUMBER.search(norm) or ORDINAL.search(normalize_text(message)) or re.search(r"\d+\s*/\s*\d+", norm):
+        return None
+    if _heads_in_text(norm):
+        return None
+    for atom in measures(message):
+        num, unit = split_atom(atom)
+        if "x" in atom or "/" in num or "." in num or (unit is not None and unit not in SALE_UNITS):
+            return None
+    words = re.findall(r"[a-z0-9]+", norm)
+    if not words or not all(word.isdigit() or word in _ALLOWED_QTY_WORDS for word in words):
+        return None
+    valid = [qty for qty in quantities_in_message(message) if 1 <= qty <= MAX_QUANTITY]
+    if len(valid) != 1:
+        return None
+    quantity = valid[0]
+    target_unit = f"{target.get('unidad') or ''} {target.get('variante') or ''}".strip()
+    if target_unit and foreign_unit(message, quantity, target_unit):
+        return None
+    return target, quantity
+
+
+def coherent_option_turn(message: str, context: dict | None) -> bool:
+    """True si el cliente navega o aclara coherentemente dentro del árbol de opciones o contexto activo."""
+    return bool(
+        pagination_group(message, context)
+        or chosen_options(message, context)
+        or unresolved_ordinal(message, context)
+        or affirms_active_item(message, context)
+        or offered_short_quantity(message, context)
+        or pending_quantity_quote(message, context)
+        or is_elliptical_turn(message, context)
+    )
 
 
 def without_chosen_measures(text: str, picked: list[dict]) -> str:

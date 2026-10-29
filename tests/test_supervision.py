@@ -296,3 +296,58 @@ def test_the_detail_shows_turns_redacted_and_orders(tmp_path, store, executor):
     assert [order["estado"] for order in detail["pedidos"]] == ["pendiente"]
     assert detail["bloqueo"] is None and detail["atencion"] == {"estado": "ia", "historial": []}
     assert detail["acciones"] == ["tomar", "finalizar", "bloquear"]
+
+
+def test_coherent_option_navigation_and_clarifications_never_trigger_premature_tendero_escalation(store, executor):
+    session = store.create()
+    # Turno 1: lista truncada de tubos PVC.
+    t1 = run_turn(
+        store, session, "necesito tubos PVC", tool_executor=executor,
+        planner=Script(Decision("call_tool", "productos", "buscar_productos", {"items": [{"text": "tubos PVC", "product": "tubo", "material": "PVC"}]}, ""),
+                       Decision("respond", "productos", None, None, "")),
+    )
+    assert t1["estado"] == "clarify"
+
+    # Turno 2: pide ver las otras opciones -> clarify, sin aviso al tendero.
+    t2 = run_turn(
+        store, session, "muéstrame las otras opciones", tool_executor=executor,
+        planner=Script(Decision("respond", "productos", None, None, "")),
+    )
+    assert t2["estado"] == "clarify" and "también tengo estas opciones" in t2["respuesta"]
+
+    # Turno 3: con solo 2 opciones en la segunda página, «la tercera» pide aclarar con clarify (sin not_verified).
+    t3_oob = run_turn(
+        store, session, "la tercera", tool_executor=executor,
+        planner=Script(Decision("respond", "productos", None, None, "")),
+    )
+    assert t3_oob["estado"] == "clarify" and "Solo te mostré 2 opciones" in t3_oob["respuesta"]
+
+    # Turno 4: elige «la segunda» sin cantidad -> pregunta cuántos metros con estado clarify (no not_verified).
+    t4 = run_turn(
+        store, session, "la segunda", tool_executor=executor,
+        planner=Script(Decision("respond", "productos", None, None, "")),
+    )
+    assert t4["estado"] == "clarify" and "necesitas?" in t4["respuesta"]
+
+    # Turno 5: confirma «sí, esa» aún sin cantidad -> sigue pidiendo cantidad en clarify, sin escalar al tendero.
+    t5 = run_turn(
+        store, session, "sí, esa", tool_executor=executor,
+        planner=Script(Decision("respond", "productos", None, None, "")),
+    )
+    assert t5["estado"] == "clarify" and "necesitas?" in t5["respuesta"]
+    assert attention(store, session) == "ia" and store.take_notices(session) == []
+
+    # Incluso tras un fallo previo, una aclaración coherente con salida inválida del modelo no dispara aviso prematuro;
+    # pero dos fallos duros de infraestructura seguidos sí siguen escalando.
+    run_turn(store, session, "algo raro", tool_executor=executor, planner=Script(down()))
+    assert attention(store, session) == "ia"
+    invalid = Decision("respond", "otro", None, None, "", raw_response="{mal", valid_json=False)
+    t_coherent = run_turn(store, session, "sí, esa", tool_executor=executor, planner=Script(invalid))
+    assert t_coherent["estado"] == "model_invalid"
+    assert attention(store, session) == "ia" and store.take_notices(session) == []
+
+    # Dos fallos reales seguidos fuera de una navegación válida sí avisan al tendero.
+    run_turn(store, session, "¿tienen algo?", tool_executor=executor, planner=Script(down()))
+    assert attention(store, session) == "requiere_humano"
+    assert store.take_notices(session) == [ESCALATION_NOTICE]
+

@@ -32,6 +32,7 @@ from asistendero.validation import normalize_text
 ATTENTION_STATES = ("ia", "requiere_humano", "tendero", CLOSED)
 ACTORS = ("asistente", "tendero", "sistema")
 FAILURE_STATES = frozenset({"model_error", "model_invalid", "limit_reached", "tool_error", "not_verified"})
+HARD_FAILURE_STATES = frozenset({"model_error", "tool_error"})
 MAX_REASON_CHARS = MAX_BAN_EXCERPT
 MAX_STAFF_REPLY_CHARS = 500
 
@@ -216,9 +217,13 @@ def ban_manually(store: SessionStore, session_id: str, motivo: str, orders: Orde
     return cancel_active(orders, session_id, "tendero al bloquear la conversación")
 
 
-def escalate_after_failures(store: SessionStore, session_id: str, previous: str | None, current: str) -> bool:
-    """Dos turnos seguidos en fallo piden al tendero y avisan al cliente; uno solo no."""
+def escalate_after_failures(
+    store: SessionStore, session_id: str, previous: str | None, current: str, *, coherent: bool = False,
+) -> bool:
+    """Dos turnos seguidos en fallo piden al tendero y avisan al cliente; uno solo o una aclaración coherente, no."""
     if previous not in FAILURE_STATES or current not in FAILURE_STATES:
+        return False
+    if coherent and current not in HARD_FAILURE_STATES:
         return False
     if not request_human(store, session_id, f"Dos turnos seguidos sin respuesta verificada ({previous}, {current}).",
                          "sistema"):

@@ -12,10 +12,18 @@ from typing import NotRequired, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from asistendero.answers import direct_response, render_answer, reply_is_grounded, with_reservation_note
-from asistendero.choices import check_reference, chosen_options, without_chosen_measures
+from asistendero.choices import (
+    check_reference, chosen_options, pagination_group, pending_quantity_quote, unresolved_ordinal,
+    without_chosen_measures,
+)
+from asistendero.context_resolution import (
+    _heads_in_text, affirms_active_item, is_elliptical_turn, offered_short_quantity, remembered_spec_for_item,
+    specs_from_context,
+)
 from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.injection import INJECTION_CODES, blocked_reply, detect_injection
+from asistendero.measures import measures
 from asistendero.observations import (
     ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model, order_results, search_findings,
 )
@@ -83,19 +91,33 @@ def _deterministic_complete(state: AgentState) -> bool:
     if not calls or state.get("error"):
         return False
     last = calls[-1]
+    context = state.get("contexto")
+    is_pending_qty = (
+        last["requested_tool"] == "calcular_cotizacion_informativa"
+        and pending_quantity_quote(state["consulta"], context) is not None
+    )
+    if (
+        last["executed"]
+        and is_pending_qty
+        and (last["response"].get("error") or {}).get("code") == "INSUFFICIENT_STOCK"
+    ):
+        return True
     if not last["executed"] or last["response"].get("status") != "ok":
         return False
     decision = state["decisiones"][-1]
     probe = Decision("respond", decision.intent, None, None, "ok")
-    if pending_reminder(state["consulta"], probe, calls, set(), state.get("referencia"), state.get("contexto")):
+    if pending_reminder(state["consulta"], probe, calls, set(), state.get("referencia"), context):
         return False
     tool = last["requested_tool"]
-    context = state.get("contexto")
+    if is_pending_qty:
+        return True
     if tool == "explorar_categoria":
         return full_category_listing(calls) or (
             not search_findings(calls) and not order_results(calls) and not quantities_in_message(state["consulta"])
         )
     if tool == "buscar_productos":
+        if pagination_group(state["consulta"], context) is not None:
+            return True
         findings = [without_negated(state["consulta"], f) for f in search_findings(calls)]
         return bool(findings) and all(not f["matches"] and not f["nearby"] for f in findings)
     if tool == "confirmar_pedido":
@@ -134,7 +156,11 @@ def _auto_quote_call(
     items = (search_call["arguments"] or {}).get("items") or []
     context = state.get("contexto")
     consulta = state["consulta"]
-    if len(items) != 1 or listed or list_lines(context) or (bool(context) and wants_to_buy(consulta, context)):
+    if (
+        len(items) != 1 or listed or list_lines(context)
+        or pagination_group(consulta, context) is not None
+        or (bool(context) and wants_to_buy(consulta, context))
+    ):
         return None
     if order_action_pending(consulta, state["referencia"], calls, context) is not None:
         return None
@@ -201,10 +227,20 @@ def after_validate(state: AgentState) -> str:
 
 
 def reference_text(message: str, context: dict | None) -> str:
-    """Lo que el cliente dijo en la conversación reciente más el mensaje actual."""
+    """Lo que el cliente dijo en la conversación reciente, las especificaciones fijadas vigentes y el mensaje actual."""
     turns = (context or {}).get("turnos") or []
     previous = [turn["cliente"] for turn in turns[-REFERENCE_TURNS:] if isinstance(turn.get("cliente"), str)]
-    return "\n".join([*previous, message])
+    spec_lines: list[str] = []
+    if specs_from_context(context):
+        heads = list(_heads_in_text(message))
+        if not heads and (elliptical := is_elliptical_turn(message, context)):
+            heads = [elliptical[1]]
+        for head in heads:
+            spec = remembered_spec_for_item(head, head, message, context)
+            parts = [spec[k] for k in ("material", "medida", "presentacion") if spec.get(k)]
+            if parts:
+                spec_lines.append(f"{head} {' '.join(parts)}")
+    return "\n".join([*spec_lines, *previous, message])
 
 
 def build_graph(tool_executor: ToolExecutor, planner: Planner):
@@ -253,14 +289,24 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         decision = state["decisiones"][-1]
         calls = state["tool_calls"]
         started = perf_counter()
+        context = state.get("contexto")
+        # «dame del primero» o «sí, esa» (con opción única): cuenta como producto identificado.
+        picked = chosen_options(state["consulta"], context)
+        if not picked and (affirmed := affirms_active_item(state["consulta"], context)):
+            picked = [affirmed]
+        pending_qty = None if picked else pending_quantity_quote(state["consulta"], context)
+        if pending_qty is not None:
+            picked = [pending_qty[0]]
+        effective_tool = decision.tool
+        effective_args = decision.arguments
+        if pending_qty is not None and effective_tool == "buscar_productos":
+            effective_tool = "calcular_cotizacion_informativa"
+            effective_args = {"lines": [{"sku": pending_qty[0]["sku"], "quantity": pending_qty[1]}]}
         call: ToolCall = {
-            "step": len(calls) + 1, "requested_tool": decision.tool,
-            "requested_arguments": decision.arguments, "executed": False, "arguments": None,
+            "step": len(calls) + 1, "requested_tool": effective_tool,
+            "requested_arguments": effective_args, "executed": False, "arguments": None,
             "response": {}, "duration_ms": 0,
         }
-        # «dame del primero»: la opción elegida por su orden cuenta como producto identificado.
-        picked = chosen_options(state["consulta"], state.get("contexto"))
-        context = state.get("contexto")
         listed = usable_lines(state["consulta"], context)
         # Lo que el cliente quitó o dejó atrás al empezar de nuevo tampoco vale como producto recordado.
         dropped = set(list_lines(context)) - set(listed)
@@ -269,19 +315,34 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
                       for item in known if item.get("sku") not in dropped}
         quantities: set[int] = set()
         try:
+            turns = (context or {}).get("turnos") or []
+            recent_utterances = "\n".join([
+                *(turn["cliente"] for turn in turns[-REFERENCE_TURNS:] if isinstance(turn.get("cliente"), str)),
+                state["consulta"],
+            ])
+            offered_qty = offered_short_quantity(state["consulta"], context)
             # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
-            quantities = (quantities_in_message(without_chosen_measures(state["consulta"], picked))
-                          or quantities_in_message(without_chosen_measures(state["referencia"], picked)))
+            quantities = (
+                quantities_in_message(without_chosen_measures(state["consulta"], picked))
+                or ({offered_qty} if offered_qty is not None else set())
+                or quantities_in_message(without_chosen_measures(recent_utterances, picked))
+            )
+            if offered_qty is not None:
+                quantities.add(offered_qty)
+            if pending_qty is not None:
+                quantities.add(pending_qty[1])
             quantities |= added_quantities(state["consulta"], context)
-            check_reference(decision.tool, decision.arguments, state["consulta"], calls, context)
-            if decision.tool in ORDER_TOOLS and isinstance(decision.arguments, dict):
+            check_reference(effective_tool, effective_args, state["consulta"], calls, context)
+            if effective_tool in ORDER_TOOLS and isinstance(effective_args, dict):
                 # Los pedidos miran el mensaje del turno: confirmar o cancelar lo tiene que decir ahora el cliente.
-                arguments = validate_order_request(decision.tool, decision.arguments, current=state["consulta"],
+                arguments = validate_order_request(effective_tool, effective_args, current=state["consulta"],
                                                    reference=state["referencia"], calls=calls, context=context)
             else:
-                arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities,
-                                             remembered, listed, state["consulta"])
-            if any(previous["executed"] and previous["requested_tool"] == decision.tool
+                arguments = validate_request(
+                    effective_tool, effective_args, state["referencia"], calls, quantities,
+                    remembered, listed, state["consulta"], context=context, picked=picked,
+                )
+            if any(previous["executed"] and previous["requested_tool"] == effective_tool
                    and previous["arguments"] == arguments for previous in calls):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")
         except Rejected as exc:
@@ -293,7 +354,36 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
                     f"{item['sku']} ({item.get('nombre', '')} {item.get('variante', '')})".strip() for item in picked) + "."
             call["response"] = error_envelope("rejected", exc.code, message, "agent_validation")
         else:
-            call.update(executed=True, arguments=arguments, response=execute_safely(tool_executor, decision.tool, arguments))
+            response = execute_safely(tool_executor, effective_tool, arguments)
+            if (
+                effective_tool == "buscar_productos"
+                and response.get("status") == "ok"
+                and isinstance(effective_args, dict)
+            ):
+                raw_items = effective_args.get("items") or []
+                clean_items = arguments.get("items") or []
+                results = (response.get("data") or {}).get("results") or []
+                retried_items = []
+                needs_retry = False
+                for idx, clean_item in enumerate(clean_items):
+                    raw_item = raw_items[idx] if idx < len(raw_items) and isinstance(raw_items[idx], dict) else {}
+                    res_matches = (
+                        results[idx].get("matches") if idx < len(results) and isinstance(results[idx], dict) else None
+                    )
+                    if (
+                        res_matches == []
+                        and "measure" in clean_item
+                        and not raw_item.get("measure")
+                        and not measures(state["consulta"])
+                    ):
+                        retried_items.append({k: v for k, v in clean_item.items() if k != "measure"})
+                        needs_retry = True
+                    else:
+                        retried_items.append(clean_item)
+                if needs_retry:
+                    arguments = {"items": retried_items}
+                    response = execute_safely(tool_executor, effective_tool, arguments)
+            call.update(executed=True, arguments=arguments, response=response)
         call["duration_ms"] = round((perf_counter() - started) * 1000)
         updated_calls = calls + [call]
         auto_quote = _auto_quote_call(state, updated_calls, picked, quantities, remembered, listed, tool_executor)
@@ -343,7 +433,18 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
             return {**common, "estado": estado, "error": error, "respuesta": answer}
 
         if not calls:
-            return {**common, "estado": "answered", "respuesta": direct_response(state["consulta"], decision)}
+            context = state.get("contexto")
+            asked = state["consulta"]
+            if pagination_group(asked, context) is not None or unresolved_ordinal(asked, context) is not None:
+                status, answer = render_answer(message, calls, context, asked)
+                return {**common, "estado": status, "respuesta": answer}
+            selected_only = chosen_options(asked, context) or (
+                [aff] if (aff := affirms_active_item(asked, context)) else []
+            )
+            if len(selected_only) == 1 and not quantities_in_message(without_chosen_measures(asked, selected_only)):
+                status, answer = render_answer(message, calls, context, asked)
+                return {**common, "estado": status, "respuesta": answer}
+            return {**common, "estado": "answered", "respuesta": direct_response(asked, decision)}
         status, answer = render_answer(message, calls, state.get("contexto"), state["consulta"])
         if decision.action == "respond" and reply_is_grounded(
             decision.reply, message, calls, state.get("contexto"), state["consulta"],

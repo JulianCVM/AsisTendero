@@ -20,7 +20,8 @@ from asistendero.handoff import (
 )
 from asistendero.injection import detect_injection
 from asistendero.orders import WEEKDAYS, OrderBook
-from asistendero.choices import shown_options
+from asistendero.choices import chosen_options, coherent_option_turn, shown_options
+from asistendero.context_resolution import affirms_active_item, updated_specs
 from asistendero.sessions import MAX_CLOSED_ORDERS, SessionStore, remembered_products
 from asistendero.shopping_list import updated_list
 from asistendero.tracing import run_traced
@@ -135,18 +136,28 @@ def run_turn(
         catalog = MockCatalog(orders.path) if orders is not None else MockCatalog()
         tool_executor = catalog_executor(catalog, orders, session_id)
     result = run_traced(message, emit, tool_executor, planner, context=context)
+    consulta = result["consulta"]
+    coherent = bool(consulta) and coherent_option_turn(consulta, context)
     products = remembered_products(result.get("referencia", ""), result.get("tool_calls", []))
-    shopping = updated_list(context.get("lista") or [], result["consulta"], result.get("tool_calls", []))
-    options = shown_options(result.get("referencia", ""), result.get("tool_calls", []), result["consulta"])
-    turn = store.record(session_id, result["consulta"], result["respuesta"], result["estado"], products, shopping,
-                        options)
+    picked_now = (chosen_options(consulta, context) or (
+        [aff] if (aff := affirms_active_item(consulta, context)) else []
+    )) if consulta else []
+    for picked_opt in picked_now:
+        if picked_opt.get("sku") and all(picked_opt.get(k) for k in ("nombre", "variante", "unidad")):
+            if not any(item["sku"] == picked_opt["sku"] for item in products):
+                products.append({key: picked_opt[key] for key in ("sku", "nombre", "variante", "unidad")})
+    shopping = updated_list(context.get("lista") or [], consulta, result.get("tool_calls", []))
+    options = shown_options(result.get("referencia", ""), result.get("tool_calls", []), consulta, context=context)
+    specs = updated_specs(context.get("especificaciones"), consulta, context) if consulta else None
+    turn = store.record(session_id, consulta, result["respuesta"], result["estado"], products, shopping,
+                        options, specs=specs)
     injection = result.get("inyeccion")
     if injection:
         cancelled = ban_session(store, session_id, injection, message, orders)
         emit({"type": "ban", "run_id": result["run_id"], "session_id": session_id,
               "details": {**injection, "pedidos_cancelados": cancelled}})
     else:
-        escalate_after_failures(store, session_id, previous, result["estado"])
+        escalate_after_failures(store, session_id, previous, result["estado"], coherent=coherent)
     emit({"type": "session", "run_id": result["run_id"], "session_id": session_id, "turno": turn,
           "productos_recordados": [item["sku"] for item in products],
           "lista": [{"sku": item["sku"], "cantidad": item["cantidad"]} for item in shopping],

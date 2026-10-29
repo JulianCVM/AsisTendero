@@ -39,6 +39,7 @@ DEFAULT_SESSIONS_PATH = Path(".local/sessions.sqlite3")
 MAX_CONTEXT_TURNS = 4
 MAX_TURN_CHARS = 500
 MAX_REMEMBERED_PRODUCTS = 8
+MAX_SESSION_SPECS = 16
 MAX_TURNS_PER_SESSION = 40
 SESSION_TTL = timedelta(hours=12)
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
@@ -104,7 +105,22 @@ def compact_context(context: dict) -> dict:
     if listed:
         clean["lista"] = listed
     if context.get("opciones"):
-        clean["opciones"] = context["opciones"]
+        clean["opciones"] = [
+            {
+                "grupo": block["grupo"],
+                "opciones": block["opciones"],
+                **({"restantes_total": len(block["restantes"])} if block.get("restantes") else {}),
+            }
+            for block in context["opciones"] if isinstance(block, dict) and block.get("grupo")
+        ]
+    if isinstance(context.get("especificaciones"), dict) and context["especificaciones"]:
+        specs = {
+            head: {k: v for k, v in vals.items() if isinstance(v, str) and v}
+            for head, vals in list(context["especificaciones"].items())[:MAX_SESSION_SPECS]
+            if isinstance(vals, dict) and any(isinstance(v, str) and v for v in vals.values())
+        }
+        if specs:
+            clean["especificaciones"] = specs
     orders = [order for order in (context.get("pedidos") or []) if isinstance(order, dict) and order.get("pedido")]
     if orders:
         active = [order for order in orders if order.get("estado") in {"pendiente", "confirmado"}]
@@ -185,7 +201,13 @@ class SessionStore:
                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                        grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
                        name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                       shown INTEGER NOT NULL DEFAULT 1,
                        PRIMARY KEY (session_id, grupo, position));
+                   CREATE TABLE IF NOT EXISTS session_specs (
+                       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                       product_key TEXT NOT NULL, measure TEXT NOT NULL DEFAULT '',
+                       material TEXT NOT NULL DEFAULT '', presentation TEXT NOT NULL DEFAULT '',
+                       updated_turn INTEGER NOT NULL, PRIMARY KEY (session_id, product_key));
                    CREATE TABLE IF NOT EXISTS attention (
                        session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
                        state TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -196,6 +218,9 @@ class SessionStore:
                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                        created_at TEXT NOT NULL, text TEXT NOT NULL);"""
             )
+            option_columns = {row[1] for row in connection.execute("PRAGMA table_info(session_options)").fetchall()}
+            if "shown" not in option_columns:
+                connection.execute("ALTER TABLE session_options ADD COLUMN shown INTEGER NOT NULL DEFAULT 1")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -270,14 +295,32 @@ class SessionStore:
                 (session_id,),
             ).fetchall()
             shown = connection.execute(
-                "SELECT grupo, label, sku, name, variant, unit FROM session_options WHERE session_id = ? "
+                "SELECT grupo, label, sku, name, variant, unit, shown FROM session_options WHERE session_id = ? "
                 "ORDER BY grupo, position", (session_id,),
             ).fetchall()
+            spec_rows = connection.execute(
+                "SELECT product_key, measure, material, presentation FROM session_specs WHERE session_id = ? "
+                "ORDER BY updated_turn DESC, product_key LIMIT ?",
+                (session_id, MAX_SESSION_SPECS),
+            ).fetchall()
         options: dict[int, dict] = {}
-        for group, label, sku, name, variant, unit in shown:
+        for group, label, sku, name, variant, unit, is_shown in shown:
             block = options.setdefault(group, {"grupo": label, "opciones": []})
-            block["opciones"].append({"n": len(block["opciones"]) + 1, "sku": sku, "nombre": name,
-                                      "variante": variant, "unidad": unit})
+            if is_shown:
+                block["opciones"].append({"n": len(block["opciones"]) + 1, "sku": sku, "nombre": name,
+                                          "variante": variant, "unidad": unit})
+            else:
+                block.setdefault("restantes", []).append({"sku": sku, "nombre": name,
+                                                          "variante": variant, "unidad": unit})
+        especificaciones = {
+            product_key: {
+                key: val
+                for key, val in (("medida", measure), ("material", material), ("presentacion", presentation))
+                if val
+            }
+            for product_key, measure, material, presentation in spec_rows
+            if measure or material or presentation
+        }
         return {
             "turnos": [
                 {"cliente": _clip(customer), "asistente": _clean_assistant(assistant)}
@@ -288,6 +331,7 @@ class SessionStore:
             "lista": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit, "cantidad": quantity}
                       for sku, name, variant, unit, quantity in listed],
             "opciones": list(options.values()),
+            "especificaciones": especificaciones,
         }
 
     def notify(self, session_id: str, text: str) -> bool:
@@ -308,10 +352,12 @@ class SessionStore:
         return [row[1] for row in rows]
 
     def record(self, session_id: str, customer: str, assistant: str, status: str, products: list[dict],
-               shopping: list[dict] | None = None, options: list[dict] | None = None) -> int:
+               shopping: list[dict] | None = None, options: list[dict] | None = None,
+               specs: dict[str, dict[str, str]] | None = None) -> int:
         """Guarda el turno ya filtrado y devuelve su número.
 
-        ``shopping`` reemplaza la lista de la sesión; ``options``, si trae grupos, reemplaza las opciones mostradas.
+        ``shopping`` reemplaza la lista de la sesión; ``options``, si trae grupos, reemplaza las opciones mostradas;
+        ``specs``, si se informa, actualiza las especificaciones fijadas por tipo de producto.
         """
         now = self.clock().isoformat()
         with self._connect() as connection:
@@ -339,12 +385,30 @@ class SessionStore:
                 )
             if options:
                 connection.execute("DELETE FROM session_options WHERE session_id = ?", (session_id,))
+                option_rows = []
+                for group, block in enumerate(options):
+                    shown_items = block.get("opciones") or []
+                    for position, item in enumerate(shown_items):
+                        option_rows.append((session_id, group, position, block["grupo"], item["sku"],
+                                            item["nombre"], item["variante"], item["unidad"], 1))
+                    offset = len(shown_items)
+                    for extra_pos, item in enumerate(block.get("restantes") or []):
+                        option_rows.append((session_id, group, offset + extra_pos, block["grupo"], item["sku"],
+                                            item["nombre"], item["variante"], item["unidad"], 0))
                 connection.executemany(
-                    "INSERT INTO session_options VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    [(session_id, group, position, block["grupo"], item["sku"], item["nombre"], item["variante"],
-                      item["unidad"]) for group, block in enumerate(options)
-                     for position, item in enumerate(block["opciones"])],
+                    "INSERT INTO session_options VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", option_rows,
                 )
+            if specs is not None:
+                connection.execute("DELETE FROM session_specs WHERE session_id = ?", (session_id,))
+                spec_rows = [
+                    (session_id, head, str(values.get("medida") or ""), str(values.get("material") or ""),
+                     str(values.get("presentacion") or ""), number)
+                    for head, values in list(specs.items())[:MAX_SESSION_SPECS]
+                    if isinstance(values, dict)
+                    and (values.get("medida") or values.get("material") or values.get("presentacion"))
+                ]
+                if spec_rows:
+                    connection.executemany("INSERT INTO session_specs VALUES (?, ?, ?, ?, ?, ?)", spec_rows)
             connection.execute("UPDATE sessions SET turns = ?, updated_at = ? WHERE id = ?", (number, now, session_id))
         return number
 

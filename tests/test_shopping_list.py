@@ -506,3 +506,178 @@ def test_a_bare_de_and_a_number_after_which_one_chooses_that_option(chat):
     for message in ["deme 50", "de 40", "de 25 o de 50", "de 50 y un taladro"]:
         assert chosen_options(message, context) == [], message
     assert [item["sku"] for item in chosen_options("pues de 25 kg, 3 bultos", context)] == ["CEM-025"]
+
+
+def test_elliptical_turn_inherits_product_subject_without_not_found_or_contaminating_other_products(chat):
+    turn, sessions, _ = chat
+    # Caso 1: «tubo PVC» + «de presion de agua» cuando Grok envía solo el modificador en buscar_productos.
+    s_tube = sessions.create()
+    first = turn(s_tube, "necesito un tubo PVC", tool("buscar_productos", items=[{"text": "tubo PVC", "product": "tubo", "material": "PVC"}]), say())
+    assert first["estado"] == "clarify"
+    second = turn(s_tube, "de presion de agua", tool("buscar_productos", items=[{"text": "de presion de agua"}]), say())
+    sent_item = second["tool_calls"][0]["arguments"]["items"][0]
+    assert sent_item["text"] == "tubo PVC presion agua"
+    assert sent_item["product"] == "tubo" and sent_item["material"] == "PVC"
+    assert second["estado"] == "clarify"
+    assert "Tubo PVC presión para agua" in second["respuesta"]
+    assert "no lo manejo" not in second["respuesta"] and "$" not in second["respuesta"]
+
+    # Caso 2: «broca» + «de concreto» -> hereda «broca concreto» y muestra las medidas de concreto.
+    s_bit = sessions.create()
+    turn(s_bit, "busco una broca", tool("buscar_productos", items=[{"text": "broca", "product": "broca"}]), say())
+    bit_reply = turn(s_bit, "de concreto", tool("buscar_productos", items=[{"text": "de concreto"}]), say())
+    bit_item = bit_reply["tool_calls"][0]["arguments"]["items"][0]
+    assert bit_item["text"] == "broca concreto" and bit_item["product"] == "broca"
+    assert bit_reply["estado"] == "clarify" and "broca para concreto" in bit_reply["respuesta"].casefold()
+    assert "no lo manejo" not in bit_reply["respuesta"]
+
+    # Lo que NO debe pasar: un producto nuevo no hereda el anterior, y sin contexto previo una búsqueda vaga se rechaza.
+    switched = turn(s_tube, "¿y tienen cemento gris?", tool("buscar_productos", items=[{"text": "cemento gris"}]), say())
+    assert "tubo" not in switched["tool_calls"][0]["arguments"]["items"][0]["text"].casefold()
+    fresh = sessions.create()
+    vague = turn(fresh, "deme 3 de esos", tool("buscar_productos", items=[{"text": "esos"}]), say())
+    assert vague["tool_calls"][0]["response"]["error"]["code"] == "VAGUE_SEARCH"
+
+
+def test_remembered_specifications_filter_variants_after_intermediate_queries_and_allow_overrides(chat):
+    turn, sessions, _ = chat
+    session = sessions.create()
+    # Turno 1: fija medida 1/2" y material PVC para el tubo.
+    t1 = turn(session, "dame un tubo PVC de 1/2",
+              tool("buscar_productos", items=[{"text": "tubo PVC de 1/2", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada"}]),
+              say())
+    assert t1["estado"] == "clarify"
+    assert "1/2 pulgada" in t1["respuesta"] and "3/4 pulgada" not in t1["respuesta"]
+    assert sessions.context(session)["especificaciones"]["tubo"] == {"medida": "1/2 pulgada", "material": "PVC"}
+
+    # Turnos 2 a 5: consultas intermedias que sacan el turno 1 de la ventana REFERENCE_TURNS (3).
+    turn(session, "¿cuánto vale la brocha de 3 pulgadas?", tool("buscar_productos", items=[BRUSH]), say())
+    turn(session, "¿tienen mangueras de abasto de 40 cm?", tool("buscar_productos", items=[HOSE_40]), say())
+    turn(session, "¿tienen rodillo de 9 pulgadas?", tool("buscar_productos", items=[ROLLER]), say())
+    turn(session, "¿cuál es el horario?", tool("consultar_info_tienda", tema="horario"), say(intent="tienda"))
+
+    # Turno 6: retoma el tubo sin repetir «1/2» ni «PVC»; el servidor filtra solo variantes PVC de 1/2", sin inventar cantidad.
+    t6 = turn(session, "volviendo al tubo, ¿cuáles eran las opciones?",
+              tool("buscar_productos", items=[{"text": "tubo", "product": "tubo"}]), say())
+    assert t6["estado"] == "clarify"
+    assert t6["tool_calls"][0]["arguments"]["items"][0]["measure"] == "1/2 pulgada"
+    assert "Tubo PVC conduit eléctrico de 1/2 pulgada" in t6["respuesta"]
+    assert "Tubo PVC presión para agua de 1/2 pulgada" in t6["respuesta"]
+    assert "3/4 pulgada" not in t6["respuesta"] and "2 pulgadas" not in t6["respuesta"] and "$" not in t6["respuesta"]
+
+    # Turno 7: especifica el uso con cantidad («el de agua, dame 2 metros») y auto-cotiza 1/2" sin volver a preguntar medida.
+    t7 = turn(session, "del tubo para agua, dame 2 metros",
+              tool("buscar_productos", items=[{"text": "tubo para agua", "product": "tubo", "use": "agua"}]), say())
+    assert t7["estado"] == "quoted"
+    assert "2 metros de tubo PVC presión para agua de 1/2 pulgada" in t7["respuesta"]
+    assert "$17.000" in t7["respuesta"]
+
+    # Sobreescritura explícita («mejor de 3/4»): actualiza la medida y no fuerza 1/2" (con lista previa Grok cotiza PVC-075).
+    t8 = turn(session, "mejor dame 2 metros del tubo PVC de 3/4 para agua",
+              tool("buscar_productos", items=[{"text": "tubo PVC de 3/4 para agua", "product": "tubo", "use": "agua", "measure": "3/4 pulgada"}]),
+              say(), quote(("PVC-075", 2)), say())
+    assert t8["estado"] == "quoted" and "3/4 pulgada" in t8["respuesta"]
+    assert sessions.context(session)["especificaciones"]["tubo"]["medida"] == "3/4 pulgada"
+
+    # Preguntar por todas las medidas limpia la medida fijada.
+    t9 = turn(session, "¿qué otras medidas de tubo PVC tienes?",
+              tool("buscar_productos", items=[{"text": "tubo PVC", "product": "tubo", "material": "PVC"}]), say())
+    assert t9["estado"] == "clarify" and "1/2 pulgada" in t9["respuesta"] and "3/4 pulgada" in t9["respuesta"]
+    assert "medida" not in sessions.context(session)["especificaciones"].get("tubo", {})
+
+
+def test_pagination_shows_remaining_options_without_repeating_the_first_three_or_quoting_four(chat):
+    turn, sessions, _ = chat
+    session = sessions.create()
+    concrete_bits = {"text": "broca para concreto", "product": "broca"}
+    first = turn(session, "buenas, ¿brocas para concreto tiene?", tool("buscar_productos", items=[concrete_bits]), say())
+    assert first["estado"] == "clarify" and "(y 4 opciones más)" in first["respuesta"]
+    ctx1 = sessions.context(session)
+    first_skus = [item["sku"] for item in ctx1["opciones"][0]["opciones"]]
+    remaining_skus = [item["sku"] for item in ctx1["opciones"][0]["restantes"]]
+    assert len(first_skus) == 3 and len(remaining_skus) == 4 and set(first_skus).isdisjoint(remaining_skus)
+
+    # Incluso si Grok intenta repetir buscar_productos, retrieve salta a respond y muestra las 4 opciones restantes.
+    second = turn(session, "muéstrame las otras 4 opciones", tool("buscar_productos", items=[concrete_bits]))
+    assert second["estado"] == "clarify"
+    assert second["model_calls"] == 1
+    assert "también tengo estas opciones:" in second["respuesta"]
+    first_variant = ctx1["opciones"][0]["opciones"][0]["variante"]
+    next_variant = ctx1["opciones"][0]["restantes"][0]["variante"]
+    assert first_variant not in second["respuesta"]
+    assert next_variant in second["respuesta"]
+    assert "$" not in second["respuesta"]
+    # No se ejecutó ninguna cotización con el «4» de «las otras 4 opciones».
+    assert all(call["requested_tool"] != "calcular_cotizacion_informativa" for call in second["tool_calls"])
+
+    ctx2 = sessions.context(session)
+    assert [item["sku"] for item in ctx2["opciones"][0]["opciones"]] == remaining_skus
+    assert "restantes" not in ctx2["opciones"][0]
+
+    # También funciona cuando Grok responde directo ante «¿cuáles son las otras cuatro?» en otra sesión.
+    other = sessions.create()
+    turn(other, "brocas para concreto", tool("buscar_productos", items=[concrete_bits]), say())
+    direct_page = turn(other, "¿cuáles son las otras cuatro?", say("Son las mismas de arriba."))
+    assert direct_page["estado"] == "clarify"
+    assert "también tengo estas opciones:" in direct_page["respuesta"]
+    assert "Son las mismas" not in direct_page["respuesta"]
+
+    # Elegir por ordinal tras paginar apunta a la opción de la segunda página, no a la primera página.
+    from asistendero.seed import PRODUCTS
+    stocks = {row[0]: row[5] for row in PRODUCTS}
+    idx, chosen_sku = next((i, sku) for i, sku in enumerate(remaining_skus) if stocks[sku] >= 2)
+    ordinal_word = ("primera", "segunda", "tercera", "cuarta")[idx]
+    third = turn(session, f"dame 2 unidades de la {ordinal_word}", quote((chosen_sku, 2)), say())
+    assert third["estado"] == "quoted"
+    assert ctx1["opciones"][0]["restantes"][idx]["variante"] in third["respuesta"]
+
+    # Si ya no quedan más opciones excedentes en «other», informa que esas son todas sin caer en not_verified.
+    exhausted = turn(other, "¿qué otras opciones tienes?", say())
+    assert exhausted["estado"] == "clarify" and "esas son todas las opciones que manejo" in exhausted["respuesta"]
+
+
+def test_collaborative_quantity_reply_quotes_focused_sku_and_resets_stagnation_counter(chat):
+    from asistendero.handoff import ESCALATION_NOTICE, attention, last_status
+
+    turn, sessions, _ = chat
+    # 1. Flujo conversacional real: pregunta de metraje del bot -> respuesta "2 metros" -> cotiza sin buscar "2 metros".
+    session = sessions.create()
+    t1 = turn(
+        session,
+        "¿tienen tubo PVC presión de 1/2 para agua?",
+        tool("buscar_productos", items=[{"text": "tubo PVC presión de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
+        say(),
+    )
+    assert t1["estado"] == "found" and "¿Cuántos metros necesitas?" in t1["respuesta"]
+
+    t2 = turn(session, "2 metros", tool("buscar_productos", items=[{"text": "2 metros"}]))
+    assert t2["estado"] == "quoted"
+    assert t2["model_calls"] == 1
+    assert [call["requested_tool"] for call in t2["tool_calls"]] == ["calcular_cotizacion_informativa"]
+    assert all(call["requested_tool"] != "buscar_productos" for call in t2["tool_calls"])
+    assert "$17.000" in t2["respuesta"]
+    assert attention(sessions, session) == "ia" and sessions.take_notices(session) == []
+
+    # 2. Reseteo de la racha de estancamiento tras un turno previo en fallo (not_verified).
+    s_reset = sessions.create()
+    sessions.record(
+        s_reset,
+        "tubo pvc 1/2",
+        "¿Cuántos metros necesitas del tubo PVC presión de 1/2?",
+        "not_verified",
+        [{"sku": "PVC-050", "nombre": "Tubo PVC presión para agua", "variante": "1/2 pulgada", "unidad": "metro"}],
+    )
+    assert last_status(sessions, s_reset) == "not_verified"
+
+    recovered = turn(s_reset, "2 metros", tool("buscar_productos", items=[{"text": "2 metros"}]))
+    assert recovered["estado"] == "quoted" and "$17.000" in recovered["respuesta"]
+    assert last_status(sessions, s_reset) == "quoted"
+    assert attention(sessions, s_reset) == "ia"
+    assert ESCALATION_NOTICE not in recovered["respuesta"] and sessions.take_notices(s_reset) == []
+
+    # Un fallo aislado en el turno siguiente tampoco dispara aviso al tendero porque la racha quedó en cero.
+    isolated_fail = turn(s_reset, "deme 3 de esos", tool("buscar_productos", items=[{"text": "esos"}]), say())
+    assert isolated_fail["estado"] == "clarify"
+    assert attention(sessions, s_reset) == "ia" and sessions.take_notices(s_reset) == []
+
+

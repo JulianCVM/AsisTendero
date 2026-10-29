@@ -5,6 +5,7 @@ import re
 import unicodedata
 
 from asistendero.catalog import Product, tokens
+from asistendero.context_resolution import _heads_in_text, enrich_elliptical_text, remembered_spec_for_item
 from asistendero.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, STORE_TOPICS, TOOL_NAMES
 from asistendero.measures import UNITS, atom_support, canonical_text, contradicts, measures, split_atom
 from asistendero.observations import Finding, ToolCall, search_findings
@@ -130,12 +131,18 @@ def quantities_in_message(message: str) -> set[int]:
         factor = 0.5 if count in {"media", "medio"} else int(count) if count.isdigit() else NUMBER_WORDS[count]
         groups.add(int(factor * GROUP_SIZES[group]))
     text = GROUP_COUNT.sub(" ", text)
+    text = re.sub(
+        rf"\b(?:cuales\s+son|muestrame|muestreme|mostrar|dime|ver)\s+(?:las\s+|los\s+)?otr[oa]s\s+"
+        rf"(?:\d{{1,2}}|{'|'.join(NUMBER_WORDS)})\b",
+        " ",
+        text,
+    )
     # Con el catálogo ampliado también son medidas «9 W», «12 AWG», «grano 80», «talla 40» o el 2 de «1/4 x 2».
     # La obra tampoco es la cantidad: el 3 de «una casa de 3 pisos» pedía cotizar 3 bultos (Z-22, suite fallas).
     measure = (r"(?!\s*(?:pulgad|kg|kilo|v\b|mm|cm|\"|x\b|×|w\b|watts|awg|ml\b|oz\b|lb\b|a\b|amperios|grados"
                r"|dientes|piezas|salidas|polos?\b|pies\b|litros?\b|l\b|g\b|pisos?\b|plantas?\b|niveles?\b"
                r"|habitacion\w*|banhos?\b|anhos?\b|mes(?:es)?\b|dias?\b|semanas?\b|horas?\b|minutos?\b"
-               r"|personas?\b|cuadras?\b|veces\b|hijos?\b))")
+               r"|personas?\b|cuadras?\b|veces\b|hijos?\b|opcion(?:es)?\b|variantes?\b))")
     label = r"(?<![#x×])(?<!x )(?<!× )(?<!grano )(?<!talla )(?<!calibre )(?<!numero )"
     found = {int(value) for value in re.findall(rf"{label}\b(\d{{1,4}})\b{measure}", text)}
     # «para un baño» o «en una pared» describen el uso; el artículo no es la cantidad del producto (J-45).
@@ -302,6 +309,7 @@ def session_phrase(current: str, reference: str, text: str, product: str | None,
 def validate_request(
     name: str | None, arguments: object, message: str, calls: list[ToolCall], quantities: set[int] | None = None,
     remembered: dict[str, str] | None = None, listed: dict[str, int] | None = None, current: str | None = None,
+    context: dict | None = None, picked: list[dict] | None = None,
 ) -> dict:
     """Devuelve los argumentos que efectivamente recibirá el ejecutor o rechaza la solicitud.
 
@@ -352,6 +360,15 @@ def validate_request(
             text = item.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 180:
                 raise Rejected("INVALID_ARGUMENT", "Cada artículo necesita un texto breve.")
+            if any(NOT_A_PRODUCT.search(str(value)) for value in item.values()):
+                raise Rejected("INVALID_ARGUMENT", "El artículo describe el producto: sin precios ni códigos de pedido.")
+            inherited_head: str | None = None
+            picked_item: dict | None = None
+            if len(items) == 1 and picked and len(picked) == 1 and not _heads_in_text(text):
+                picked_item = picked[0]
+                text = f"{picked_item.get('nombre', '')} {picked_item.get('variante', '')}".strip() or text
+            elif len(items) == 1:
+                text, inherited_head = enrich_elliptical_text(text, current or message, context)
             if not tokens(without_quantities(text)):
                 raise Rejected("INVALID_ARGUMENT", "El artículo solo dice una cantidad: usa el producto que el cliente "
                                                    "eligió o pregúntale cuál quiere.")
@@ -363,8 +380,6 @@ def validate_request(
             if refused & asked:
                 raise Rejected("NEGATED_ATTRIBUTE", f"El cliente dijo que no quiere «{sorted(refused & asked)[0]}»: "
                                                     "busca sin esa palabra.")
-            if any(NOT_A_PRODUCT.search(str(value)) for value in item.values()):
-                raise Rejected("INVALID_ARGUMENT", "El artículo describe el producto: sin precios ni códigos de pedido.")
             fields = {}
             for field in QUERY_FIELDS:
                 value = item.get(field)
@@ -380,6 +395,30 @@ def validate_request(
             # presentation="1 galón" (C-08 en la segunda corrida S3) ninguna variante cumplía el filtro.
             if SALE_QUANTITY.match(normalize_text(fields.get("presentation", ""))):
                 fields["presentation"] = re.sub(r"^\s*\d+\s*", "", fields["presentation"])
+            extra_support = ""
+            if picked_item is not None:
+                if picked_item.get("nombre"):
+                    fields.setdefault("product", picked_item["nombre"].split()[0])
+                if picked_item.get("variante") and measures(picked_item["variante"]):
+                    fields.setdefault("measure", picked_item["variante"])
+                extra_support = canonical_text(text)
+            else:
+                if inherited_head:
+                    fields.setdefault("product", inherited_head)
+                spec = remembered_spec_for_item(text, fields.get("product"), current or message, context)
+                kept_specs: list[str] = []
+                if spec.get("material") and not (tokens(spec["material"]) & refused):
+                    fields.setdefault("material", spec["material"])
+                    kept_specs.append(spec["material"])
+                if spec.get("medida"):
+                    fields.setdefault("measure", spec["medida"])
+                    kept_specs.append(spec["medida"])
+                if spec.get("presentacion") and not (tokens(spec["presentacion"]) & refused):
+                    fields.setdefault("presentation", spec["presentacion"])
+                    kept_specs.append(spec["presentacion"])
+                if inherited_head:
+                    kept_specs.append(text)
+                extra_support = canonical_text(" ".join(kept_specs))
             heard = canonical_text(heard_as(message, " ".join([text, *fields.values()])))
             # Con varios artículos, un atributo debe estar en la parte del mensaje que habla del suyo («tubo PVC y
             # cemento gris» no pinta el tubo de gris). Con uno solo, todo el mensaje habla de él. En las corridas S4
@@ -392,6 +431,9 @@ def validate_request(
                 phrase = item_clause(heard, text, tokens)
             else:
                 phrase = heard
+            if extra_support:
+                heard = f"{heard} {extra_support}".strip()
+                phrase = f"{phrase} {extra_support}".strip()
             query = ProductQuery(text.strip(), **fields).grounded(heard, tokens, phrase)
             clean.append({key: value for key, value in vars(query).items() if value is not None})
         return {"items": clean}

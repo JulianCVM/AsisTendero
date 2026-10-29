@@ -257,3 +257,53 @@ def test_session_context_prunes_obsolete_metadata_and_keeps_price_masking(store)
     assert [order["pedido"] for order in compacted["pedidos"]] == ["P-ACTIVO", "P-CERR1", "P-CERR2"]
     assert len([o for o in compacted["pedidos"] if o["estado"] not in {"pendiente", "confirmado"}]) == MAX_CLOSED_ORDERS
     assert "recogida" not in compacted["pedidos"][0] and "nota" not in compacted["pedidos"][0]
+
+
+def test_session_store_persists_overflow_options_and_specifications_and_upgrades_legacy_schema(tmp_path):
+    from asistendero.sessions import compact_context
+
+    path = tmp_path / "legacy_sessions.sqlite3"
+    first_store = SessionStore(path)
+    session = first_store.create()
+    # Simula una base anterior sin session_specs ni columna shown en session_options.
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """DROP TABLE session_specs;
+               DROP TABLE session_options;
+               CREATE TABLE session_options (
+                   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                   grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
+                   name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                   PRIMARY KEY (session_id, grupo, position));"""
+        )
+        connection.execute(
+            "INSERT INTO session_options VALUES (?, 0, 0, 'tubos pvc', 'CON-050', 'Tubo conduit', '1/2 pulgada', 'metro')",
+            (session,),
+        )
+
+    upgraded = SessionStore(path)
+    assert upgraded.context(session)["opciones"][0]["opciones"][0]["sku"] == "CON-050"
+    upgraded.record(
+        session,
+        "dame un tubo PVC de 1/2",
+        "Tengo estas opciones",
+        "clarify",
+        [],
+        options=[{
+            "grupo": "tubos pvc",
+            "opciones": [{"sku": "CON-050", "nombre": "Tubo conduit", "variante": "1/2 pulgada", "unidad": "metro"}],
+            "restantes": [{"sku": "PVC-050", "nombre": "Tubo agua", "variante": "1/2 pulgada", "unidad": "metro"}],
+        }],
+        specs={"tubo": {"medida": "1/2 pulgada", "material": "PVC"}},
+    )
+    reopened = SessionStore(path)
+    ctx = reopened.context(session)
+    assert [item["sku"] for item in ctx["opciones"][0]["opciones"]] == ["CON-050"]
+    assert [item["sku"] for item in ctx["opciones"][0]["restantes"]] == ["PVC-050"]
+    assert ctx["especificaciones"] == {"tubo": {"medida": "1/2 pulgada", "material": "PVC"}}
+
+    compacted = compact_context(ctx)
+    assert compacted["opciones"][0]["restantes_total"] == 1
+    assert "restantes" not in compacted["opciones"][0]
+    assert compacted["especificaciones"] == {"tubo": {"medida": "1/2 pulgada", "material": "PVC"}}
+

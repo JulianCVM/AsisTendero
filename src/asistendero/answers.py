@@ -3,7 +3,12 @@
 import re
 
 from asistendero.catalog import Product, tokens
-from asistendero.choices import ambiguous_reference
+from asistendero.choices import (
+    ambiguous_reference, chosen_options, next_options_page, pagination_group, unresolved_ordinal,
+)
+from asistendero.context_resolution import (
+    affirms_active_item, filter_matches_by_spec, pending_quantity_target, remembered_spec_for_item,
+)
 from asistendero.grok import AGENT_PROMPT, MAX_ITEMS, Decision
 from asistendero.guardrails import leaks
 from asistendero.observations import (ToolCall, availability_by_sku, latest_quote, order_results, search_findings,
@@ -94,6 +99,39 @@ def _join(parts: list[str]) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+def _option_to_product(item: dict) -> Product:
+    return Product(
+        sku=item.get("sku") or "",
+        name=item.get("nombre") or "producto",
+        variant=item.get("variante") or "",
+        unit=item.get("unidad") or "unidad",
+        price_cop=0,
+        stock=0,
+        updated_at="",
+    )
+
+
+def _render_pagination(group: dict, asked_raw: str, store: list[str], demo: list[str]) -> tuple[str, str]:
+    if group.get("restantes"):
+        shown_now, still_left = next_options_page(group, asked_raw)
+        items = [_option_to_product(opt) for opt in shown_now]
+        same_name = len({item.name for item in items}) == 1
+        subject = in_sentence(items[0].name) if same_name else _display(group["grupo"], items, shared=True)
+        extra = len(still_left)
+        more = f"\n(y {extra} {'opción' if extra == 1 else 'opciones'} más)" if extra > 0 else ""
+        question = "¿Qué medida o referencia necesitas?" if same_name else "¿Cuál te sirve?"
+        block = f"De {subject} también tengo estas opciones:\n" + "\n".join(option_lines(items)) + f"{more}\n{question}"
+        return "clarify", _join([block, *store, *demo])
+    items = [_option_to_product(opt) for opt in (group.get("opciones") or [])]
+    if not items:
+        return "clarify", _join(["¿Qué producto y qué medida buscas?", *store, *demo])
+    same_name = len({item.name for item in items}) == 1
+    subject = in_sentence(items[0].name) if same_name else _display(group["grupo"], items, shared=True)
+    question = "¿Qué medida o referencia necesitas?" if same_name else "¿Cuál te sirve?"
+    block = f"De {subject} esas son todas las opciones que manejo:\n" + "\n".join(option_lines(items)) + f"\n{question}"
+    return "clarify", _join([block, *store, *demo])
+
+
 def render_answer(message: str, calls: list[ToolCall], context: dict | None = None,
                   current: str | None = None) -> tuple[str, str]:
     """Respuesta determinista construida solo con lo que devolvieron las herramientas.
@@ -103,13 +141,16 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     recientes más el actual, para respaldar productos); ``current``, solo el mensaje de este turno: lo que el cliente
     pregunta ahora (cuánto queda, cuándo llega) no se arrastra de un turno anterior.
     """
-    asked = normalize_text(message if current is None else current)
+    asked_raw = message if current is None else current
+    asked = normalize_text(asked_raw)
     findings = search_findings(calls)
     store = store_lines(calls)
     orders = order_reply(calls)
     quote, quote_call = latest_quote(calls)
     demo = [DEMO_NOTE] if context is None or not context.get("turnos") else []
     order_text = [orders[1]] if orders else []
+    if not quote and not orders and (page_group := pagination_group(asked_raw, context)) is not None:
+        return _render_pagination(page_group, asked_raw, store, demo)
     if not findings and quote:
         block = _with_offer(quote_block(quote, {}, _quote_header(quote, {})), quote,
                             quote_offer(context, orders and orders[0], False))
@@ -131,7 +172,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         # decía «No pude consultar el catálogo».
         return "insufficient_stock", _join([_short_of_known(quote_call, context), *demo])
     if not findings:
-        options = ambiguous_reference(message if current is None else current, context)
+        options = ambiguous_reference(asked_raw, context)
         if options and any((call["response"].get("error") or {}).get("code") == "AMBIGUOUS_REFERENCE" for call in calls):
             return "clarify", f"¿Cuál quieres: {' o '.join(options)}? Dime cuál y te lo cotizo."
         if any((call["response"].get("error") or {}).get("code") == "VAGUE_SEARCH" for call in calls):
@@ -139,6 +180,17 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
             return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
                                f"en grupos de {MAX_ITEMS} o menos?")
+        selected_ctx = chosen_options(asked_raw, context)
+        if not selected_ctx and (aff := affirms_active_item(asked_raw, context)):
+            selected_ctx = [aff]
+        if len(selected_ctx) == 1 and selected_ctx[0].get("nombre"):
+            target = selected_ctx[0]
+            unit = target.get("unidad") or "unidad"
+            many = "Cuántas" if unit in FEMININE else "Cuántos"
+            item_name = in_sentence(label(target["nombre"], target.get("variante") or ""))
+            return "clarify", _join([f"¿{many} {units(unit, 2)} {of_the(item_name)} necesitas?", *demo])
+        if ordinal_note := unresolved_ordinal(asked_raw, context):
+            return "clarify", _join([ordinal_note, *demo])
         if any(call["response"]["status"] == "error" for call in calls):
             return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
                                   "existencias verificados. Intenta de nuevo en unos minutos.")
@@ -147,6 +199,9 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
 
     availability = availability_by_sku(calls)
     quoted = {line["sku"] for line in (quote or {}).get("lines", [])}
+    picked_skus = {opt["sku"] for opt in chosen_options(asked_raw, context) if opt.get("sku")}
+    if not picked_skus and (aff := affirms_active_item(asked_raw, context)) and aff.get("sku"):
+        picked_skus = {aff["sku"]}
     # Si la cotización falló por existencias, cuánto queda se explica una vez, abajo (``short_stock_text``).
     short = quote_call is not None and (quote_call["response"].get("error") or {}).get("code") == "INSUFFICIENT_STOCK"
     # Z-14 y Z-22 (suite fallas): el 90 de «codo de 90» y el 50 de «cemento de 50» contaban como lo que el cliente
@@ -159,10 +214,14 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     restock_about = restock_subjects(asked, [finding["query"] for finding in findings]) if restock_asked else set()
     suitability = asks_suitability(asked)
     sentences, questions, statuses, products = [], [], [], {}
+    last_selected: Product | None = None
     seen = set()
     for index, finding in enumerate(findings):
         finding = without_negated(asked, finding)
-        matches, nearby = finding["matches"], finding["nearby"]
+        spec = remembered_spec_for_item(finding["query"], finding["request"].get("product"), asked_raw, context)
+        matches = filter_matches_by_spec(list(finding["matches"]), spec)
+        finding = {**finding, "matches": matches}
+        nearby = finding["nearby"]
         # Dos búsquedas con el mismo resultado son una sola respuesta (X-22, corrida 30: «taladro no lo manejo» salía
         # dos veces; Z-33: «tubo PVC de 1/2» y «tubo PVC de 1/2 para agua» repetían las mismas opciones).
         same = (tuple(item.sku for item in matches), tuple(item.sku for item in nearby)) if matches or nearby else (
@@ -177,6 +236,8 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         # vuelve a preguntar cuál.
         in_quote = [product for product in matches if product.sku in quoted]
         selected = selected or (in_quote[0] if len(in_quote) == 1 else None)
+        in_picked = [product for product in matches if product.sku in picked_skus]
+        selected = selected or (in_picked[0] if len(in_picked) == 1 else None)
         if not matches and nearby:
             material = finding["request"].get("material")
             material_differs = material and all(
@@ -194,6 +255,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
                              "gusto te la busco.")
             statuses.append("not_found")
         elif selected:
+            last_selected = selected
             stock = availability.get(selected.sku, {}).get("stock", selected.stock)
             first = not any(status == "found" for status in statuses)
             restock = restock_sentence(in_sentence(label(selected.name, selected.variant)),
@@ -236,11 +298,11 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     if orders:
         status = orders[0] or status
     if status == "found" and len(statuses) == 1 and not store and not orders and not restock_asked:
-        product = next(iter(grounded_products(message, calls).values()), None)
+        product = next(iter(grounded_products(message, calls).values()), None) or last_selected
         if product and availability.get(product.sku, {}).get("stock", product.stock) > 0:
             # Z-01 (suite fallas): con «2.5 metros» se preguntaba «¿Cuántos metros necesitas?», como si no lo hubiera
             # dicho; se vende por unidad entera y se ofrecen las dos más cercanas.
-            whole = fractional_amount(message if current is None else current)
+            whole = fractional_amount(asked_raw)
             many = "Cuántas" if product.unit in FEMININE else "Cuántos"
             questions.append(whole_units_question(product.unit, whole) if whole
                              else f"¿{many} {units(product.unit, 2)} necesitas?")
@@ -252,7 +314,15 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
 
 def _short_of_known(call: ToolCall, context: dict | None) -> str:
     """Lo que no alcanzó, nombrado con lo que la sesión ya conoce del producto (no hubo búsqueda en el turno)."""
-    known = {item.get("sku"): item for item in (context or {}).get("productos") or []}
+    known = {
+        opt.get("sku"): opt
+        for group in (context or {}).get("opciones") or []
+        for opt in (group.get("opciones") or [])
+        if isinstance(opt, dict) and opt.get("sku")
+    }
+    if (focus := pending_quantity_target(context)) and focus.get("sku"):
+        known[focus["sku"]] = focus
+    known.update({item.get("sku"): item for item in (context or {}).get("productos") or []})
     held = {line.get("sku") for order in (context or {}).get("pedidos") or []
             if order.get("estado") in {"pendiente", "confirmado"} for line in order.get("lineas") or []}
     lines = call["arguments"]["lines"]
@@ -320,6 +390,8 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     # La lista de categorías va siempre con los nombres del catálogo: en el visor (26-10) Grok la resumió como
     # «herramientas manuales y eléctricas … y más», y no hay herramientas eléctricas.
     if full_category_listing(calls):
+        return False
+    if pagination_group(message if current is None else current, context) is not None:
         return False
     normalized = normalize_text(reply)
     orders = order_allowances(calls, context)

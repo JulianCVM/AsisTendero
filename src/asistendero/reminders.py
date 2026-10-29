@@ -6,11 +6,14 @@ cronológico. El servidor solo recuerda: nunca ejecuta la herramienta por su cue
 
 import re
 
-from asistendero.grok import Decision
+from asistendero.catalog import tokens
+from asistendero.choices import (
+    chosen_options, pagination_group, pending_quantity_quote, unresolved_ordinal, without_chosen_measures,
+)
+from asistendero.context_resolution import affirms_active_item, is_elliptical_turn, offered_short_quantity
+from asistendero.grok import Decision, ORDER_TOOLS
 from asistendero.observations import ToolCall, order_results
 from asistendero.order_rules import mentioned_hours, order_action_pending
-from asistendero.catalog import tokens
-from asistendero.grok import ORDER_TOOLS
 from asistendero.restock import asks_restock
 from asistendero.shopping_list import missing_from_quote
 from asistendero.store_replies import asks_assortment, full_category_listing
@@ -133,7 +136,6 @@ def pending_reminder(
     if not decision.valid_json or decision.action != "respond":
         return None
     reference = reference or message
-    quantities = quantities_in_message(message)
     tools = {call["requested_tool"] for call in calls}
     # Con intención «tienda» y otra herramienta ya usada (explorar_categoria) no hace falta el aviso.
     asks_store = STORE_QUESTION.search(normalize_text(message)) or (decision.intent == "tienda" and not calls)
@@ -144,6 +146,8 @@ def pending_reminder(
     follow_up = order_tool == "registrar_cambio" and f"ORDER_REQUIRED:{order_tool}" not in sent
     if order_tool and (follow_up or not any(code.startswith("ORDER_REQUIRED") for code in sent)):
         return f"ORDER_REQUIRED:{order_tool}"
+    if pagination_group(message, context) is not None or unresolved_ordinal(message, context) is not None:
+        return None
     assortment = asks_assortment(normalize_text(message))
     if "CATALOG_REQUIRED" not in sent and assortment and not full_category_listing(calls):
         return "CATALOG_REQUIRED"
@@ -153,19 +157,40 @@ def pending_reminder(
                     and call["response"]["status"] == "ok" for call in calls)
     if "RESTOCK_REQUIRED" not in sent and asks_restock(normalize_text(message)) and not looked_up:
         return "RESTOCK_REQUIRED"
+    picked = chosen_options(message, context)
+    affirmed = None if picked else affirms_active_item(message, context)
+    pending_qty = None if (picked or affirmed) else pending_quantity_quote(message, context)
+    selected_items = picked or ([affirmed] if affirmed else ([pending_qty[0]] if pending_qty else []))
+    quantities = quantities_in_message(without_chosen_measures(message, picked))
+    offered_qty = offered_short_quantity(message, context)
+    if offered_qty is not None:
+        quantities.add(offered_qty)
+    if pending_qty is not None:
+        quantities.add(pending_qty[1])
+    elliptical = is_elliptical_turn(message, context) is not None
     # «2 bultos» pide productos aunque Grok marque la intención como «tienda»: en X-10 («me mandan a domicilio 2
     # bultos de cemento») consultó los domicilios y ofreció cotizar en vez de buscar.
     # «¿Qué venden?» no nombra un producto que buscar: el aviso de búsqueda solo gastaba otra llamada.
-    asks_products = not assortment and (decision.intent == "productos"
-                                        or (quantities and decision.intent not in {"tienda", "saludo"}))
-    asks_units = quantities and sale_units(message) and not tools & PRODUCT_TOOLS
+    asks_products = not assortment and not selected_items and (
+        decision.intent == "productos"
+        or elliptical
+        or (quantities and offered_qty is None and decision.intent not in {"tienda", "saludo"})
+    )
+    asks_units = (
+        quantities and sale_units(message) and not tools & PRODUCT_TOOLS
+        and not selected_items and offered_qty is None
+    )
     if "SEARCH_REQUIRED" not in sent and ((not calls and asks_products) or asks_units):
         return "SEARCH_REQUIRED"
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
-    units = {sku: f"{product.unit} {product.variant}" for sku, product in grounded_products(reference, calls).items()}
+    grounded_map = grounded_products(reference, calls)
+    units = {sku: f"{product.unit} {product.variant}" for sku, product in grounded_map.items()}
+    for item in selected_items:
+        if item.get("sku") and item["sku"] not in units:
+            units[item["sku"]] = f"{item.get('unidad') or ''} {item.get('variante') or ''}"
     # Z-22 (suite fallas): con «¿el cemento gris de 50 sirve para…?» el aviso pedía cotizar 50 bultos.
-    quantities -= naming_numbers(message, list(grounded_products(reference, calls).values()))
+    quantities -= naming_numbers(message, list(grounded_map.values()))
     remembered = (context or {}).get("productos") or []
     # Q-11: tras «¿tienen silicona transparente?», «dame 2» no se cotizaba porque el turno no volvió a buscar. Con un
     # solo producto recordado no hay duda de cuál es; una hora («paso a las 10») no es una cantidad que cotizar.
@@ -176,7 +201,7 @@ def pending_reminder(
         return "QUOTE_REQUIRED:retry"
     said = message
     if not quantities:
-        said, quantities = _answered_question(message, context, grounded_products(reference, calls))
+        said, quantities = _answered_question(message, context, grounded_map, selected_items)
     if (
         "QUOTE_REQUIRED" not in sent and quantities and not registered
         and "calcular_cotizacion_informativa" not in tools
@@ -199,7 +224,9 @@ def _retry_quote(calls: list[ToolCall], known: set[str], quantities: set[int]) -
                for line in lines)
 
 
-def _answered_question(message: str, context: dict | None, products: dict) -> tuple[str, set[int]]:
+def _answered_question(
+    message: str, context: dict | None, products: dict, selected_items: list[dict] | None = None,
+) -> tuple[str, set[int]]:
     """Mensaje y cantidades del turno anterior si este solo contesta qué producto era.
 
     W-02 con Grok real: «necesito 3 metros de tubo pvc», el agente preguntó cuál y el cliente dijo «de media, para
@@ -213,6 +240,11 @@ def _answered_question(message: str, context: dict | None, products: dict) -> tu
         return message, set()
     previous = turns[-1].get("cliente") or ""
     named = any(tokens(product.name.split()[0], synonyms=False) & tokens(previous) for product in products.values())
+    if not named and selected_items:
+        named = any(
+            tokens((item.get("nombre") or "").split()[0], synonyms=False) & tokens(previous)
+            for item in selected_items if item.get("nombre")
+        )
     return (previous, quantities_in_message(previous)) if named else (message, set())
 
 

@@ -19,6 +19,7 @@ import re
 
 from asistendero.catalog import tokens
 from asistendero.choices import chosen_options
+from asistendero.context_resolution import RESTART
 from asistendero.grok import MAX_ITEMS
 from asistendero.observations import ToolCall, latest_quote, order_results
 from asistendero.validation import normalize_text, quantities_in_message
@@ -36,8 +37,6 @@ REMOVES = re.compile(
     r"\b(?:quit(?:a|ale|alo|ala|alos|alas|ame|ar|en)|saca(?:le|lo|la|los|las|me)?|elimin\w*"
     r"|ya\s+no\s+(?:quiero|necesito|me\s+lleves?)|no\s+(?:quiero|necesito)\s+(?:el|la|los|las))\b"
 )
-RESTART = re.compile(r"\b(?:borr\w*\s+(?:la\s+lista|todo)|(?:empe[zc]|comen[zc])\w*\s+de\s+(?:nuevo|cero)|desde\s+cero"
-                     r"|(?:nueva|otra)\s+cotizacion)\b")
 
 
 def list_lines(context: dict | None) -> dict[str, int]:

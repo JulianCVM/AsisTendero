@@ -84,8 +84,8 @@ class Script:
         self.steps = list(steps)
         self.seen = []
 
-    def __call__(self, message, observations, remaining):
-        self.seen.append({"message": message, "observations": observations, "remaining": remaining})
+    def __call__(self, message, observations, remaining, context=None):
+        self.seen.append({"message": message, "observations": observations, "remaining": remaining, "context": context})
         step = self.steps.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -1257,3 +1257,85 @@ def test_observation_for_model_sends_only_essential_product_attributes():
     }
     avail_obs = observation_for_model(avail_call)
     assert "updated_at" not in avail_obs["datos"]
+
+
+def test_quantity_reply_after_metraje_question_quotes_active_sku_without_searching_catalog():
+    context_pvc = {
+        "turnos": [{
+            "cliente": "necesito tubo pvc presion de 1/2",
+            "asistente": "Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a [precio] el metro. "
+                         "¿Cuántos metros necesitas del tubo PVC presión de 1/2?",
+        }],
+        "productos": [{"sku": "PVC-050", "nombre": "Tubo PVC presión para agua",
+                       "variante": "1/2 pulgada", "unidad": "metro"}],
+    }
+
+    # «2 metros» y «2»: no envía la magnitud a buscar_productos, vincula a PVC-050 y cotiza de inmediato.
+    for reply_msg in ("2 metros", "2"):
+        executor = FakeExecutor()
+        planner = Script(tool("buscar_productos", items=[{"text": reply_msg}]))
+        result = build_graph(executor, planner).invoke({"consulta": reply_msg, "contexto": context_pvc})
+        assert result["estado"] == "quoted"
+        assert result["model_calls"] == 1
+        assert executor.calls == [
+            ("calcular_cotizacion_informativa", {"lines": [{"sku": "PVC-050", "quantity": 2}]}),
+        ]
+        assert "$17.000" in result["respuesta"]
+
+    # «3 bultos» tras pregunta sobre cemento gris de 50 kg (incluso si el SKU solo estaba en opciones).
+    context_cement = {
+        "turnos": [{
+            "cliente": "el de 50",
+            "asistente": "¿Cuántos bultos del cemento gris de 50 kg necesitas?",
+        }],
+        "opciones": [{"grupo": "cemento gris", "opciones": [
+            {"sku": "CEM-025", "nombre": "Cemento gris", "variante": "bulto de 25 kg", "unidad": "bulto"},
+            {"sku": "CEM-050", "nombre": "Cemento gris", "variante": "bulto de 50 kg", "unidad": "bulto"},
+        ]}],
+    }
+    cement_exec = FakeExecutor()
+    cement_res = build_graph(cement_exec, Script(tool("buscar_productos", items=[{"text": "3 bultos"}]))).invoke(
+        {"consulta": "3 bultos", "contexto": context_cement},
+    )
+    assert cement_res["estado"] == "quoted"
+    assert cement_exec.calls == [
+        ("calcular_cotizacion_informativa", {"lines": [{"sku": "CEM-050", "quantity": 3}]}),
+    ]
+
+    # Si Grok intenta responder sin herramienta, recibe QUOTE_REQUIRED y nunca SEARCH_REQUIRED.
+    remind_exec = FakeExecutor()
+    remind_planner = Script(
+        say("Serían $17.000."),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+    )
+    remind_res = build_graph(remind_exec, remind_planner).invoke({"consulta": "2 metros", "contexto": context_pvc})
+    assert remind_res["estado"] == "quoted"
+    assert [item["code"] for item in remind_res.get("avisos", [])] == ["QUOTE_REQUIRED"]
+    assert remind_exec.calls == [
+        ("calcular_cotizacion_informativa", {"lines": [{"sku": "PVC-050", "quantity": 2}]}),
+    ]
+
+    # Lo que NO debe pasar: si el usuario nombra otro producto o una unidad ajena/fracción, no cotiza PVC-050.
+    other_exec = FakeExecutor({"2 bultos de cemento": (["CEM-050"], [])})
+    other_res = build_graph(
+        other_exec,
+        Script(tool("buscar_productos", items=[{"text": "2 bultos de cemento", "product": "cemento"}]), say("")),
+    ).invoke({"consulta": "2 bultos de cemento", "contexto": context_pvc})
+    assert other_exec.calls[0][0] == "buscar_productos"
+    assert all(
+        args != {"lines": [{"sku": "PVC-050", "quantity": 2}]}
+        for name, args in other_exec.calls if name == "calcular_cotizacion_informativa"
+    )
+    assert other_res["estado"] == "quoted" and "cemento" in other_res["respuesta"].casefold()
+
+    foreign_exec = FakeExecutor()
+    foreign_res = build_graph(
+        foreign_exec,
+        Script(say("El tubo PVC de 1/2 se vende por metro; ¿cuántos metros necesitas?"),
+               say("El tubo PVC de 1/2 se vende por metro; ¿cuántos metros necesitas?")),
+    ).invoke({"consulta": "1 rollo", "contexto": context_pvc})
+    # «1 rollo» no son metros: no se vincula al tubo, no se cotiza ni se exige cotizar (sigue la regla previa).
+    assert all(name != "calcular_cotizacion_informativa" for name, _ in foreign_exec.calls)
+    assert "QUOTE_REQUIRED" not in [item["code"] for item in foreign_res.get("avisos", [])]
+    assert "$" not in foreign_res["respuesta"]
+
