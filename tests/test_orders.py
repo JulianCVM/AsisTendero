@@ -399,10 +399,9 @@ def test_without_a_session_the_rejected_order_keeps_the_quote_answer(tmp_path):
     cement = {"text": "cemento gris de 50 kg", "product": "cemento", "measure": "50 kg", "presentation": "bulto"}
     planner = Script(tool("buscar_productos", items=[cement]),
                      tool("registrar_pedido", lines=[{"sku": "CEM-050", "quantity": 3}]),
-                     tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 3}]),
                      say("Te aparté 3 bultos. Datos simulados."))
     result = build_graph(executor, planner).invoke({"consulta": "Apártame 3 bultos de cemento gris de 50 kg, pago mañana"})
-    assert result["tool_calls"][1]["response"]["error"]["code"] == "SESSION_REQUIRED"
+    assert result["tool_calls"][2]["response"]["error"]["code"] == "SESSION_REQUIRED"
     assert result["estado"] == "quoted"
     assert "No es un pedido ni una reserva" in result["respuesta"] and "aparté" not in result["respuesta"]
 
@@ -434,9 +433,10 @@ def test_a_registered_order_does_not_ask_for_a_separate_quote(chat):
                   tool("registrar_pedido", lines=[{"sku": "CEM-050", "quantity": 2}]), say())
     assert len(result["planner"].seen) == 3 and result["estado"] == "order_pending"
     assert "$79.000" in result["respuesta"] and [o["estado"] for o in book.session_orders(session)] == ["pendiente"]
-    # Sin pedido registrado el aviso sigue: una cantidad con producto distinguido se cotiza.
-    plain = turn(sessions.create(), "Necesito 3 metros de tubo PVC de 1/2 para agua",
-                 tool("buscar_productos", items=[PVC_HALF]), say(), say())
+    # Sin pedido registrado el aviso sigue: con varios productos distinguidos y cantidad, pide cotizar.
+    brush = {"text": "brochas de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas"}
+    plain = turn(sessions.create(), "Necesito 3 metros de tubo PVC de 1/2 para agua y 2 brochas de 3 pulgadas",
+                 tool("buscar_productos", items=[PVC_HALF, brush]), say(), say())
     assert plain["planner"].seen[-1]["observaciones"][-1]["error"]["code"] == "QUOTE_REQUIRED"
 
 def test_a_question_about_confirming_is_not_a_confirmation(chat):

@@ -58,6 +58,9 @@ class Decision:
 
 
 def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | None, int | None, int | None]:
+    """Envía un prefijo ``system`` 100 % estático (para aciertos de Prompt Caching) y los datos dinámicos en ``user``."""
+    if not isinstance(system, str) or not system:
+        raise ValueError("El bloque system debe ser un texto estático no vacío.")
     api_key = os.getenv("GROK_API_KEY", "").strip()
     if not api_key:
         raise ModelError("MODEL_NOT_CONFIGURED", "Falta GROK_API_KEY. Configúrala en .env o en el entorno.")
@@ -79,7 +82,7 @@ def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | N
             response_format=RESPONSE_FORMAT,
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
             ],
         )
     except openai.APITimeoutError:
@@ -150,14 +153,16 @@ def parse_decision(raw: str) -> tuple[str, str, str | None, dict | None, str]:
 def decide_with_grok(
     message: str, observations: list[dict], remaining_calls: int, context: dict | None = None,
 ) -> Decision:
+    from asistendero.sessions import compact_context
+
     payload = {
         "mensaje": message,
         "observaciones": observations,
         "llamadas_disponibles": remaining_calls,
     }
     if context:
-        # Solo los turnos y productos que la sesión guardó: sin precios ni existencias viejas.
-        payload["conversacion"] = context
+        # Se conserva la clave "conversacion" (habilita pedidos en sesión) podando listas vacías y metadatos obsoletos.
+        payload["conversacion"] = compact_context(context)
     raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(AGENT_PROMPT, payload)
     return decision_from_raw(
         raw, model=model, input_tokens=in_tokens, output_tokens=out_tokens,

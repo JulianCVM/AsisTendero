@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from asistendero.catalog import MockCatalog, tokens
 from asistendero.executor import catalog_executor
-from asistendero.graph import Planner, ToolExecutor, after_validate, build_graph, next_node
+from asistendero.graph import Planner, ToolExecutor, after_retrieve, after_validate, build_graph, next_node
 from asistendero.grok import (
     AGENT_PROMPT, DEFAULT_BASE_URL, PROMPT_VERSION, Decision, ModelError, current_model, decide_with_grok,
 )
@@ -118,7 +118,32 @@ def run_traced(
     graph = build_graph(tool_executor, traced_planner)
     for chunk in graph.stream({"consulta": query, "contexto": context}, stream_mode="updates"):
         for node, update in chunk.items():
+            previous_calls = len(state.get("tool_calls", []))
             state.update(update)
+            if node == "retrieve":
+                for index, call in enumerate(update["tool_calls"][previous_calls:]):
+                    if index > 0:
+                        push("route", details={
+                            "motivo": "Match unívoco con cantidad explícita; el servidor auto-cotiza en retrieve.",
+                        })
+                        start_node("retrieve")
+                    details = {"tool_call": call}
+                    if call["requested_tool"] == "buscar_productos" and call["executed"]:
+                        details["terminos"] = [sorted(tokens(item["text"])) for item in call["arguments"]["items"]]
+                    push(
+                        "node",
+                        node="retrieve",
+                        status="complete",
+                        duration_ms=call.get("duration_ms", round((perf_counter() - node_started) * 1000)),
+                        details=details,
+                    )
+                following = after_retrieve(state)
+                if following == "respond":
+                    push("route", details={
+                        "motivo": "Salida determinista completa tras la herramienta; se responde sin otra llamada a Grok.",
+                    })
+                start_node(following)
+                continue
             if node == "validate":
                 details = {"consulta_normalizada": update["consulta"], "longitud": len(update["consulta"]),
                            "barreras": update["filtro"]["codes"], "datos_personales_omitidos": update["filtro"]["redacted"],
@@ -130,11 +155,6 @@ def run_traced(
                     "error": update.get("error"),
                     "model_calls": update["model_calls"],
                 }
-            elif node == "retrieve":
-                call = update["tool_calls"][-1]
-                details = {"tool_call": call}
-                if call["requested_tool"] == "buscar_productos" and call["executed"]:
-                    details["terminos"] = [sorted(tokens(item["text"])) for item in call["arguments"]["items"]]
             else:
                 details = {
                     "estado": update["estado"],
@@ -156,7 +176,7 @@ def run_traced(
                                                  "El mensaje solo pedía información que no se entrega; "
                                                  "se responde sin llamar a Grok."})
                 start_node("respond")
-            elif node in {"validate", "retrieve"}:
+            elif node == "validate":
                 start_node("interpret")
             elif node == "interpret":
                 following = next_node(state)

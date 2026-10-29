@@ -115,6 +115,12 @@ def test_trace_records_model_failure_with_code_and_unknown_cost():
 
 def test_trace_shows_server_reminders_when_grok_answers_without_required_steps():
     events = []
+    cod = {"sku": "COD-050", "name": "Codo PVC presión 90°", "variant": "1/2 pulgada", "unit": "unidad",
+           "price_cop": 1800, "stock": 40, "updated_at": "2026-10-15T00:00:00-05:00"}
+    two_matches = lambda name, arguments: {
+        "status": "ok", "data": {"results": [{"matches": [PVC, cod], "nearby": []}]},
+        "error": None, "source": "mock_sqlite", "observed_at": "2026-10-20T12:00:00+00:00",
+    }
     steps = iter([
         Decision("respond", "productos", None, None, "El PVC está a $1.000."),
         Decision("call_tool", "productos", "buscar_productos",
@@ -123,7 +129,7 @@ def test_trace_shows_server_reminders_when_grok_answers_without_required_steps()
         Decision("respond", "productos", None, None, ""),
         Decision("respond", "productos", None, None, ""),
     ])
-    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, executor, lambda *_: next(steps))
+    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, two_matches, lambda *_: next(steps))
 
     reminders = [event for event in events if event["type"] == "route" and event["details"].get("aviso")]
     assert len(reminders) == 2
@@ -132,7 +138,7 @@ def test_trace_shows_server_reminders_when_grok_answers_without_required_steps()
     assert [item.get("error", {}).get("code") for item in requests[3] if item["estado"] == "aviso"] == [
         "SEARCH_REQUIRED", "QUOTE_REQUIRED",
     ]
-    # Cada aviso se envía una vez: tras el segundo «respond» el servidor no insiste ni cotiza por su cuenta.
+    # Cada aviso se envía una vez: tras el segundo «respond» el servidor no insiste ni cotiza con varios matches.
     assert events[-1]["details"]["tools_executed"] == ["buscar_productos"]
     assert events[-1]["details"]["model_calls"] == 4
     assert "$1.000" not in result["respuesta"]
@@ -154,7 +160,6 @@ def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
         "Necesito 2 metros de tubo PVC de 1/2 para agua": [
             call("buscar_productos", items=[{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
             call("consultar_disponibilidad", sku="PVC-050"),
-            call("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
             finish(),
         ],
         "Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg": [
@@ -191,12 +196,10 @@ def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
         "Necesito 20 metros de tubo PVC de 1/2 para agua": [
             call("buscar_productos", items=[{"text": "20 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
             call("consultar_disponibilidad", sku="PVC-050"),
-            call("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
             finish(),
         ],
         "Busco un taladro de 20 V": [
             call("buscar_productos", items=[{"text": "taladro de 20 V", "product": "taladro", "measure": "20 V"}]),
-            finish(),
         ],
         # Desde S3 el horario sale de consultar_info_tienda.
         "Hola, ¿están atendiendo en este momento?": [
@@ -230,8 +233,6 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
         Decision("call_tool", "productos", "buscar_productos",
                  {"items": [{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]}, "",
                  "grok-4.20-0309-non-reasoning", 80, 15),
-        Decision("call_tool", "productos", "calcular_cotizacion_informativa",
-                 {"lines": [{"sku": "PVC-050", "quantity": 2}]}, "", "grok-4.20-0309-non-reasoning", 90, 15),
         Decision("respond", "productos", None, None, "", "grok-4.20-0309-non-reasoning", 100, 20),
         # Pasos para F-01-CATALOG_UNAVAILABLE:
         Decision("call_tool", "productos", "buscar_productos",
@@ -251,6 +252,7 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
     assert report["skipped_ids"] == ["S2-02"]
     assert [item["id"] for item in report["cases"]] == ["S2-01"]
     assert report["passed"] == 1 and report["total"] == 1
+    assert report["cases"][0]["events"][-1]["details"]["model_calls"] == 2
 
     f_catalog, f_model, _ = report["controlled_failures"]
     assert f_catalog["id"] == "F-01-CATALOG_UNAVAILABLE"

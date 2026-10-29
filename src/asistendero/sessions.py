@@ -43,7 +43,9 @@ MAX_TURNS_PER_SESSION = 40
 SESSION_TTL = timedelta(hours=12)
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 MAX_BAN_EXCERPT = 200
+MAX_CLOSED_ORDERS = 2
 MONEY = re.compile(r"\$\s?[\d.,]*\d(?:\s*COP)?")
+OBSOLETE_TURN_NOTES = re.compile(r"\n*Precios y existencias de demostración\.\s*$")
 MANUAL_BAN = "MANUAL"
 CLOSED = "finalizada"
 
@@ -67,6 +69,63 @@ def _clip_to(text: str, limit: int) -> str:
 
 def _clip(text: str) -> str:
     return _clip_to(text, MAX_TURN_CHARS)
+
+
+def _clean_assistant(text: str) -> str:
+    """Enmascara precios viejos y quita aclaraciones fijas repetidas sin perder el contenido del turno."""
+    masked = MONEY.sub("[precio]", text)
+    trimmed = OBSOLETE_TURN_NOTES.sub("", masked).strip() or masked.strip()
+    return _clip(re.sub(r"\n{3,}", "\n\n", trimmed))
+
+
+def compact_context(context: dict) -> dict:
+    """Poda colecciones vacías, pedidos cerrados obsoletos y metadatos internos para el payload de Grok."""
+    clean: dict = {}
+    if isinstance(context.get("ahora"), str) and context["ahora"]:
+        clean["ahora"] = context["ahora"]
+    turns = [
+        {"cliente": _clip(str(turn["cliente"])), "asistente": _clean_assistant(str(turn.get("asistente", "")))}
+        for turn in (context.get("turnos") or [])[-MAX_CONTEXT_TURNS:]
+        if isinstance(turn, dict) and turn.get("cliente")
+    ]
+    if turns:
+        clean["turnos"] = turns
+    products = [
+        {key: item[key] for key in ("sku", "nombre", "variante", "unidad") if key in item}
+        for item in (context.get("productos") or [])[:MAX_REMEMBERED_PRODUCTS]
+        if isinstance(item, dict) and item.get("sku")
+    ]
+    if products:
+        clean["productos"] = products
+    listed = [
+        {key: item[key] for key in ("sku", "nombre", "variante", "unidad", "cantidad") if key in item}
+        for item in (context.get("lista") or []) if isinstance(item, dict) and item.get("sku")
+    ]
+    if listed:
+        clean["lista"] = listed
+    if context.get("opciones"):
+        clean["opciones"] = context["opciones"]
+    orders = [order for order in (context.get("pedidos") or []) if isinstance(order, dict) and order.get("pedido")]
+    if orders:
+        active = [order for order in orders if order.get("estado") in {"pendiente", "confirmado"}]
+        closed = [order for order in orders if order.get("estado") not in {"pendiente", "confirmado"}][:MAX_CLOSED_ORDERS]
+        pruned_orders = []
+        for order in active + closed:
+            entry = {
+                "pedido": order["pedido"],
+                "estado": order["estado"],
+                "lineas": [
+                    {key: line[key] for key in ("sku", "nombre", "variante", "cantidad", "unidad") if key in line}
+                    for line in (order.get("lineas") or []) if isinstance(line, dict)
+                ],
+            }
+            for optional in ("aparta_hasta", "recogida", "nota"):
+                if order.get(optional):
+                    entry[optional] = order[optional]
+            pruned_orders.append(entry)
+        if pruned_orders:
+            clean["pedidos"] = pruned_orders
+    return clean
 
 
 def remembered_products(reference: str, calls: list[dict]) -> list[dict]:
@@ -221,7 +280,7 @@ class SessionStore:
                                       "variante": variant, "unidad": unit})
         return {
             "turnos": [
-                {"cliente": _clip(customer), "asistente": _clip(MONEY.sub("[precio]", assistant))}
+                {"cliente": _clip(customer), "asistente": _clean_assistant(assistant)}
                 for customer, assistant in reversed(turns) if customer
             ],
             "productos": [{"sku": sku, "nombre": name, "variante": variant, "unidad": unit}
@@ -265,6 +324,12 @@ class SessionStore:
                 [(session_id, item["sku"], item["nombre"], item["variante"], item["unidad"], number)
                  for item in products],
             )
+            if products:
+                connection.execute(
+                    "DELETE FROM session_products WHERE session_id = ? AND sku NOT IN ("
+                    "SELECT sku FROM session_products WHERE session_id = ? ORDER BY last_turn DESC, sku LIMIT ?)",
+                    (session_id, session_id, MAX_REMEMBERED_PRODUCTS),
+                )
             if shopping is not None:
                 connection.execute("DELETE FROM session_list WHERE session_id = ?", (session_id,))
                 connection.executemany(

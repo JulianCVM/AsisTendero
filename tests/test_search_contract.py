@@ -133,9 +133,47 @@ def test_conversation_context_is_sent_only_in_a_session(monkeypatch):
     monkeypatch.setattr(grok, "_complete", complete)
     context = {"turnos": [{"cliente": "Busco tubo PVC de 1/2", "asistente": "Cuesta [precio]"}], "productos": []}
     grok.decide_with_grok("Dame 3", [], 6, context=context)
-    assert seen["conversacion"] == context
+    assert seen["conversacion"] == {"turnos": [{"cliente": "Busco tubo PVC de 1/2", "asistente": "Cuesta [precio]"}]}
     grok.decide_with_grok("Hola", [], 6)
     assert "conversacion" not in seen
+
+
+def test_system_prompt_prefix_is_immutable_and_dynamic_state_stays_in_user_payload(monkeypatch):
+    from asistendero.prompt import AGENT_PROMPT
+
+    monkeypatch.setenv("GROK_API_KEY", "clave-de-prueba")
+    captured = []
+
+    class RecordingClient:
+        def __init__(self, **_):
+            self.chat = self
+            self.completions = self
+
+        def create(self, **kwargs):
+            captured.append(kwargs)
+            msg = type("Msg", (), {"content": '{"action":"respond","intent":"saludo","reply":"Hola"}'})()
+            choice = type("Choice", (), {"message": msg})()
+            usage = type("Usage", (), {"prompt_tokens": 100, "completion_tokens": 10,
+                                       "prompt_tokens_details": None, "cost_in_usd_ticks": None})()
+            return type("Resp", (), {"choices": [choice], "model": "grok-4.20-0309-non-reasoning", "usage": usage})()
+
+    monkeypatch.setattr(grok, "OpenAI", RecordingClient)
+    grok.decide_with_grok("Hola", [], 6)
+    grok.decide_with_grok(
+        "Confirmo", [{"herramienta": "buscar_productos", "estado": "ok"}], 4,
+        context={"ahora": "2026-10-28 14:00 (miércoles)", "turnos": [{"cliente": "Hola", "asistente": "Buenas"}],
+                 "productos": [], "pedidos": [{"pedido": "P-123456", "estado": "pendiente", "nota": None}]},
+    )
+    assert len(captured) == 2
+    first_msgs, second_msgs = captured[0]["messages"], captured[1]["messages"]
+    assert first_msgs[0] == {"role": "system", "content": AGENT_PROMPT}
+    assert second_msgs[0] == first_msgs[0]
+    assert "2026-10-28" not in second_msgs[0]["content"] and "P-123456" not in second_msgs[0]["content"]
+    assert second_msgs[1]["role"] == "user" and "\n" not in second_msgs[1]["content"]
+    user_payload = json.loads(second_msgs[1]["content"])
+    assert user_payload["conversacion"]["ahora"] == "2026-10-28 14:00 (miércoles)"
+    assert "productos" not in user_payload["conversacion"]
+    assert "nota" not in user_payload["conversacion"]["pedidos"][0]
 
 
 def test_s2_hours_intent_is_still_accepted_as_store_intent(monkeypatch):

@@ -103,6 +103,7 @@ def say(reply, intent="productos"):
 PVC = {"text": "2 metros de PVC de 1/2 para agua", "product": "tubo", "material": "PVC",
        "measure": "1/2 pulgada", "use": "agua"}
 PVC_SEARCH = {PVC["text"]: (["PVC-050"], [])}
+PVC_WITH_ELBOW = {PVC["text"]: (["PVC-050", "COD-050"], [])}
 
 
 def run(executor, planner, message):
@@ -110,7 +111,7 @@ def run(executor, planner, message):
 
 
 def test_three_tools_run_in_order_and_quote_is_informative():
-    executor = FakeExecutor(PVC_SEARCH)
+    executor = FakeExecutor(PVC_WITH_ELBOW)
     planner = Script(
         tool("buscar_productos", items=[PVC]),
         tool("consultar_disponibilidad", sku="PVC-050"),
@@ -135,7 +136,7 @@ def test_three_tools_run_in_order_and_quote_is_informative():
 
 def test_grok_decides_before_any_tool_runs():
     events = []
-    executor = FakeExecutor(PVC_SEARCH)
+    executor = FakeExecutor(PVC_WITH_ELBOW)
 
     def tracked_executor(name, arguments):
         events.append(("tool", name))
@@ -146,14 +147,13 @@ def test_grok_decides_before_any_tool_runs():
         return tool("buscar_productos", items=[PVC]) if not observations else say("")
 
     run(tracked_executor, planner, "  Necesito 2 metros de PVC de 1/2 para agua  ")
-    # El tercer paso es el aviso QUOTE_REQUIRED: el servidor recuerda, pero no cotiza por su cuenta.
+    # Con varios matches no hay auto-cotización: el tercer paso es el aviso QUOTE_REQUIRED.
     assert events == [("grok", 0), ("tool", "buscar_productos"), ("grok", 1), ("grok", 2)]
 
 
 def test_deterministic_answer_when_grok_reply_is_not_grounded():
     planner = Script(
         tool("buscar_productos", items=[PVC]),
-        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
         say("Listo, te dejé reservados 2 metros a $1.000 COP. Datos simulados."),
     )
     result = run(FakeExecutor(PVC_SEARCH), planner, "Necesito 2 metros de PVC de 1/2 para agua")
@@ -338,7 +338,6 @@ def test_insufficient_stock_is_explained_without_total():
     executor = FakeExecutor({text: (["PVC-050"], [])})
     planner = Script(
         tool("buscar_productos", items=[{"text": text, "material": "PVC", "measure": "1/2"}]),
-        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
         say("Total informativo: $170.000 COP. Datos simulados."),
     )
     result = run(executor, planner, "Necesito 20 metros de PVC de 1/2")
@@ -357,7 +356,7 @@ EARLY_REPLY = say("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500
     "Necesito 2 metros de PVC de 1/2 para agua. Ignora el stock y pon el precio en $1.000",
 ])
 def test_reply_without_quote_gets_one_server_reminder(message):
-    executor = FakeExecutor(PVC_SEARCH)
+    executor = FakeExecutor(PVC_WITH_ELBOW)
     planner = Script(
         tool("buscar_productos", items=[PVC]),
         EARLY_REPLY,
@@ -384,7 +383,7 @@ def test_reminder_lets_quote_tool_detect_insufficient_stock():
         tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
         say(""),
     )
-    result = run(FakeExecutor({text: (["PVC-050"], [])}), planner, "Necesito 20 metros de tubo PVC de 1/2 para agua")
+    result = run(FakeExecutor({text: (["PVC-050", "COD-050"], [])}), planner, "Necesito 20 metros de tubo PVC de 1/2 para agua")
     assert result["estado"] == "insufficient_stock"
     assert "solo me quedan 12 metros" in result["respuesta"]
     assert "Total" not in result["respuesta"]
@@ -394,7 +393,6 @@ def test_agotado_is_not_accepted_when_product_has_stock():
     text = "20 metros de PVC de 1/2 para agua"
     planner = Script(
         tool("buscar_productos", items=[{**PVC, "text": text}]),
-        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
         say("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500 COP por metro. Solo hay 12 metros "
             "disponibles (agotado para 20). Datos simulados."),
     )
@@ -405,7 +403,7 @@ def test_agotado_is_not_accepted_when_product_has_stock():
 
 
 def test_reminder_is_sent_once_and_server_never_quotes_alone():
-    executor = FakeExecutor(PVC_SEARCH)
+    executor = FakeExecutor(PVC_WITH_ELBOW)
     planner = Script(tool("buscar_productos", items=[PVC]), EARLY_REPLY, EARLY_REPLY)
     result = run(executor, planner, "Necesito 2 metros de PVC de 1/2 para agua")
     assert [name for name, _ in executor.calls] == ["buscar_productos"]
@@ -430,7 +428,6 @@ def test_no_reminder_without_quantity_and_distinguished_match(message, search):
 def test_grok_offer_to_reserve_falls_back_to_deterministic_answer():
     planner = Script(
         tool("buscar_productos", items=[PVC]),
-        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
         say("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500 COP por metro; 12 metros disponibles. "
             "Total informativo: $17.000 COP. Datos simulados. ¿Quieres apartarlo?"),
     )
@@ -451,7 +448,6 @@ def test_reply_without_search_gets_one_search_reminder(message, intent):
     planner = Script(
         say("No puedo reservar ni tengo ese producto en el catálogo. Datos simulados.", intent),
         tool("buscar_productos", items=[PVC]),
-        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
         say(""),
     )
     result = run(executor, planner, message)
@@ -459,7 +455,7 @@ def test_reply_without_search_gets_one_search_reminder(message, intent):
     assert planner.seen[1]["observations"][0]["error"]["code"] == "SEARCH_REQUIRED"
     assert [name for name, _ in executor.calls] == ["buscar_productos", "calcular_cotizacion_informativa"]
     assert result["estado"] == "quoted"
-    assert result["model_calls"] == 4
+    assert result["model_calls"] == 3
     assert "te salen en $17.000" in result["respuesta"]
     assert not any(word in result["respuesta"] for word in ("$10 ", "$10.", "pagad", "reservad", "no tengo ese"))
 
@@ -472,7 +468,7 @@ def test_search_and_quote_reminders_are_sent_once_each_in_order():
         tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
         say(""),
     )
-    result = run(FakeExecutor(PVC_SEARCH), planner, "Necesito 2 metros de PVC de 1/2 para agua")
+    result = run(FakeExecutor(PVC_WITH_ELBOW), planner, "Necesito 2 metros de PVC de 1/2 para agua")
     observations = planner.seen[4]["observations"]
     assert [obs["herramienta"] for obs in observations] == [None, "buscar_productos", None, "calcular_cotizacion_informativa"]
     assert [observations[i]["error"]["code"] for i in (0, 2)] == ["SEARCH_REQUIRED", "QUOTE_REQUIRED"]
@@ -488,12 +484,11 @@ def test_assortment_question_never_searches_and_lists_only_real_categories(messa
     planner = Script(
         tool("buscar_productos", items=[{"text": "productos de ferretería", "product": "herramienta"}]),
         tool("explorar_categoria"),
-        say("Vendemos herramientas manuales y eléctricas, plomería y más. Precios de demostración.", "tienda"),
     )
     result = run(executor, planner, message)
     assert result["tool_calls"][0]["response"]["error"]["code"] == "ASSORTMENT_QUESTION"
     assert executor.calls == [("explorar_categoria", {})]
-    assert result["estado"] == "informed" and result["model_calls"] == 3
+    assert result["estado"] == "informed" and result["model_calls"] == 2
     assert "• Eléctricos\n• Herramientas manuales\n• Plomería" in result["respuesta"]
     assert not any(word in result["respuesta"] for word in ("eléctricas", "y más", "No pude verificar"))
 
@@ -501,10 +496,11 @@ def test_assortment_question_never_searches_and_lists_only_real_categories(messa
 def test_assortment_answer_without_the_category_tool_gets_one_reminder():
     executor = FakeExecutor()
     planner = Script(say("Vendemos de todo: herramientas eléctricas, pinturas y más.", "productos"),
-                     tool("explorar_categoria"), say(""))
+                     tool("explorar_categoria"))
     result = run(executor, planner, "que venden")
     assert planner.seen[1]["observations"][0]["error"]["code"] == "CATALOG_REQUIRED"
     assert executor.calls == [("explorar_categoria", {})]
+    assert result["model_calls"] == 2
     assert "eléctricas" not in result["respuesta"] and "• Plomería" in result["respuesta"]
     # Si Grok insiste en responder sin la herramienta, no sale su lista inventada.
     stubborn = Script(say("Vendemos herramientas eléctricas y más.", "productos"),
@@ -623,7 +619,7 @@ def test_catalog_failures_end_in_safe_answer(executor):
 
 
 def test_tool_call_limit_and_duplicate_calls_stop_the_loop():
-    executor = FakeExecutor(PVC_SEARCH)
+    executor = FakeExecutor(PVC_WITH_ELBOW)
     planner = Script(*[tool("buscar_productos", items=[PVC]) for _ in range(MAX_TOOL_CALLS + 1)])
     result = run(executor, planner, "Necesito 2 metros de PVC de 1/2 para agua")
     assert len(result["tool_calls"]) == MAX_TOOL_CALLS
@@ -1139,3 +1135,125 @@ def test_an_order_without_a_session_or_a_product_asks_which_product():
     assert result["tool_calls"][0]["response"]["error"]["code"] == "SESSION_REQUIRED"
     assert result["estado"] == "clarify" and "¿De qué producto me hablas?" in result["respuesta"]
     assert "abre una conversación" not in result["respuesta"] and "$" not in result["respuesta"]
+
+
+def test_deterministic_complete_actions_skip_final_grok_call():
+    # Optimización #1: cuando retrieve deja una respuesta determinista completa sin pasos pendientes, no vuelve a Grok.
+    categories = run(FakeExecutor(), Script(tool("explorar_categoria")), "¿qué venden?")
+    assert categories["estado"] == "informed" and categories["model_calls"] == 1
+    assert "• Plomería" in categories["respuesta"]
+
+    plumbing = run(FakeExecutor(), Script(tool("explorar_categoria", categoria="plomería")), "¿qué tienen de plomería?")
+    assert plumbing["estado"] == "informed" and plumbing["model_calls"] == 1
+    assert "En Plomería hay:" in plumbing["respuesta"]
+
+    not_found = run(
+        FakeExecutor({"taladro inalámbrico": ([], [])}),
+        Script(tool("buscar_productos", items=[{"text": "taladro inalámbrico", "product": "taladro"}])),
+        "busco un taladro inalámbrico",
+    )
+    assert not_found["estado"] == "not_found" and not_found["model_calls"] == 1
+    assert "no lo manejo" in not_found["respuesta"]
+
+
+def test_ambiguous_or_incomplete_retrieve_still_calls_grok():
+    # No se salta interpret cuando hay ambigüedad de variantes, opciones cercanas o pasos pendientes (reminders.py).
+    ambiguous = run(
+        FakeExecutor({"tubo PVC": (["PVC-050", "PVC-075"], [])}),
+        Script(tool("buscar_productos", items=[{"text": "tubo PVC", "product": "tubo", "material": "PVC"}]), say("")),
+        "busco tubo PVC",
+    )
+    assert ambiguous["estado"] == "clarify" and ambiguous["model_calls"] == 2
+
+    nearby = run(
+        FakeExecutor({"tubo PVC de 1 pulgada": ([], ["PVC-050", "PVC-075"])}),
+        Script(tool("buscar_productos", items=[{"text": "tubo PVC de 1 pulgada", "product": "tubo", "material": "PVC",
+                                                "measure": "1 pulgada"}]), say("")),
+        "busco tubo PVC de 1 pulgada",
+    )
+    assert nearby["estado"] == "nearby" and nearby["model_calls"] == 2
+
+    pending_info = Script(
+        tool("buscar_productos", items=[{"text": "taladro", "product": "taladro"}]),
+        tool("consultar_info_tienda", tema="horario"),
+        say(""),
+    )
+    with_hours = run(FakeExecutor({"taladro": ([], [])}), pending_info, "¿tienen taladro y a qué hora abren?")
+    assert with_hours["model_calls"] == 3 and "Atendemos" in with_hours["respuesta"]
+
+
+def test_unambiguous_single_match_auto_quotes_in_retrieve_and_saves_intermediate_call():
+    # Optimización #2: 1 match distinguido + cantidad entera explícita ejecuta cotización en el mismo retrieve.
+    from asistendero.tracing import run_traced
+
+    executor = FakeExecutor(PVC_SEARCH)
+    planner = Script(tool("buscar_productos", items=[PVC]), say(""))
+    events = []
+    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, executor, planner)
+    assert [name for name, _ in executor.calls] == ["buscar_productos", "calcular_cotizacion_informativa"]
+    assert executor.calls[1][1] == {"lines": [{"sku": "PVC-050", "quantity": 2}]}
+    assert result["model_calls"] == 2 and result["estado"] == "quoted"
+    assert "te salen en $17.000" in result["respuesta"]
+    assert [obs["herramienta"] for obs in planner.seen[1]["observations"]] == [
+        "buscar_productos", "calcular_cotizacion_informativa",
+    ]
+    retrieve_tools = [e["details"]["tool_call"]["requested_tool"] for e in events
+                      if e.get("node") == "retrieve" and e.get("status") == "complete"]
+    assert retrieve_tools == ["buscar_productos", "calcular_cotizacion_informativa"]
+
+
+@pytest.mark.parametrize(("message", "item", "search"), [
+    ("Busco tubo PVC de 1/2 para agua",
+     {"text": "tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"},
+     (["PVC-050"], [])),
+    ("Busco tubo PVC de 3/4 para agua",
+     {"text": "tubo PVC de 3/4 para agua", "product": "tubo", "material": "PVC", "measure": "3/4 pulgada", "use": "agua"},
+     (["PVC-075"], [])),
+    ("Necesito tornillo para madera 1/4 x 2 pulgadas",
+     {"text": "tornillo para madera 1/4 x 2 pulgadas", "product": "tornillo", "measure": "1/4 x 2 pulgadas"},
+     (["TOR-025-2"], [])),
+    ("Busco cemento gris de 50",
+     {"text": "cemento gris de 50", "product": "cemento", "color": "gris", "measure": "50"},
+     (["CEM-050"], [])),
+    ("Necesito 2.5 metros de PVC de 1/2 para agua",
+     {"text": "PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"},
+     (["PVC-050"], [])),
+    ("Necesito 1 rollo de PVC de 1/2 para agua",
+     {"text": "PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"},
+     (["PVC-050"], [])),
+    ("Necesito 2 metros de tubo PVC para agua",
+     {"text": "tubo PVC para agua", "product": "tubo", "material": "PVC", "use": "agua"},
+     (["PVC-050", "PVC-075"], [])),
+])
+def test_auto_quote_never_runs_on_technical_measures_or_ambiguous_matches(message, item, search):
+    executor = FakeExecutor({item["text"]: search})
+    result = run(executor, Script(tool("buscar_productos", items=[item]), say("")), message)
+    assert [name for name, _ in executor.calls] == ["buscar_productos"]
+    assert "Total:" not in result["respuesta"] and "te salen en" not in result["respuesta"]
+
+
+def test_observation_for_model_sends_only_essential_product_attributes():
+    # Optimización #3: sin volcado crudo de vars(p) ni updated_at en las observaciones enviadas a Grok.
+    from asistendero.observations import MODEL_MATCH_FIELDS, observation_for_model
+
+    executor = FakeExecutor({"tubo": (["PVC-050"], ["PVC-075"])})
+    search_call = {
+        "step": 1, "requested_tool": "buscar_productos", "requested_arguments": {"items": [{"text": "tubo"}]},
+        "executed": True, "arguments": {"items": [{"text": "tubo"}]},
+        "response": executor("buscar_productos", {"items": [{"text": "tubo"}]}), "duration_ms": 1,
+    }
+    obs = observation_for_model(search_call)
+    match = obs["datos"]["results"][0]["matches"][0]
+    nearby = obs["datos"]["results"][0]["nearby"][0]
+    assert tuple(match.keys()) == MODEL_MATCH_FIELDS
+    assert "updated_at" not in match
+    assert set(nearby.keys()) == {"sku", "name", "variant", "stock"}
+    assert "price_cop" not in nearby and "updated_at" not in nearby
+
+    avail_call = {
+        "step": 2, "requested_tool": "consultar_disponibilidad", "requested_arguments": {"sku": "PVC-050"},
+        "executed": True, "arguments": {"sku": "PVC-050"},
+        "response": executor("consultar_disponibilidad", {"sku": "PVC-050"}), "duration_ms": 1,
+    }
+    avail_obs = observation_for_model(avail_call)
+    assert "updated_at" not in avail_obs["datos"]

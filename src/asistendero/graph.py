@@ -12,18 +12,31 @@ from typing import NotRequired, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from asistendero.answers import direct_response, render_answer, reply_is_grounded, with_reservation_note
+from asistendero.choices import check_reference, chosen_options, without_chosen_measures
 from asistendero.grok import ORDER_TOOLS, PROMPT_VERSION, Decision, ModelError
 from asistendero.guardrails import screen_message
 from asistendero.injection import INJECTION_CODES, blocked_reply, detect_injection
-from asistendero.observations import ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model
-from asistendero.choices import check_reference, chosen_options, without_chosen_measures
-from asistendero.order_rules import added_quantities, validate_order_request
+from asistendero.observations import (
+    ToolCall, ToolExecutor, error_envelope, execute_safely, observation_for_model, order_results, search_findings,
+)
+from asistendero.order_rules import (
+    RELATIVE_TIME, added_quantities, mentioned_hours, order_action_pending, validate_order_request, wants_to_buy,
+)
 from asistendero.reminders import pending_reminder, with_reminders
+from asistendero.search import without_quantities
 from asistendero.shopping_list import list_lines, usable_lines
-from asistendero.validation import Rejected, quantities_in_message, validate_request
+from asistendero.spelling import heard_as
+from asistendero.store_replies import full_category_listing
+from asistendero.validation import (
+    MAX_QUANTITY, Rejected, foreign_unit, fractional_amount, grounded_selection, is_distinguished, naming_numbers,
+    normalize_text, quantities_in_message, quantity_of_other, sale_units, validate_request, without_negated,
+)
 
 
-__all__ = ["MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "AgentState", "Planner", "ToolExecutor", "build_graph", "next_node"]
+__all__ = [
+    "MAX_MESSAGE_CHARS", "MAX_TOOL_CALLS", "AgentState", "Planner", "ToolExecutor",
+    "after_retrieve", "after_validate", "build_graph", "next_node",
+]
 
 # planner(mensaje, observaciones, llamadas_disponibles[, context=...]): el contexto solo va en una sesión.
 Planner = Callable[..., Decision]
@@ -62,6 +75,112 @@ def _pending(state: AgentState) -> str | None:
     sent = {item["code"] for item in state.get("avisos", [])}
     return pending_reminder(state["consulta"], state["decisiones"][-1], calls, sent, state.get("referencia"),
                             state.get("contexto"))
+
+
+def _deterministic_complete(state: AgentState) -> bool:
+    """True cuando retrieve ya dejó una salida determinista completa y no falta ningún paso ni desambiguación."""
+    calls = state.get("tool_calls", [])
+    if not calls or state.get("error"):
+        return False
+    last = calls[-1]
+    if not last["executed"] or last["response"].get("status") != "ok":
+        return False
+    decision = state["decisiones"][-1]
+    probe = Decision("respond", decision.intent, None, None, "ok")
+    if pending_reminder(state["consulta"], probe, calls, set(), state.get("referencia"), state.get("contexto")):
+        return False
+    tool = last["requested_tool"]
+    context = state.get("contexto")
+    if tool == "explorar_categoria":
+        return full_category_listing(calls) or (
+            not search_findings(calls) and not order_results(calls) and not quantities_in_message(state["consulta"])
+        )
+    if tool == "buscar_productos":
+        findings = [without_negated(state["consulta"], f) for f in search_findings(calls)]
+        return bool(findings) and all(not f["matches"] and not f["nearby"] for f in findings)
+    if tool == "confirmar_pedido":
+        confirmed = {order["pedido"] for name, order in order_results(calls) if name == "confirmar_pedido"}
+        pending_left = any(
+            order.get("estado") == "pendiente" and order.get("pedido") not in confirmed
+            for order in (context or {}).get("pedidos") or []
+        )
+        has_time = bool(mentioned_hours(state["consulta"]) or RELATIVE_TIME.search(normalize_text(state["consulta"])))
+        scheduled = any(name == "agendar_recogida" for name, _ in order_results(calls))
+        return not pending_left and (not has_time or scheduled) and "?" not in state["consulta"]
+    if tool == "cancelar_pedido":
+        return "?" not in state["consulta"]
+    if tool == "consultar_pedido":
+        return not ((last["response"].get("data") or {}).get("pedidos")) and state["consulta"].count("?") <= 1
+    return False
+
+
+def after_retrieve(state: AgentState) -> str:
+    """Salta directo a respond si la herramienta completó una respuesta estandarizada sin pasos pendientes."""
+    return "respond" if _deterministic_complete(state) else "interpret"
+
+
+def _auto_quote_call(
+    state: AgentState, calls: list[ToolCall], picked: list[dict], quantities: set[int],
+    remembered: dict[str, str], listed: dict[str, int], tool_executor: ToolExecutor,
+) -> ToolCall | None:
+    """Auto-cotiza en retrieve cuando buscar_productos retorna 1 match unívoco y hay cantidad entera explícita."""
+    search_call = calls[-1]
+    if (
+        search_call["requested_tool"] != "buscar_productos" or not search_call["executed"]
+        or search_call["response"].get("status") != "ok" or len(calls) + 1 >= MAX_TOOL_CALLS
+        or any(previous["requested_tool"] == "calcular_cotizacion_informativa" for previous in calls)
+    ):
+        return None
+    items = (search_call["arguments"] or {}).get("items") or []
+    context = state.get("contexto")
+    consulta = state["consulta"]
+    if len(items) != 1 or listed or list_lines(context) or (bool(context) and wants_to_buy(consulta, context)):
+        return None
+    if order_action_pending(consulta, state["referencia"], calls, context) is not None:
+        return None
+    raw_findings = search_findings([search_call])
+    if len(raw_findings) != 1 or len(raw_findings[0]["matches"]) != 1:
+        return None
+    finding = without_negated(consulta, raw_findings[0])
+    if len(finding["matches"]) != 1:
+        return None
+    match = finding["matches"][0]
+    described = " ".join([finding["query"], *map(str, finding["request"].values())])
+    said_ref = state["referencia"]
+    ref_msg = (without_quantities(normalize_text(said_ref))
+               if normalize_text(match.unit) in sale_units(said_ref) else said_ref)
+    if not is_distinguished(heard_as(ref_msg, described), described, match, finding["matches"]):
+        return None
+    if grounded_selection(said_ref, finding) != match or fractional_amount(consulta) is not None:
+        return None
+    turn_quantities = (
+        quantities_in_message(without_chosen_measures(consulta, picked))
+        - naming_numbers(consulta, finding["matches"] + finding["nearby"])
+        - mentioned_hours(consulta)
+    )
+    valid_quantities = [q for q in turn_quantities if 1 <= q <= MAX_QUANTITY]
+    if len(valid_quantities) != 1:
+        return None
+    quantity = valid_quantities[0]
+    if (
+        foreign_unit(consulta, quantity, f"{match.unit} {match.variant}")
+        or quantity_of_other(consulta, quantity, f"{match.name} {match.variant} {match.unit}")
+    ):
+        return None
+    try:
+        quote_args = validate_request(
+            "calcular_cotizacion_informativa", {"lines": [{"sku": match.sku, "quantity": quantity}]},
+            said_ref, calls, quantities, remembered, listed, consulta,
+        )
+    except Rejected:
+        return None
+    started = perf_counter()
+    response = execute_safely(tool_executor, "calcular_cotizacion_informativa", quote_args)
+    return {
+        "step": len(calls) + 1, "requested_tool": "calcular_cotizacion_informativa",
+        "requested_arguments": quote_args, "executed": True, "arguments": quote_args,
+        "response": response, "duration_ms": round((perf_counter() - started) * 1000),
+    }
 
 
 def next_node(state: AgentState) -> str:
@@ -141,25 +260,25 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         }
         # «dame del primero»: la opción elegida por su orden cuenta como producto identificado.
         picked = chosen_options(state["consulta"], state.get("contexto"))
+        context = state.get("contexto")
+        listed = usable_lines(state["consulta"], context)
+        # Lo que el cliente quitó o dejó atrás al empezar de nuevo tampoco vale como producto recordado.
+        dropped = set(list_lines(context)) - set(listed)
+        known = [*((context or {}).get("productos") or []), *picked]
+        remembered = {item.get("sku"): f"{item.get('nombre', '')} {item.get('variante', '')} {item.get('unidad', '')}"
+                      for item in known if item.get("sku") not in dropped}
+        quantities: set[int] = set()
         try:
             # Las cantidades son las del turno; si el turno no dice ninguna («cotízalo»), las de la conversación.
             quantities = (quantities_in_message(without_chosen_measures(state["consulta"], picked))
                           or quantities_in_message(without_chosen_measures(state["referencia"], picked)))
-            quantities |= added_quantities(state["consulta"], state.get("contexto"))
-            check_reference(decision.tool, decision.arguments, state["consulta"], calls, state.get("contexto"))
+            quantities |= added_quantities(state["consulta"], context)
+            check_reference(decision.tool, decision.arguments, state["consulta"], calls, context)
             if decision.tool in ORDER_TOOLS and isinstance(decision.arguments, dict):
                 # Los pedidos miran el mensaje del turno: confirmar o cancelar lo tiene que decir ahora el cliente.
                 arguments = validate_order_request(decision.tool, decision.arguments, current=state["consulta"],
-                                                   reference=state["referencia"], calls=calls,
-                                                   context=state.get("contexto"))
+                                                   reference=state["referencia"], calls=calls, context=context)
             else:
-                context = state.get("contexto")
-                listed = usable_lines(state["consulta"], context)
-                # Lo que el cliente quitó o dejó atrás al empezar de nuevo tampoco vale como producto recordado.
-                dropped = set(list_lines(context)) - set(listed)
-                known = [*((context or {}).get("productos") or []), *picked]
-                remembered = {item.get("sku"): f"{item.get('nombre', '')} {item.get('variante', '')} {item.get('unidad', '')}"
-                              for item in known if item.get("sku") not in dropped}
                 arguments = validate_request(decision.tool, decision.arguments, state["referencia"], calls, quantities,
                                              remembered, listed, state["consulta"])
             if any(previous["executed"] and previous["requested_tool"] == decision.tool
@@ -176,7 +295,11 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         else:
             call.update(executed=True, arguments=arguments, response=execute_safely(tool_executor, decision.tool, arguments))
         call["duration_ms"] = round((perf_counter() - started) * 1000)
-        return {"tool_calls": calls + [call], "fuente": "mock_sqlite"}
+        updated_calls = calls + [call]
+        auto_quote = _auto_quote_call(state, updated_calls, picked, quantities, remembered, listed, tool_executor)
+        if auto_quote is not None:
+            updated_calls.append(auto_quote)
+        return {"tool_calls": updated_calls, "fuente": "mock_sqlite"}
 
     def respond(state: AgentState) -> dict:
         injection = state.get("inyeccion")
@@ -204,7 +327,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         decision = state["decisiones"][-1] if state["decisiones"] else None
         if error is None and decision is not None and not decision.valid_json:
             error = {"code": "MODEL_INVALID_OUTPUT", "message": "Grok devolvió una decisión con formato inválido."}
-        elif error is None and decision is not None and decision.action == "call_tool":
+        elif error is None and decision is not None and decision.action == "call_tool" and not _deterministic_complete(state):
             error = {"code": "TOOL_CALL_LIMIT", "message": f"Se alcanzó el límite de {MAX_TOOL_CALLS} herramientas."}
 
         if error:
@@ -222,7 +345,9 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         if not calls:
             return {**common, "estado": "answered", "respuesta": direct_response(state["consulta"], decision)}
         status, answer = render_answer(message, calls, state.get("contexto"), state["consulta"])
-        if reply_is_grounded(decision.reply, message, calls, state.get("contexto"), state["consulta"]):
+        if decision.action == "respond" and reply_is_grounded(
+            decision.reply, message, calls, state.get("contexto"), state["consulta"],
+        ):
             answer = decision.reply.strip()
         return {**common, "estado": status, "respuesta": answer}
 
@@ -236,6 +361,6 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     builder.add_conditional_edges(
         "interpret", next_node, {"retrieve": "retrieve", "respond": "respond", "interpret": "interpret"},
     )
-    builder.add_edge("retrieve", "interpret")
+    builder.add_conditional_edges("retrieve", after_retrieve, {"interpret": "interpret", "respond": "respond"})
     builder.add_edge("respond", END)
     return builder.compile()

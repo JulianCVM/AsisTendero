@@ -221,3 +221,39 @@ def test_bans_say_whether_they_were_manual_or_automatic(store):
     with pytest.raises(SessionError) as error:
         store.context(manual)
     assert error.value.code == "SESSION_BANNED" and "El tendero bloqueó" in str(error.value)
+
+
+def test_session_context_prunes_obsolete_metadata_and_keeps_price_masking(store):
+    from asistendero.sessions import MAX_CLOSED_ORDERS, MAX_REMEMBERED_PRODUCTS, compact_context
+
+    session = store.create()
+    store.record(
+        session, "Busco tubo PVC",
+        "Sí, a $8.500 el metro.\n\nPrecios y existencias de demostración.",
+        "found",
+        [{"sku": f"SKU-{n}", "nombre": f"Prod {n}", "variante": "1", "unidad": "unidad"} for n in range(12)],
+    )
+    ctx = store.context(session)
+    assert ctx["turnos"] == [{"cliente": "Busco tubo PVC", "asistente": "Sí, a [precio] el metro."}]
+    assert len(ctx["productos"]) == MAX_REMEMBERED_PRODUCTS
+    with sqlite3.connect(store.path) as connection:
+        count = connection.execute("SELECT COUNT(*) FROM session_products WHERE session_id = ?", (session,)).fetchone()[0]
+    assert count == MAX_REMEMBERED_PRODUCTS
+
+    compacted = compact_context({
+        "turnos": ctx["turnos"],
+        "productos": [],
+        "lista": [],
+        "opciones": [],
+        "_interno": "no-enviar",
+        "pedidos": [
+            {"pedido": "P-ACTIVO", "estado": "pendiente", "lineas": [], "aparta_hasta": "14:05", "recogida": None, "nota": None},
+            {"pedido": "P-CERR1", "estado": "cancelado", "lineas": [], "aparta_hasta": None, "recogida": None, "nota": ""},
+            {"pedido": "P-CERR2", "estado": "vencido", "lineas": [], "aparta_hasta": None},
+            {"pedido": "P-CERR3", "estado": "entregado", "lineas": []},
+        ],
+    })
+    assert set(compacted) == {"turnos", "pedidos"}
+    assert [order["pedido"] for order in compacted["pedidos"]] == ["P-ACTIVO", "P-CERR1", "P-CERR2"]
+    assert len([o for o in compacted["pedidos"] if o["estado"] not in {"pendiente", "confirmado"}]) == MAX_CLOSED_ORDERS
+    assert "recogida" not in compacted["pedidos"][0] and "nota" not in compacted["pedidos"][0]
