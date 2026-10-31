@@ -6,6 +6,11 @@ costo conocido y lo dice (``cost_complete``): un dato ausente nunca se cuenta co
 
 from decimal import Decimal
 
+# Una llamada «con caché» es la que reutilizó al menos la mitad de su entrada: el prompt fijo ocupa cerca del 85 %.
+# Contar solo «más de cero» no sirve: la pasarela cachea siempre el primer bloque de 128 tokens, y en las corridas del
+# 24-10-2026 las llamadas que cayeron en un servidor frío (128 de unos 2.800 tokens) contaban como aciertos.
+CACHE_COVERED_SHARE = Decimal("0.5")
+
 
 def record_cost(record: dict) -> Decimal | None:
     cost = record.get("cost")
@@ -19,6 +24,30 @@ def _records_events(record: dict) -> list[dict]:
     if "turns" in record:
         return [event for turn in record["turns"] for event in turn.get("events", [])]
     return record.get("events", [])
+
+
+def model_calls(record: dict) -> list[dict]:
+    """Las llamadas a Grok con uso conocido de un caso: mensaje suelto, conversación o varios clientes."""
+    calls = []
+    for unit in record.get("clients") or [record]:
+        for turn in unit.get("turns") or [unit]:
+            calls.extend(event["details"] for event in turn.get("events", [])
+                         if event.get("type") == "model_response" and isinstance(event["details"].get("input_tokens"), int)
+                         and event["details"]["input_tokens"] > 0)
+    return calls
+
+
+def cache_figures(calls: list[dict]) -> dict:
+    """Cuántas llamadas reutilizaron el prompt fijo, qué parte de la entrada salió de la caché y el costo por llamada."""
+    covered = sum(1 for call in calls
+                  if Decimal(call.get("cached_input_tokens") or 0) >= CACHE_COVERED_SHARE * call["input_tokens"])
+    priced = [Decimal(call["cost"]["usd"]) for call in calls if isinstance(call.get("cost"), dict) and call["cost"].get("usd")]
+    return {
+        "calls_with_usage": len(calls),
+        "cache_covered_calls": covered,
+        "cache_covered_percent": float(round(Decimal(covered) * 100 / len(calls), 1)) if calls else 0.0,
+        "cost_per_call_usd": format(sum(priced) / len(priced), ".6f") if priced else None,
+    }
 
 
 def _reminders(record: dict) -> int:
@@ -66,6 +95,7 @@ def summarize(report: dict) -> dict:
         "input_tokens": input_tokens,
         "cached_tokens": cached_tokens,
         "cache_hit_percent": float(cache_hit_percent),
+        **cache_figures([call for record in records for call in model_calls(record)]),
         # Los fallos controlados también consumen (F-01 llama a Grok): cuentan en el consumo, no por tarea.
         "failures_cost_usd": format(sum((cost for cost in failure_costs if cost is not None), Decimal(0)), ".6f"),
         "failed_ids": [record["id"] for record in records if not record["passed"]],
@@ -95,19 +125,23 @@ def comparison_markdown(reports: list[dict]) -> str:
     """Tabla para la evidencia: un renglón por reporte y, debajo, qué casos falló cada uno."""
     suites = sorted({name for report in reports for name in report["summary"]["by_suite"]})
     header = ["Modelo", "Prompt", "Commit", "Aprobados", *suites, "Costo USD", "USD/tarea", "Tokens/tarea",
-              "Grok/tarea", "ms/tarea", "% Caché", "Avisos"]
+              "Grok/tarea", "USD/llamada", "ms/tarea", "% tokens en caché", "% llamadas con caché", "Avisos"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for report in reports:
         summary = report["summary"]
         by_suite = summary["by_suite"]
-        cache_str = f"{summary.get('cache_hit_percent', 0.0):.1f}%"
+        cache_str = f"{summary.get('cache_hit_percent', 0.0):.1f} %"
+        # Un reporte anterior a esta métrica no la trae: se marca como ausente, no como cero.
+        covered = summary.get("cache_covered_percent")
+        covered_str = f"{covered:.1f} %" if summary.get("calls_with_usage") else "—"
         cells = [
             report["model"], report["prompt_version"], report.get("commit") or "—",
             f"{report['passed']}/{report['total']}",
             *[f"{by_suite[name]['passed']}/{by_suite[name]['total']}" if name in by_suite else "—" for name in suites],
             summary["cost_usd"] + ("" if summary["cost_complete"] else " (parcial)"),
             summary["cost_per_task_usd"], summary["tokens_per_task"], summary["model_calls_per_task"],
-            summary["elapsed_ms_per_task"], cache_str, str(summary["reminders"]),
+            summary.get("cost_per_call_usd") or "—", summary["elapsed_ms_per_task"], cache_str, covered_str,
+            str(summary["reminders"]),
         ]
         lines.append("| " + " | ".join(cells) + " |")
     lines.append("")

@@ -381,7 +381,5 @@ def test_two_consecutive_turns_produce_identical_prompt_prefix_without_timestamp
     assert cost is not None
     # 200 tokens frescos * 1.25/M = 0.00025 + 800 tokens en caché * 0.20/M = 0.00016 + 100 tokens salida * 2.50/M = 0.00025 -> 0.00066 USD
     assert Decimal(cost["usd"]) == Decimal("0.0006600000")
-    cache_hit_pct = round((Decimal(800) / Decimal(1000)) * 100, 1)
-    assert cache_hit_pct == Decimal("80.0")
 
 

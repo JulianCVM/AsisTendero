@@ -45,6 +45,7 @@ SESSION_TTL = timedelta(hours=12)
 SESSION_ID = re.compile(r"^[0-9a-f]{32}$")
 MAX_BAN_EXCERPT = 200
 MAX_CLOSED_ORDERS = 2
+ACTIVE_ORDER_STATES = frozenset({"pendiente", "confirmado"})
 MONEY = re.compile(r"\$\s?[\d.,]*\d(?:\s*COP)?")
 OBSOLETE_TURN_NOTES = re.compile(r"\n*Precios y existencias de demostración\.\s*$")
 MANUAL_BAN = "MANUAL"
@@ -77,6 +78,28 @@ def _clean_assistant(text: str) -> str:
     masked = MONEY.sub("[precio]", text)
     trimmed = OBSOLETE_TURN_NOTES.sub("", masked).strip() or masked.strip()
     return _clip(re.sub(r"\n{3,}", "\n\n", trimmed))
+
+
+def order_context(orders: list[dict]) -> list[dict]:
+    """Pedidos de la sesión para Grok: los activos y los cerrados más recientes, sin precios ni campos vacíos."""
+    orders = [order for order in orders if isinstance(order, dict) and order.get("pedido")]
+    active = [order for order in orders if order.get("estado") in ACTIVE_ORDER_STATES]
+    closed = [order for order in orders if order.get("estado") not in ACTIVE_ORDER_STATES][:MAX_CLOSED_ORDERS]
+    entries = []
+    for order in active + closed:
+        entry = {
+            "pedido": order["pedido"],
+            "estado": order.get("estado"),
+            "lineas": [
+                {key: line[key] for key in ("sku", "nombre", "variante", "cantidad", "unidad") if key in line}
+                for line in (order.get("lineas") or []) if isinstance(line, dict)
+            ],
+        }
+        for optional in ("aparta_hasta", "recogida", "nota"):
+            if order.get(optional):
+                entry[optional] = order[optional]
+        entries.append(entry)
+    return entries
 
 
 def compact_context(context: dict) -> dict:
@@ -124,26 +147,9 @@ def compact_context(context: dict) -> dict:
         }
         if specs:
             clean["especificaciones"] = specs
-    orders = [order for order in (context.get("pedidos") or []) if isinstance(order, dict) and order.get("pedido")]
-    if orders:
-        active = [order for order in orders if order.get("estado") in {"pendiente", "confirmado"}]
-        closed = [order for order in orders if order.get("estado") not in {"pendiente", "confirmado"}][:MAX_CLOSED_ORDERS]
-        pruned_orders = []
-        for order in active + closed:
-            entry = {
-                "pedido": order["pedido"],
-                "estado": order["estado"],
-                "lineas": [
-                    {key: line[key] for key in ("sku", "nombre", "variante", "cantidad", "unidad") if key in line}
-                    for line in (order.get("lineas") or []) if isinstance(line, dict)
-                ],
-            }
-            for optional in ("aparta_hasta", "recogida", "nota"):
-                if order.get(optional):
-                    entry[optional] = order[optional]
-            pruned_orders.append(entry)
-        if pruned_orders:
-            clean["pedidos"] = pruned_orders
+    pruned_orders = order_context(context.get("pedidos") or [])
+    if pruned_orders:
+        clean["pedidos"] = pruned_orders
     # Lo volátil (reloj del servidor, cálculo de abierto_ahora) va estrictamente al final:
     if isinstance(context.get("ahora"), str) and context["ahora"]:
         clean["ahora"] = context["ahora"]

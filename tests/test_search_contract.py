@@ -8,7 +8,7 @@ from asistendero.agente.modelo import grok
 
 
 def fake_complete(payload):
-    return lambda *_: (json.dumps(payload) if not isinstance(payload, str) else payload,
+    return lambda *_, **__: (json.dumps(payload) if not isinstance(payload, str) else payload,
                        "modelo-prueba", 20, 30, None, None)
 
 
@@ -65,7 +65,7 @@ def test_direct_reply_is_parsed(monkeypatch):
 def test_grok_receives_message_observations_and_remaining_calls(monkeypatch):
     seen = {}
 
-    def complete(system, payload):
+    def complete(system, payload, conversation=None):
         seen.update(payload)
         return json.dumps({"action": "respond", "intent": "otro", "reply": "ok"}), "m", 1, 1, None, None
 
@@ -125,7 +125,7 @@ def test_models_outside_the_challenge_rules_are_rejected_before_the_gateway(monk
 def test_conversation_context_is_sent_only_in_a_session(monkeypatch):
     seen = {}
 
-    def complete(system, payload):
+    def complete(system, payload, conversation=None):
         seen.clear()
         seen.update(payload)
         return json.dumps({"action": "respond", "intent": "otro", "reply": "ok"}), "m", 1, 1, None, None
@@ -181,3 +181,30 @@ def test_s2_hours_intent_is_still_accepted_as_store_intent(monkeypatch):
     monkeypatch.setattr(grok, "_complete", fake_complete(payload))
     decision = grok.decide_with_grok("¿Abren hoy?", [], 6)
     assert decision.valid_json and decision.intent == "tienda"
+
+
+def test_payload_keeps_what_changes_least_first_and_the_system_prompt_fixed(monkeypatch):
+    sent = []
+
+    def complete(system, payload, conversation=None):
+        sent.append((system, list(payload), payload.get("conversacion"), json.dumps(payload)))
+        return json.dumps({"action": "respond", "intent": "otro", "reply": "ok"}), "m", 1, 1, None, None
+
+    monkeypatch.setattr(grok, "_complete", complete)
+    context = {"session_id": "sesion-secreta", "turnos": [{"cliente": "Busco tubo", "asistente": "Hay dos"}],
+               "productos": [{"sku": "PVC-050", "nombre": "Tubo"}], "ahora": "2026-10-31 14:00 (viernes)",
+               "abierto_ahora": True}
+    grok.decide_with_grok("Dame 3", [{"herramienta": "buscar_productos"}], 5, context=context)
+    grok.decide_with_grok("Dame 3", [], 6, context={**context, "ahora": "2026-10-31 14:07 (viernes)"})
+    grok.decide_with_grok("Hola", [], 6)
+
+    assert {system for system, *_ in sent} == {grok.AGENT_PROMPT}
+    assert "14:0" not in grok.AGENT_PROMPT
+    # Conversación (fija en el turno) → mensaje → observaciones (crecen al final) → llamadas disponibles.
+    assert sent[0][1] == ["conversacion", "mensaje", "observaciones", "llamadas_disponibles"]
+    assert sent[2][1] == ["mensaje", "observaciones", "llamadas_disponibles"]
+    # El reloj cierra la conversación: lo anterior a él es idéntico aunque cambie la hora.
+    assert list(sent[0][2])[-2:] == ["ahora", "abierto_ahora"]
+    before_clock = sent[0][3].split('"ahora"')[0]
+    assert sent[1][3].startswith(before_clock) and sent[0][3] != sent[1][3]
+    assert all("sesion-secreta" not in raw for *_, raw in sent)

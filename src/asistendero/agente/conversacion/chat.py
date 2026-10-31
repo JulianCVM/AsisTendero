@@ -13,7 +13,7 @@ from asistendero.agente.conversacion.handoff import (
     HANDOFF_AGAIN_REPLY, HANDOFF_REPLY, STAFF_HOLD_REPLY, asks_for_human, attention, cancel_active,
     escalate_after_failures, last_status, request_human,
 )
-from asistendero.agente.conversacion.sessions import MAX_CLOSED_ORDERS, remembered_products, SessionStore
+from asistendero.agente.conversacion.sessions import SessionStore, order_context, remembered_products
 from asistendero.agente.entrada.guardrails import redact_personal_data, screen_message
 from asistendero.agente.entrada.injection import detect_injection
 from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, Planner
@@ -28,25 +28,6 @@ from asistendero.observabilidad.tracing import run_traced
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.pedidos.orders import OrderBook
 from asistendero.tienda.reloj import WEEKDAYS
-
-
-def order_context(orders: list[dict]) -> list[dict]:
-    """Pedidos de la sesión para Grok: activos más recientes cerrados, sin precios ni campos nulos."""
-    active = [order for order in orders if order["estado"] in {"pendiente", "confirmado"}]
-    closed = [order for order in orders if order["estado"] not in {"pendiente", "confirmado"}][:MAX_CLOSED_ORDERS]
-    items = []
-    for order in active + closed:
-        entry = {
-            "pedido": order["pedido"],
-            "estado": order["estado"],
-            "lineas": [{"sku": line["sku"], "nombre": line["nombre"], "variante": line["variante"],
-                        "cantidad": line["cantidad"], "unidad": line["unidad"]} for line in order["lineas"]],
-        }
-        for optional in ("aparta_hasta", "recogida", "nota"):
-            if order.get(optional):
-                entry[optional] = order[optional]
-        items.append(entry)
-    return items
 
 
 def session_context(store: SessionStore, session_id: str, orders: OrderBook | None) -> dict:

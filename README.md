@@ -123,6 +123,8 @@ GROK_BASE_URL=https://api.reto.pltk.mx/v1
 
 Si la llamada a la pasarela falla por el certificado (red con un proxy que firma con su propio certificado), `grok.py` usa los certificados del sistema cuando el paquete opcional `truststore` (MIT) está instalado; sin él, usa los de Python.
 
+`GROK_CONV_ID=1` (opcional, apagada) pide a la pasarela atender cada conversación en el mismo servidor para reutilizar la caché del prompt; está apagada hasta medirla con una corrida real ([HARNESS.md](docs/HARNESS.md#caché-del-prompt)).
+
 En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes.
 
 ## Uso
@@ -238,7 +240,7 @@ El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama 
     --models grok-4.20-0309-non-reasoning grok-4.5 grok-4.7 --budget-usd 2
 ```
 
-Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los eventos completos y, caso por caso, una bitácora parcial (`*.partial.jsonl`). `--models` reparte los modelos en rueda (cada caso, o cada cliente de un caso de concurrencia, usa el siguiente) y el reporte separa aprobados, llamadas, tokens y costo por modelo. `--concurrency` (1 a 6) corre varios casos a la vez y `--budget-usd` deja de empezar casos al llegar al tope; los que ya corrían terminan. La hora de la tienda en la evaluación arranca el miércoles 21-10-2026 a las 9:00 y avanza con el reloj real, para que «mañana a las 10» signifique siempre lo mismo.
+Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los eventos completos y, caso por caso, una bitácora parcial (`*.partial.jsonl`). `--models` reparte los modelos en rueda (cada caso, o cada cliente de un caso de concurrencia, usa el siguiente) y el reporte separa aprobados, llamadas, tokens y costo por modelo, y la tabla comparativa trae el costo por llamada, el % de tokens que salió de la caché y el % de llamadas que reutilizaron el prompt fijo. `--concurrency` (1 a 6) corre varios casos a la vez y `--budget-usd` deja de empezar casos al llegar al tope; los que ya corrían terminan. La hora de la tienda en la evaluación arranca el miércoles 21-10-2026 a las 9:00 y avanza con el reloj real, para que «mañana a las 10» signifique siempre lo mismo.
 
 ## Estructura del repositorio
 

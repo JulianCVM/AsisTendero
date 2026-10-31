@@ -2,6 +2,7 @@
 
 from contextvars import ContextVar
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 
@@ -67,8 +68,24 @@ class Decision:
     reported_cost_usd_ticks: int | None = None
 
 
+# La caché de xAI va por bloques de 128 tokens y vive en el servidor que atendió la llamada. En las corridas reales
+# hasta el 24-10-2026 (3.924 llamadas), una de cada 7 en la corrida v10 cayó en un servidor frío y solo cacheó 128
+# tokens del prompt fijo. xAI enruta por esta cabecera (`prompt_cache_key` en su API de Responses). Va tras la bandera
+# GROK_CONV_ID porque no se ha comprobado que la pasarela del reto la reenvíe: se enciende para una corrida medida.
+CONVERSATION_HEADER = "x-grok-conv-id"
+
+
+def conversation_key(session_id: str | None) -> str | None:
+    """Clave estable de enrutamiento: la de la sesión o, sin sesión, la del prompt; nunca el id en claro."""
+    if os.getenv("GROK_CONV_ID", "").strip().casefold() not in {"1", "true", "si", "sí"}:
+        return None
+    # Sin sesión, todas las consultas sueltas comparten el mismo prefijo (el prompt fijo): conviene el mismo servidor.
+    seed = f"sesion:{session_id}" if session_id else f"prompt:{PROMPT_VERSION}"
+    return hashlib.sha256(f"asistendero:{seed}".encode("utf-8")).hexdigest()[:32]
+
+
 def _complete(
-    system: str, payload: dict, session_id: str | None = None,
+    system: str, payload: dict, conversation: str | None = None,
 ) -> tuple[str, str, int | None, int | None, int | None, int | None]:
     """Envía un prefijo ``system`` 100 % estático (para aciertos de Prompt Caching) y los datos dinámicos en ``user``."""
     if not isinstance(system, str) or not system:
@@ -95,8 +112,8 @@ def _complete(
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
         ],
     }
-    if session_id:
-        create_kwargs["user"] = session_id
+    if conversation:
+        create_kwargs["extra_headers"] = {CONVERSATION_HEADER: conversation}
     # Los mensajes del SDK pueden incluir datos de la solicitud: solo se propaga un código.
     try:
         result = client.chat.completions.create(**create_kwargs)
@@ -180,12 +197,12 @@ def prepare_step(
     remaining_calls: int,
     context: dict | None = None,
 ) -> tuple[dict, str | None]:
-    """Construye el payload del mensaje ``user`` para Grok aplicando las 4 reglas de Prompt Caching.
+    """Arma el mensaje ``user``: lo que cambia menos va primero, para que la caché de prefijo lo reutilice.
 
-    Coloca lo estático al inicio (la conversación podada con historial limpio y colecciones fijas)
-    y lo volátil al final (reloj del servidor, cálculo de ``abierto_ahora`` y estado del turno), de modo que
-    el prefijo del prompt sea byte a byte idéntico entre llamadas sucesivas en la misma sesión.
-    Devuelve ``(payload, session_id)``.
+    Orden: la conversación compactada (fija durante el turno; su reloj, al final de ella), el mensaje (fijo en el
+    turno), las observaciones (crecen agregando al final) y las llamadas disponibles (cambian en cada paso). Así el
+    segundo paso de un turno reutiliza todo hasta la última observación del primero. El ``session_id`` no va en el
+    payload: solo sirve para la clave de enrutamiento. Devuelve ``(payload, session_id)``.
     """
     from asistendero.agente.conversacion.sessions import compact_context
 
@@ -210,12 +227,10 @@ def decide_with_grok(
     message: str, observations: list[dict], remaining_calls: int, context: dict | None = None,
 ) -> Decision:
     payload, session_id = prepare_step(message, observations, remaining_calls, context)
-    try:
-        raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(
-            AGENT_PROMPT, payload, session_id=session_id,
-        )
-    except TypeError:
-        raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(AGENT_PROMPT, payload)
+    # Una sola llamada por paso: nunca se repite, ni ante un error inesperado (sería consumo sin tarea real).
+    raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(
+        AGENT_PROMPT, payload, conversation=conversation_key(session_id),
+    )
     return decision_from_raw(
         raw, model=model, input_tokens=in_tokens, output_tokens=out_tokens,
         cached_input_tokens=cached_tokens, reported_cost_usd_ticks=cost_ticks,
