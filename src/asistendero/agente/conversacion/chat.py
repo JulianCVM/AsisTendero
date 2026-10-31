@@ -13,7 +13,7 @@ from asistendero.agente.conversacion.handoff import (
     HANDOFF_AGAIN_REPLY, HANDOFF_REPLY, STAFF_HOLD_REPLY, asks_for_human, attention, cancel_active,
     escalate_after_failures, last_status, request_human,
 )
-from asistendero.agente.conversacion.sessions import SessionStore, remembered_products
+from asistendero.agente.conversacion.sessions import MAX_CLOSED_ORDERS, SessionStore, remembered_products
 from asistendero.agente.entrada.guardrails import redact_personal_data, screen_message
 from asistendero.agente.entrada.injection import detect_injection
 from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, Planner, ToolExecutor
@@ -28,14 +28,22 @@ from asistendero.tienda.reloj import WEEKDAYS
 
 
 def order_context(orders: list[dict]) -> list[dict]:
-    """Pedidos de la sesión para Grok: estado, líneas y horas, sin precios (se releen con la herramienta)."""
-    return [
-        {"pedido": order["pedido"], "estado": order["estado"],
-         "lineas": [{"sku": line["sku"], "nombre": line["nombre"], "variante": line["variante"],
-                     "cantidad": line["cantidad"], "unidad": line["unidad"]} for line in order["lineas"]],
-         "aparta_hasta": order["aparta_hasta"], "recogida": order["recogida"], "nota": order["nota"]}
-        for order in orders
-    ]
+    """Pedidos de la sesión para Grok: activos más recientes cerrados, sin precios ni campos nulos."""
+    active = [order for order in orders if order["estado"] in {"pendiente", "confirmado"}]
+    closed = [order for order in orders if order["estado"] not in {"pendiente", "confirmado"}][:MAX_CLOSED_ORDERS]
+    items = []
+    for order in active + closed:
+        entry = {
+            "pedido": order["pedido"],
+            "estado": order["estado"],
+            "lineas": [{"sku": line["sku"], "nombre": line["nombre"], "variante": line["variante"],
+                        "cantidad": line["cantidad"], "unidad": line["unidad"]} for line in order["lineas"]],
+        }
+        for optional in ("aparta_hasta", "recogida", "nota"):
+            if order.get(optional):
+                entry[optional] = order[optional]
+        items.append(entry)
+    return items
 
 
 def session_context(store: SessionStore, session_id: str, orders: OrderBook | None) -> dict:

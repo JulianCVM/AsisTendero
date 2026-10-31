@@ -8,6 +8,9 @@ const SVG = 'http://www.w3.org/2000/svg';
 const LAYER_TEXT = {prompt: 'Instrucción', model: 'Decide Grok', rule: 'Regla', data: 'Dato'};
 // Conexiones que pasan por encima de la fila principal para no cruzar nodos: el aviso y la salida sin Grok.
 const ARCS = {'route>interpret': 46, 'validate>respond': 78};
+// Las dos salidas nuevas de la bodega van por debajo de la fila de abajo: [corrimiento en la bodega, profundidad].
+// La auto-cotización vuelve a la aduana; «sin Grok» pasa bajo la aduana y sube a la balanza por su derecha.
+const BELOW = {'bodega>aduana': [40, 24], 'bodega>respond': [-40, 58]};
 const narrow = matchMedia('(max-width: 760px)');
 
 function svg(tag, attributes) {
@@ -170,7 +173,14 @@ export function createMap(info) {
       let d;
       let label;
       let room = 0;
-      if (ARCS[key]) {
+      if (BELOW[key]) {
+        const [shift, depth] = BELOW[key];
+        const [x1, y1] = anchor(a, 'bottom', shift);
+        const [x2, y2] = anchor(b, 'bottom');
+        const drop = y1 + depth * 1.4;
+        d = `M${x1} ${y1} C${x1} ${drop} ${x2} ${drop} ${x2} ${y2}`;
+        label = [(x1 + x2) / 2, y1 + depth + 4];
+      } else if (ARCS[key]) {
         const [x1, y1] = anchor(a, 'top', 18);
         const [x2, y2] = anchor(b, 'top', -18);
         const lift = Math.min(y1, y2) - ARCS[key];

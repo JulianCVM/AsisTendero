@@ -48,7 +48,10 @@ NODES = [
      "does": "Lee el catálogo SQLite en solo lectura, con negocio y sede fijados por el servidor; un pedido solo "
              "aparta unidades.",
      "receives": "Los argumentos aprobados por la aduana.",
-     "decides": "Nada: devuelve el sobre {status, data, error} que vuelve a Grok como observación."},
+     "decides": "Devuelve el sobre {status, data, error}. Si la búsqueda dejó un solo producto que el cliente distinguió "
+                "y una cantidad entera, la aduana valida la cotización en el mismo paso. Si la salida ya está completa "
+                "(categoría, búsqueda sin resultados, pedido confirmado o cancelado, consulta vacía) y no falta ningún "
+                "paso, va directo a responder; si no, vuelve a Grok como observación."},
     {"id": "respond", "graph": "respond", "station": "Balanza", "title": "Verifica y responde", "code": "reply_is_grounded",
      "layers": ["model", "rule", "data"],
      "does": "Arma la respuesta final con los datos de las herramientas y comprueba la redacción que propuso Grok.",
@@ -80,6 +83,10 @@ EDGES = [
     {"from": "aduana", "to": "interpret", "label": "rechazo",
      "when": "La solicitud no pasó: la herramienta no corre y Grok recibe el código."},
     {"from": "bodega", "to": "interpret", "label": "observación", "when": "El resultado vuelve a Grok."},
+    {"from": "bodega", "to": "aduana", "label": "auto-cotiza", "internal": True,
+     "when": "Un solo producto distinguido y una cantidad entera: el servidor cotiza sin pedirle a Grok otro paso."},
+    {"from": "bodega", "to": "respond", "label": "sin Grok",
+     "when": "La herramienta dejó la respuesta completa y no falta ningún paso: se responde sin otra llamada a Grok."},
     {"from": "respond", "to": "outcome", "label": "estado", "when": "Respuesta y estado final."},
 ]
 

@@ -188,8 +188,24 @@ def execute_safely(tool_executor: ToolExecutor, name: str, arguments: dict) -> d
     return response
 
 
+MODEL_MATCH_FIELDS = ("sku", "name", "variant", "price_cop", "stock", "unit", "restock")
+MODEL_AVAILABILITY_FIELDS = ("sku", "name", "variant", "unit", "stock", "restock")
+
+
+def _model_match(product: Product) -> dict:
+    return {
+        "sku": product.sku,
+        "name": product.name,
+        "variant": product.variant,
+        "price_cop": product.price_cop,
+        "stock": product.stock,
+        "unit": product.unit,
+        "restock": product.restock,
+    }
+
+
 def observation_for_model(call: ToolCall) -> dict:
-    """Lo que Grok ve de cada llamada: nearby nunca lleva precio."""
+    """Lo que Grok ve de cada llamada: solo los atributos de razonamiento y nearby sin precio."""
     response = call["response"]
     observation = {
         "herramienta": call["requested_tool"],
@@ -203,11 +219,13 @@ def observation_for_model(call: ToolCall) -> dict:
     if call["requested_tool"] == "buscar_productos":
         data = {"results": [
             {
-                "matches": [vars(p) for p in finding["matches"]],
+                "matches": [_model_match(p) for p in finding["matches"]],
                 "nearby": [{"sku": p.sku, "name": p.name, "variant": p.variant, "stock": p.stock}
                            for p in finding["nearby"]],
             }
             for finding in search_findings([call])
         ]}
+    elif call["requested_tool"] == "consultar_disponibilidad" and isinstance(data, dict):
+        data = {key: data[key] for key in MODEL_AVAILABILITY_FIELDS if key in data}
     observation["datos"] = data
     return observation

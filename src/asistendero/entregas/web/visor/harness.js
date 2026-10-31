@@ -59,10 +59,17 @@ function onRunning(node) {
     if (from === 'route') note('route', 'Grok respondió sin un paso que el mensaje exige: vuelve a la torre con un aviso.', 'warning');
     walk(from, 'interpret');
   } else if (node === 'retrieve') {
+    // Si retrieve vuelve a empezar desde la bodega, no lo pidió Grok: el servidor auto-cotiza el match unívoco.
+    if (run.at === 'bodega') {
+      note('bodega', 'Un solo producto distinguido y una cantidad entera: el servidor cotiza en el mismo paso.');
+      walk('bodega', 'aduana');
+      return;
+    }
     note('route', 'call_tool con llamadas disponibles: pasa a la aduana.');
     walk('route', 'aduana');
   } else if (node === 'respond') {
     if (run.at === 'route') note('route', 'Pasa a verificar y responder.');
+    if (run.at === 'bodega') note('bodega', 'La herramienta dejó la respuesta completa: se responde sin otra llamada a Grok.');
     walk(run.at, 'respond');
   }
 }
