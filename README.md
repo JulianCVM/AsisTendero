@@ -10,7 +10,7 @@ En muchos comercios pequeños, los productos, precios, existencias y conversacio
 
 La visión de PulsoTienda es que el agente pueda acompañar el recorrido comercial y apoyar al dueño en la operación diaria. La primera etapa se concentra en una pregunta básica: **¿puede entender una solicitud de un cliente, buscar únicamente lo pertinente y contestar sin inventar productos, precios ni disponibilidad?**
 
-El primer piloto previsto es una ferretería de una sede. El establecimiento, su catálogo y sus datos aún no están definidos; por eso esta versión trabaja con un catálogo de demostración de 384 variantes en 12 categorías.
+El primer piloto previsto es una ferretería de una sede. El establecimiento, su catálogo y sus datos aún no están definidos; por eso esta versión trabaja con un catálogo de demostración de 435 variantes en 12 categorías. Para evaluar al agente fuera de la ferretería, la misma base trae una segunda tienda ficticia, una tienda de barrio de mercado diario con 108 productos (granos, lácteos, huevos, frescos, aseo, bebidas y mecato), que solo usa el evaluador.
 
 ## Qué hace hoy
 
@@ -136,7 +136,7 @@ En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python
 .\.venv\Scripts\python.exe -m asistendero --demo   # lo mismo, sobre la tienda de demostración
 ```
 
-Arranca en un solo proceso el [visor](#visor-local) (chat del cliente y traza, [http://127.0.0.1:8765/](http://127.0.0.1:8765/)) y el [panel del tendero](#panel-del-tendero) ([http://127.0.0.1:8766/](http://127.0.0.1:8766/), con la página de presentación en `/inicio`). Los dos usan la misma tienda, los mismos pedidos y las mismas conversaciones: lo que un cliente pide en el chat aparece en el panel, y lo que el tendero responde al tomar una conversación llega al chat. Si el catálogo ficticio no existe, lo crea en `.local/mock_catalog_s3.sqlite3` (384 variantes); si ya existe, no lo toca. `Ctrl+C` detiene todo. Abrir las páginas no llama a Grok: cada mensaje del chat y cada **Interpretar** del asistente de bodega sí, y consumen créditos.
+Arranca en un solo proceso el [visor](#visor-local) (chat del cliente y traza, [http://127.0.0.1:8765/](http://127.0.0.1:8765/)) y el [panel del tendero](#panel-del-tendero) ([http://127.0.0.1:8766/](http://127.0.0.1:8766/), con la página de presentación en `/inicio`). Los dos usan la misma tienda, los mismos pedidos y las mismas conversaciones: lo que un cliente pide en el chat aparece en el panel, y lo que el tendero responde al tomar una conversación llega al chat. Si el catálogo ficticio no existe, lo crea en `.local/mock_catalog_s3.sqlite3` (435 variantes de ferretería y la tienda de mercado del evaluador); si ya existe, solo le agrega los productos nuevos de la siembra sin tocar los precios ni las existencias que el tendero ya cambió. `Ctrl+C` detiene todo. Abrir las páginas no llama a Grok: cada mensaje del chat y cada **Interpretar** del asistente de bodega sí, y consumen créditos.
 
 El mismo comando, con un mensaje o con `--chat`, responde en la terminal (abajo). Los comandos de cada parte por separado (`asistendero.entregas.visor`, `asistendero.entregas.panel`, `asistendero.datos`) siguen disponibles. Si prefieres crear el catálogo sin arrancar nada, usa `python -m asistendero.datos`, que se detiene si la base ya existe.
 
@@ -220,7 +220,7 @@ La página `/inicio` habla en lenguaje de negocio y no reproduce detalles técni
 | Precio y existencias solo cambian desde el panel; el cobro y la entrega son en el mostrador | `inventory.py`, `payments.py` y [docs/PAGOS.md](docs/PAGOS.md). |
 | La clave del servicio de IA no se muestra al cliente | Vive en `.env` (excluido de Git) y la traza la registra como `"api_key": "[omitida]"` (`tracing.py`). |
 
-Cifras del repositorio: **257 casos de evaluación en 17 suites** ([cases.json](evaluation/cases.json)); **45 de ellos en la suite `inyeccion`**, con **34 ataques** que deben bloquearse antes de Grok y frases legítimas parecidas que deben atenderse; **10 herramientas** que Grok puede pedir (`TOOL_NAMES` de `grok.py`), y **más de 850 pruebas automáticas** que nunca llaman a Grok (`pytest -q`). Topes que el código hace cumplir: un mensaje de hasta **2.000 caracteres**, hasta **6 herramientas** por mensaje, lo apartado espera el «sí» **5 minutos**, hasta **3 pedidos activos** por conversación y la recogida se agenda con **hasta 7 días** de anticipación. `tests/test_tendero.py` compara estas cifras con su fuente.
+Cifras del repositorio: **334 casos de evaluación en 20 suites** ([cases.json](evaluation/cases.json)); **45 de ellos en la suite `inyeccion`**, con **34 ataques** que deben bloquearse antes de Grok y frases legítimas parecidas que deben atenderse; **10 herramientas** que Grok puede pedir (`TOOL_NAMES` de `grok.py`), y **más de 850 pruebas automáticas** que nunca llaman a Grok (`pytest -q`). Topes que el código hace cumplir: un mensaje de hasta **2.000 caracteres**, hasta **6 herramientas** por mensaje, lo apartado espera el «sí» **5 minutos**, hasta **3 pedidos activos** por conversación y la recogida se agenda con **hasta 7 días** de anticipación. `tests/test_tendero.py` compara estas cifras con su fuente.
 
 La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con Grok de los diez casos `S2-01` a `S2-10` y de dos fallos controlados (catálogo inaccesible y modelo inaccesible), con `run_id`, tokens, latencia y costo informado por la API. Con `s2-tools-v1` pasaron 7 de 10 casos y los dos fallos. Los tres que fallaron se corrigieron en `s2-tools-v2`. Con esa versión, los diez casos y los dos fallos pasaron en una sola corrida sobre el commit `ffcdde4`. Desde el 21-10-2026 el evaluador agrega un tercer fallo controlado (salida inválida del modelo, sin red) y guarda en cada reporte el commit evaluado; la corrida vigente da 10/10 casos y 3/3 fallos sobre `a6a190e`. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. Las verificaciones de [búsqueda estructurada](evaluation/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) y de [Semana 1](EVIDENCIA_SEMANA1.md) corresponden a versiones anteriores del agente.
 
@@ -238,7 +238,17 @@ El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama 
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite extremos flujos variados --concurrency 3 --budget-usd 1
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite pedidos concurrencia --concurrency 3 `
     --models grok-4.20-0309-non-reasoning grok-4.5 grok-4.7 --budget-usd 2
+# 31-10: catálogo ampliado, tienda de mercado (prompt mercado-v1) y paráfrasis
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite ampliacion mercado parafrasis --concurrency 3 --budget-usd 1
 ```
+
+Un caso con `"negocio": "mercado"` corre con el catálogo, los pedidos y el prompt (`mercado-v1`) de la tienda de
+mercado; cada renglón del reporte guarda su negocio y su versión de prompt. Además de lo que pide cada caso, el
+evaluador revisa siempre dos cosas por su cuenta (`eval_oracle.py`): que cada cifra en pesos de la respuesta haya
+salido de las herramientas de ese turno y que la respuesta no muestre un SKU. Un caso puede exigir también cómo
+llegó Grok a la respuesta: herramientas que no debía ejecutar (`forbidden_tools`), productos que no debía elegir
+(`forbidden_skus`) y campos que alguna búsqueda debía llevar (`expected_search`). Los casos con el mismo `grupo`
+(suite `parafrasis`) dicen lo mismo con otras palabras, y el resumen dice en cuántos grupos el agente respondió igual.
 
 Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los eventos completos y, caso por caso, una bitácora parcial (`*.partial.jsonl`). `--models` reparte los modelos en rueda (cada caso, o cada cliente de un caso de concurrencia, usa el siguiente) y el reporte separa aprobados, llamadas, tokens y costo por modelo, y la tabla comparativa trae el costo por llamada, el % de tokens que salió de la caché y el % de llamadas que reutilizaron el prompt fijo. `--concurrency` (1 a 6) corre varios casos a la vez y `--budget-usd` deja de empezar casos al llegar al tope; los que ya corrían terminan. La hora de la tienda en la evaluación arranca el miércoles 21-10-2026 a las 9:00 y avanza con el reloj real, para que «mañana a las 10» signifique siempre lo mismo.
 
@@ -250,7 +260,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | Ruta | Contenido |
 | --- | --- |
 | `src/asistendero/agente/` | **AsisTendero**, el agente que atiende a los clientes, y su harness. |
-| `agente/modelo/` | `grok.py` (cliente de Grok, decisión y contrato de herramientas) y `prompt.py` (instrucciones del agente). |
+| `agente/modelo/` | `grok.py` (cliente de Grok, decisión y contrato de herramientas) y `prompt.py` (instrucciones del agente; la versión de la tienda de mercado sale de la misma con otros ejemplos). |
 | `agente/flujo/` | `graph.py` (flujo LangGraph: Grok decide, el servidor valida, ejecuta y responde) y `reminders.py` (avisos cuando Grok responde sin un paso que el mensaje exige). |
 | `agente/entrada/` | Lo que se revisa antes de pensar: `injection.py` (inyecciones, con baneo), `guardrails.py` (temas delicados, datos personales, fugas del prompt) y `spelling.py` (mensajes mal escritos). |
 | `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `choices.py` (opciones mostradas y paginadas), `context_resolution.py` (turnos breves que se apoyan en el anterior y lo que el cliente ya dijo de cada producto) y `shopping_list.py` (lo cotizado en la conversación). |
@@ -264,9 +274,9 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `tienda/ventas/` | `payments.py` (registro manual del cobro, ver [PAGOS.md](docs/PAGOS.md)), `sales.py` y `sales_history.py`. |
 | `tienda/abastecimiento/` | `purchasing*.py` (proveedores y pedidos al proveedor) y `stock_*.py` (llegadas y cambios de bodega). |
 | `tienda/bodega/` | `stock_assistant.py` y `stock_proposal.py`: Grok interpreta lo que cuenta el tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
-| `src/asistendero/datos/` | `catalog_data.py` y `seed.py`: catálogo ficticio y base. |
+| `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py` y `harness_flow.py` (mapa del harness atado al grafo real). |
-| `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
+| `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
 | `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
 | `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |

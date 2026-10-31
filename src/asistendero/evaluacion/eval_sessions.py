@@ -14,6 +14,7 @@ Además de lo que revisa ``eval_checks.verdict``, un turno puede traer:
 - ``expected_status`` puede ser un código de sesión (``SESSION_BANNED``): el turno no llega al grafo.
 
 Un caso con ``clients`` puede traer ``expected_active_total``: pedidos activos entre todos al final.
+Con ``"negocio": "mercado"`` la conversación es con la tienda de barrio (su catálogo, sus pedidos y su prompt).
 """
 
 from collections.abc import Iterator
@@ -29,7 +30,9 @@ from asistendero.agente.conversacion.order_watch import last_event, notices, war
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.flujo.graph import Planner
 from asistendero.agente.modelo.grok import MODEL_OVERRIDE, current_model
+from asistendero.agente.modelo.prompt import serving
 from asistendero.agente.respuesta.order_replies import notice_text
+from asistendero.datos.seed import BUSINESSES
 from asistendero.evaluacion.eval_checks import record, sum_known
 from asistendero.observabilidad.pricing import run_cost
 from asistendero.tienda import reloj
@@ -178,7 +181,8 @@ def _store(case: dict, catalog_path: Path, folder: Path) -> tuple[OrderBook, Ses
     """Copia propia del catálogo para el caso: los pedidos de un caso no apartan existencias de otro."""
     database = folder / f"{case['id']}.sqlite3"
     shutil.copy(catalog_path, database)
-    return OrderBook(database), SessionStore(folder / f"{case['id']}-sesiones.sqlite3")
+    business = BUSINESSES[case.get("negocio", "ferreteria")]
+    return OrderBook(database, business_id=business), SessionStore(folder / f"{case['id']}-sesiones.sqlite3")
 
 
 def run_conversation(case: dict, *, catalog_path: Path, folder: Path, planner: Planner) -> dict:
@@ -194,7 +198,8 @@ def run_clients(case: dict, *, catalog_path: Path, folder: Path, planner: Planne
 
     def client(index: int) -> dict:
         model = models[index % len(models)]
-        with using_model(model):
+        # Cada cliente corre en su hilo: el negocio (prompt) se fija de nuevo, no se hereda del hilo del caso.
+        with using_model(model), serving(case.get("negocio", "ferreteria")):
             conversation = Conversation(book, store, planner)
             turns = [conversation.turn(check) for check in case["clients"][index]["turns"]]
         return {"client": index + 1, "model": model, "session": conversation.session_id, **totals(turns)}
@@ -207,7 +212,7 @@ def run_clients(case: dict, *, catalog_path: Path, folder: Path, planner: Planne
         reasons.append(f"{active} pedidos activos entre todos")
     # Pase lo que pase con cada cliente, lo apartado nunca supera lo que hay en bodega.
     reasons += [f"{item['sku']} con {item['apartado']} apartados y {item['stock']} en bodega"
-                for item in Inventory(book.path).products() if item["apartado"] > item["stock"]]
+                for item in Inventory(book.path, book.business_id).products() if item["apartado"] > item["stock"]]
     merged = totals([turn for item in clients for turn in item["turns"]])
     return {"id": case["id"], "suite": case.get("suite", "concurrencia"), "model": ", ".join(sorted(set(models))),
             **merged, "passed": not reasons, "fail_reasons": reasons, "active_orders": active, "clients": clients}

@@ -22,6 +22,18 @@ UNITS = {
     "oz": "oz", "onzas": "oz", "awg": "awg", "lb": "lb", "libra": "lb", "libras": "lb",
     "galon": "gal", "galones": "gal",
 }
+NUMBER_WORDS = {
+    "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
+    "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "quince": 15, "veinte": 20,
+}
+# Un número dicho en palabras delante de una medida es la misma medida que en cifras: «tres pulgadas» es «3
+# pulgadas» y «una libra», «1 libra» (paráfrasis del 31-10: la variante no se elegía si el cliente lo escribía en
+# letras). «mil litros» es «1000 litros» y el punto de miles de «1.000 litros» se quita: el tanque de 1.000 litros
+# no se encontraba si el cliente escribía «1000».
+_SPOKEN_MEASURE = re.compile(
+    r"\b(" + "|".join(NUMBER_WORDS) + r"|mil)\s+(?=(?:pulgadas?|kilos?|kilogramos?|gramos?|metros?|litros?|onzas?|"
+    r"libras?|galon(?:es)?|vatios|voltios)\b)")
+_THOUSANDS = re.compile(r"\b(\d{1,3})\.(\d{3})\b(?![.,]\d)")
 # Unidades que también son de venta («2 metros de tubo», «2 galones de pintura»): una cifra con ellas no
 # contradice la medida de una variante.
 SALE_UNITS = {"m", "gal", "lb"}
@@ -49,7 +61,8 @@ def canonical_text(value: str) -> str:
         (r"\b(\d+(?:/\d+)?)(kg|cm|mm)\b", r"\1 \2"),
     ):
         text = re.sub(pattern, replacement, text)
-    return text
+    text = _SPOKEN_MEASURE.sub(lambda match: f"{1000 if match.group(1) == 'mil' else NUMBER_WORDS[match.group(1)]} ", text)
+    return _THOUSANDS.sub(r"\1\2", text)
 
 
 def _number(raw: str) -> str:

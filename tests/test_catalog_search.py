@@ -89,6 +89,12 @@ def test_measures_separate_sizes_from_quantities():
     assert measures("2 bisagras de 3 1/2\"") == {"2", "3-1/2in"}
     assert measures("tubo PVC de media pulgada") == {"1/2in"}
     assert measures("cemento gris de 50 kg") == {"50kg"}
+    # Paráfrasis del 31-10: en letras o con punto de miles es la misma medida que en cifras.
+    assert measures("brochas de tres pulgadas") == measures("brochas de 3 pulgadas") == {"3in"}
+    assert measures("deme una libra") == {"1lb"}
+    assert measures("tanque de mil litros") == measures("tanque de 1.000 litros") == measures("1000 litros") == {"1000l"}
+    # Un decimal no es un punto de miles, y una palabra que no es número no se toca.
+    assert measures("gaseosa de 1.5 litros") == {"1.5l"} and measures("unas pulgadas") == set()
 
 
 def _selected(catalog, message, **item):

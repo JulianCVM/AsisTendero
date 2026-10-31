@@ -11,9 +11,8 @@ from uuid import uuid4
 from asistendero.agente.entrada.guardrails import redact_personal_data
 from asistendero.agente.flujo.graph import Planner, ToolExecutor, after_retrieve, after_validate, build_graph, next_node
 from asistendero.agente.herramientas.executor import catalog_executor
-from asistendero.agente.modelo.grok import (
-    AGENT_PROMPT, DEFAULT_BASE_URL, PROMPT_VERSION, Decision, ModelError, current_model, decide_with_grok,
-)
+from asistendero.agente.modelo.grok import DEFAULT_BASE_URL, Decision, ModelError, current_model, decide_with_grok
+from asistendero.agente.modelo.prompt import active_prompt
 from asistendero.observabilidad.pricing import call_cost, run_cost
 from asistendero.tienda.catalogo.catalog import MockCatalog, tokens
 
@@ -73,7 +72,7 @@ def run_traced(
             "phase": phase,
             "endpoint": _visible_endpoint(),
             "model": current_model(),
-            "instructions": AGENT_PROMPT,
+            "instructions": active_prompt()[1],
             "mensaje": message,
             "observaciones": observations,
             "llamadas_disponibles": remaining,
@@ -113,7 +112,7 @@ def run_traced(
 
     # Los datos personales no quedan en la traza ni en los reportes del evaluador.
     push("input", details={"run_id": run_id, "consulta": redact_personal_data(query)[0],
-                           "prompt_version": PROMPT_VERSION, "sesion": bool(context)})
+                           "prompt_version": active_prompt()[0], "sesion": bool(context)})
     start_node("validate")
     graph = build_graph(tool_executor, traced_planner)
     for chunk in graph.stream({"consulta": query, "contexto": context}, stream_mode="updates"):
@@ -214,7 +213,7 @@ def run_traced(
 
     final_details = {
         "run_id": run_id,
-        "prompt_version": state.get("prompt_version", PROMPT_VERSION),
+        "prompt_version": state.get("prompt_version", active_prompt()[0]),
         "estado": state["estado"],
         "respuesta": state["respuesta"],
         "error": state.get("error"),

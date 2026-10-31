@@ -1,6 +1,7 @@
 """Comprobaciones de un turno evaluado: qué se esperaba, qué pasó y qué quedó en la traza."""
 
 from asistendero.agente.reglas.validation import grounded_products
+from asistendero.evaluacion.eval_oracle import analysis_reasons, leaked_codes, unbacked_prices
 
 
 def selected_skus(reference: str, tool_calls: list[dict]) -> list[str]:
@@ -34,6 +35,9 @@ def verdict(check: dict, result: dict, selected_skus: list[str]) -> list[str]:
     # Varias formas válidas de decir lo mismo (corrida 26: «ya no lo vamos a traer» o «está descontinuado»).
     reasons += [f"no dice ninguna de {' | '.join(options)}" for options in check.get("must_include_any", [])
                 if not any(option.casefold() in response for option in options)]
+    reasons += [f"precio sin respaldo {amount}" for amount in unbacked_prices(result["respuesta"], tool_calls)]
+    reasons += [f"muestra el código {sku}" for sku in leaked_codes(result["respuesta"], tool_calls)]
+    reasons += analysis_reasons(check, tool_calls, selected_skus)
     if "max_model_calls" in check and result["model_calls"] > check["max_model_calls"]:
         reasons.append(f"{result['model_calls']} llamadas a Grok")
     injection = result.get("inyeccion") or {}
@@ -57,6 +61,7 @@ def record(check: dict, result: dict, events: list[dict]) -> dict:
     reasons = verdict(check, result, skus)
     return {
         "query": check["query"],
+        "grupo": check.get("grupo"),
         "run_id": result["run_id"],
         "expected_status": check["expected_status"],
         "actual_status": result["estado"],

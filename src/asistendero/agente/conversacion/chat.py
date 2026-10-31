@@ -20,7 +20,7 @@ from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, Planner
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.herramientas.observations import ToolExecutor
 from asistendero.agente.modelo.grok import decide_with_grok
-from asistendero.agente.modelo.prompt import PROMPT_VERSION
+from asistendero.agente.modelo.prompt import active_prompt
 from asistendero.agente.reglas.choices import chosen_options, coherent_option_turn, shown_options
 from asistendero.agente.reglas.context_resolution import affirms_active_item, updated_specs
 from asistendero.agente.reglas.shopping_list import updated_list
@@ -62,7 +62,7 @@ def _without_grok(store: SessionStore, session_id: str, message: str, status: st
               "elapsed_ms": elapsed, "details": details})
 
     push("route", {"motivo": reason})
-    push("final", {"run_id": run_id, "prompt_version": PROMPT_VERSION, "estado": status, "respuesta": reply,
+    push("final", {"run_id": run_id, "prompt_version": active_prompt()[0], "estado": status, "respuesta": reply,
                    "error": None, "model_called": False, "model_calls": 0, "barreras": [], "inyeccion": None,
                    "tool_calls": 0, "tools_requested": [], "tools_executed": [], "input_tokens": None,
                    "output_tokens": None, "cached_input_tokens": None, "cache_hit_percent": 0.0, "total_tokens": None,
@@ -71,7 +71,7 @@ def _without_grok(store: SessionStore, session_id: str, message: str, status: st
           "lista": [], "bloqueada": False, "atencion": attention(store, session_id)})
     return {"run_id": run_id, "consulta": customer, "respuesta": reply, "estado": status, "error": None,
             "model_called": False, "model_calls": 0, "tool_calls": [], "referencia": "",
-            "prompt_version": PROMPT_VERSION, "duration_ms": elapsed, "cost": None, "session_id": session_id,
+            "prompt_version": active_prompt()[0], "duration_ms": elapsed, "cost": None, "session_id": session_id,
             "turno": turn}
 
 
@@ -118,7 +118,7 @@ def run_turn(
         return human
     previous = last_status(store, session_id)
     if tool_executor is None:
-        catalog = MockCatalog(orders.path) if orders is not None else MockCatalog()
+        catalog = MockCatalog(orders.path, orders.business_id, orders.store_id) if orders is not None else MockCatalog()
         tool_executor = catalog_executor(catalog, orders, session_id)
     result = run_traced(message, emit, tool_executor, planner, context=context)
     consulta = result["consulta"]

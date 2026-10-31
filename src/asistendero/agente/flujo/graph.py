@@ -19,7 +19,7 @@ from asistendero.agente.herramientas.observations import (
     error_envelope, execute_safely, observation_for_model, order_results, search_findings, ToolCall, ToolExecutor,
 )
 from asistendero.agente.modelo.grok import ORDER_TOOLS, Decision, ModelError
-from asistendero.agente.modelo.prompt import PROMPT_VERSION
+from asistendero.agente.modelo.prompt import active_prompt
 from asistendero.agente.reglas.choices import (
     check_reference, chosen_options, pagination_group, pending_quantity_quote, unresolved_ordinal,
     without_chosen_measures,
@@ -399,13 +399,13 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
     def respond(state: AgentState) -> dict:
         injection = state.get("inyeccion")
         if injection:
-            return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0, "estado": "blocked",
+            return {"prompt_version": active_prompt()[0], "model_called": False, "model_calls": 0, "estado": "blocked",
                     "respuesta": blocked_reply(state.get("contexto")),
                     "error": {"code": "INJECTION_DETECTED", "message": INJECTION_CODES[injection["code"]]}}
         guard = state.get("filtro") or {}
         notes = [note for note in (guard.get("refusal"), PERSONAL_DATA_NOTE if guard.get("redacted") else "") if note]
         if not state["consulta"]:
-            return {"prompt_version": PROMPT_VERSION, "model_called": False, "model_calls": 0,
+            return {"prompt_version": active_prompt()[0], "model_called": False, "model_calls": 0,
                     "estado": "refused", "respuesta": " ".join([*notes, REFUSAL_CLOSING])}
         update = _respond(state)
         update["respuesta"] = with_reservation_note(state["consulta"], update["respuesta"], state["tool_calls"],
@@ -416,7 +416,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
 
     def _respond(state: AgentState) -> dict:
         message, calls = state["referencia"], state["tool_calls"]
-        common = {"prompt_version": PROMPT_VERSION, "model_called": state.get("model_called", False),
+        common = {"prompt_version": active_prompt()[0], "model_called": state.get("model_called", False),
                   "model_calls": state.get("model_calls", 0)}
         error = state.get("error")
         decision = state["decisiones"][-1] if state["decisiones"] else None

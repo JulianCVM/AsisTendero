@@ -8,6 +8,8 @@ PVC de presión para agua solo existe en 1/2 y 3/4 de pulgada, y las seis filas 
 
 import hashlib
 
+from asistendero.datos.catalog_ampliacion import EXTRA_FAMILIES
+
 
 # Filas del corte S2: precio y existencias fijos porque la evidencia y las pruebas dependen de ellos.
 LEGACY = [
@@ -326,10 +328,15 @@ def _stock(sku: str) -> int:
     return 0 if digest % 12 == 0 else 1 + digest % 60
 
 
-def build_products() -> list[tuple[str, str, str, str, int, int, str, str]]:
-    """Filas (SKU, nombre, variante, unidad, precio, stock, términos, categoría), sin SKU repetidos."""
-    rows = list(LEGACY)
-    for prefix, name, unit, category, terms, variants in FAMILIES:
+def build_products(families: list | None = None, legacy: list | None = None) -> list[tuple[str, str, str, str, int, int, str, str]]:
+    """Filas (SKU, nombre, variante, unidad, precio, stock, términos, categoría), sin SKU repetidos.
+
+    Sin argumentos arma la ferretería (filas de S2, familias y su ampliación); otro negocio pasa sus familias.
+    """
+    if families is None:
+        families, legacy = FAMILIES + EXTRA_FAMILIES, LEGACY
+    rows = list(legacy or [])
+    for prefix, name, unit, category, terms, variants in families:
         for code, variant, price in variants:
             sku = f"{prefix}-{code}"
             rows.append((sku, name, variant, unit, int(price), _stock(sku), terms, category))

@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 
 from asistendero.datos.catalog_data import build_products
+from asistendero.datos.catalog_mercado import MARKET_BUSINESS_ID, MARKET_FAMILIES, MARKET_RESTOCKS, MARKET_STORE_INFO
 
 
 DEMO_BUSINESS_ID = "demo-ferreteria"
@@ -16,9 +17,12 @@ DEFAULT_DB_PATH = Path(".local/mock_catalog_s3.sqlite3")
 UPDATED_AT = "2026-10-15T00:00:00-05:00"
 
 _ROWS = build_products()
-# SKU, nombre, variante, unidad, precio COP, stock, términos de búsqueda.
+# SKU, nombre, variante, unidad, precio COP, stock, términos de búsqueda (la ferretería).
 PRODUCTS = [row[:7] for row in _ROWS]
 CATEGORIES = {row[0]: row[7] for row in _ROWS}
+_MARKET_ROWS = build_products(MARKET_FAMILIES)
+MARKET_PRODUCTS = [row[:7] for row in _MARKET_ROWS]
+MARKET_CATEGORIES = {row[0]: row[7] for row in _MARKET_ROWS}
 
 # Información de la tienda de demostración que lee consultar_info_tienda. Todo es ficticio.
 STORE_INFO = {
@@ -51,6 +55,17 @@ STORE_INFO = {
 }
 # Temas agregados después de crear una base: upgrade_db los escribe en bases existentes.
 UPGRADED_TOPICS = ("contacto", "pedidos", "facturacion")
+
+# Los dos negocios de demostración, por el nombre con que los elige el servidor (nunca el cliente ni Grok).
+BUSINESSES = {"ferreteria": DEMO_BUSINESS_ID, "mercado": MARKET_BUSINESS_ID}
+
+
+def _seed_rows(business_id: str) -> tuple[list[tuple], dict, dict, dict]:
+    """Productos, categorías, información y surtido de un negocio de demostración."""
+    if business_id == MARKET_BUSINESS_ID:
+        return MARKET_PRODUCTS, MARKET_CATEGORIES, MARKET_STORE_INFO, MARKET_RESTOCKS
+    return PRODUCTS, CATEGORIES, STORE_INFO, RESTOCKS
+
 
 # Surtido que anota el tendero (restock.py): día del proveedor, fecha o «descontinuado». Sin fila, sin dato.
 RESTOCK_SCHEMA = """
@@ -131,9 +146,38 @@ def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
                 [(DEMO_BUSINESS_ID, DEMO_STORE_ID, topic, json.dumps(STORE_INFO[topic], ensure_ascii=False))
                  for topic in UPGRADED_TOPICS],
             )
+            _add_missing(connection)
     finally:
         connection.close()
     return path
+
+
+def _add_missing(connection: sqlite3.Connection) -> None:
+    """Productos nuevos de la siembra (la ampliación del 31-10 y la tienda de mercado) en una base existente.
+
+    Solo inserta los SKU que la base no tiene: nunca cambia un precio o un stock que el tendero ya editó. La tienda
+    de mercado entra completa la primera vez, con su información y su surtido.
+    """
+    for business_id in BUSINESSES.values():
+        products, categories, info, restocks = _seed_rows(business_id)
+        known = {row[0] for row in connection.execute(
+            "SELECT sku FROM products WHERE business_id = ? AND store_id = ?", (business_id, DEMO_STORE_ID))}
+        new = [product for product in products if product[0] not in known]
+        connection.executemany(
+            "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(business_id, DEMO_STORE_ID, *product, UPDATED_AT, categories[product[0]]) for product in new],
+        )
+        if business_id == DEMO_BUSINESS_ID:
+            continue
+        connection.executemany(
+            "INSERT OR IGNORE INTO store_info VALUES (?, ?, ?, ?)",
+            [(business_id, DEMO_STORE_ID, topic, json.dumps(content, ensure_ascii=False)) for topic, content in info.items()],
+        )
+        if not known:
+            connection.executemany(
+                "INSERT OR IGNORE INTO restocks VALUES (?, ?, ?, ?, ?)",
+                [(business_id, DEMO_STORE_ID, sku, plan, UPDATED_AT) for sku, plan in restocks.items()],
+            )
 
 
 def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
@@ -193,7 +237,9 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
 
 
 def main() -> None:
-    print(f"Catálogo ficticio de {len(PRODUCTS)} variantes creado en {create_mock_db()}")
+    path = create_mock_db()
+    print(f"Catálogo ficticio creado en {path}: ferretería con {len(PRODUCTS)} variantes y tienda de mercado con "
+          f"{len(MARKET_PRODUCTS)}.")
 
 
 if __name__ == "__main__":

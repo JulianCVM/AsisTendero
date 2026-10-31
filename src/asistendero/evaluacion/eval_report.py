@@ -6,6 +6,8 @@ costo conocido y lo dice (``cost_complete``): un dato ausente nunca se cuenta co
 
 from decimal import Decimal
 
+from asistendero.evaluacion.eval_oracle import paraphrase_groups
+
 # Una llamada «con caché» es la que reutilizó al menos la mitad de su entrada: el prompt fijo ocupa cerca del 85 %.
 # Contar solo «más de cero» no sirve: la pasarela cachea siempre el primer bloque de 128 tokens, y en las corridas del
 # 24-10-2026 las llamadas que cayeron en un servidor frío (128 de unos 2.800 tokens) contaban como aciertos.
@@ -99,6 +101,8 @@ def summarize(report: dict) -> dict:
         # Los fallos controlados también consumen (F-01 llama a Grok): cuentan en el consumo, no por tarea.
         "failures_cost_usd": format(sum((cost for cost in failure_costs if cost is not None), Decimal(0)), ".6f"),
         "failed_ids": [record["id"] for record in records if not record["passed"]],
+        "paraphrase_groups": (groups := paraphrase_groups(records)),
+        "paraphrase_consistent": sum(group["consistent"] for group in groups.values()),
         "by_suite": {
             name: {**values, "cost_usd": format(values["cost_usd"], ".6f")} for name, values in sorted(by_suite.items())
         },

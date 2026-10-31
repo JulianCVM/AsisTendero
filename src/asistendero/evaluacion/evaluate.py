@@ -21,7 +21,8 @@ from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.modelo.grok import (
     ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, current_model, decide_with_grok, decision_from_raw,
 )
-from asistendero.datos.seed import DEFAULT_DB_PATH, upgrade_db
+from asistendero.agente.modelo.prompt import PROMPTS, serving
+from asistendero.datos.seed import BUSINESSES, DEFAULT_DB_PATH, upgrade_db
 from asistendero.evaluacion.eval_checks import record
 from asistendero.evaluacion.eval_report import comparison_markdown, record_cost, summarize
 from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock, run_clients, run_conversation, store_time, using_model
@@ -32,7 +33,8 @@ from asistendero.tienda.catalogo.catalog import MockCatalog
 
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
 SUITES = ("s2", "catalogo", "tienda", "seguridad", "conversacion", "ruido", "pedidos", "sesion_larga", "concurrencia",
-          "extremos", "flujos", "variados", "inyeccion", "memoria", "natural", "surtido", "fallas")
+          "extremos", "flujos", "variados", "inyeccion", "memoria", "natural", "surtido", "fallas", "ampliacion",
+          "mercado", "parafrasis")
 # Más hilos no prueban nada nuevo y en S3 cinco corridas en paralelo agotaron la memoria del equipo.
 MAX_CONCURRENCY = 6
 INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"
@@ -149,7 +151,10 @@ def evaluate_cases(
     """
     skipped = skip_ids or set()
     selected_cases = [case for case in cases if case["id"] not in skipped]
-    executor = catalog_executor(catalog)
+    # Un ejecutor por negocio sobre la misma base: el de la ferretería es el catálogo que se recibió.
+    executors = {kind: catalog_executor(catalog if kind == "ferreteria" else
+                                        MockCatalog(catalog.path, BUSINESSES[kind], catalog.store_id))
+                 for kind in BUSINESSES}
     rotation = list(models or [])
     lock = threading.Lock()
     spent = {"usd": Decimal(0)}
@@ -165,19 +170,21 @@ def evaluate_cases(
                 return None
         # El caso i arranca la rueda en el modelo i: así cada modelo atiende a todos los tipos de cliente.
         turn = rotation[index % len(rotation):] + rotation[:index % len(rotation)] if rotation else []
+        kind = case.get("negocio", "ferreteria")
         try:
-            with using_model(turn[0] if turn else None):
+            with using_model(turn[0] if turn else None), serving(kind):
                 if "clients" in case:
                     clients = turn or [current_model()]
                     result = run_clients(case, catalog_path=catalog.path, folder=folder, planner=planner, models=clients)
                 elif "turns" in case:
                     result = run_conversation(case, catalog_path=catalog.path, folder=folder, planner=planner)
                 else:
-                    result = _run_record(case, executor=executor, planner=planner)
+                    result = _run_record(case, executor=executors[kind], planner=planner)
         except BaseException:
             # Un caso que revienta (o un Ctrl-C) detiene la corrida: los casos en cola no deben seguir gastando.
             stop.set()
             raise
+        result.update(negocio=kind, prompt_version=PROMPTS[kind][0])
         with lock:
             spent["usd"] += record_cost(result) or 0
             on_record(result)
@@ -199,6 +206,8 @@ def evaluate_cases(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "model": current_model(),
         "prompt_version": PROMPT_VERSION,
+        # Con casos de la tienda de mercado, la corrida usa más de un prompt: cada renglón dice el suyo.
+        "prompt_versions": sorted({record["prompt_version"] for record in records}),
         "mock_db_sha256": hashlib.sha256(catalog.path.read_bytes()).hexdigest(),
         "skipped_ids": sorted(skipped),
         # En un caso con clientes, cada cliente usa su modelo; el renglón del caso los junta en un texto.
@@ -281,7 +290,7 @@ def main() -> int:
     partial_path = Path(".local") / f"eval-{started:%Y%m%dT%H%M%S%fZ}.partial.jsonl"
 
     def log_partial(record: dict) -> None:
-        line = {"id": record["id"], "model": record["model"], "prompt_version": PROMPT_VERSION, **state,
+        line = {"id": record["id"], "model": record["model"], "prompt_version": record["prompt_version"], **state,
                 "passed": record["passed"], "model_calls": record["model_calls"],
                 "total_tokens": record.get("total_tokens"), "cost": record.get("cost")}
         with partial_path.open("a", encoding="utf-8") as handle:

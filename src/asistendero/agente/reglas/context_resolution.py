@@ -3,7 +3,8 @@
 import re
 
 from asistendero.agente.respuesta.store_replies import asks_assortment
-from asistendero.datos.seed import PRODUCTS
+from asistendero.agente.modelo.prompt import BUSINESS_KIND
+from asistendero.datos.seed import MARKET_PRODUCTS, PRODUCTS
 from asistendero.tienda.catalogo.catalog import covers, Product, tokens
 from asistendero.tienda.catalogo.measures import (
     SALE_UNITS, atom_support, canonical_text, contradicts, measures, split_atom,
@@ -70,10 +71,10 @@ AFFIRMATIVE_SHORT = re.compile(
 )
 
 
-def _build_catalog_index() -> tuple[dict[str, str], dict[str, set[str]]]:
+def _build_catalog_index(rows: list[tuple]) -> tuple[dict[str, str], dict[str, set[str]]]:
     canonical_head: dict[str, str] = {}
     family_words: dict[str, set[str]] = {}
-    for row in PRODUCTS:
+    for row in rows:
         first = canonical_text(row[1].split()[0])
         base = first[:-1] if first.endswith("s") and first not in {"guantes", "gafas", "botas"} else first
         for tok in tokens(first):
@@ -82,7 +83,20 @@ def _build_catalog_index() -> tuple[dict[str, str], dict[str, set[str]]]:
     return canonical_head, family_words
 
 
-_CANONICAL_HEAD, _FAMILY_WORDS = _build_catalog_index()
+def _rows() -> list[tuple]:
+    """Productos del negocio que atiende este hilo: un turno de la tienda de mercado nunca apunta a la ferretería."""
+    return MARKET_PRODUCTS if BUSINESS_KIND.get() == "mercado" else PRODUCTS
+
+
+_INDEXES = {kind: _build_catalog_index(rows) for kind, rows in (("ferreteria", PRODUCTS), ("mercado", MARKET_PRODUCTS))}
+
+
+def _heads() -> dict[str, str]:
+    return _INDEXES[BUSINESS_KIND.get()][0]
+
+
+def _families() -> dict[str, set[str]]:
+    return _INDEXES[BUSINESS_KIND.get()][1]
 
 
 def _format_subject(head: str, materials: list[str]) -> str:
@@ -94,8 +108,8 @@ def _heads_in_text(text: str) -> list[str]:
     found: list[str] = []
     for raw in re.findall(r"[a-z0-9]+", canonical_text(without_quantities(text))):
         for tok in tokens(raw):
-            if tok in _CANONICAL_HEAD and _CANONICAL_HEAD[tok] not in found:
-                found.append(_CANONICAL_HEAD[tok])
+            if tok in _heads() and _heads()[tok] not in found:
+                found.append(_heads()[tok])
     return found
 
 
@@ -117,7 +131,7 @@ def previous_product_subject(context: dict | None) -> tuple[str, str] | None:
                 head = heads[0]
                 refused = negated_words(canonical_text(group_text), tokens)
                 mats = [w for w in re.findall(r"[a-z]+", canonical_text(group_text))
-                        if w in MATERIAL_WORDS and w in _FAMILY_WORDS.get(head, set()) and w not in refused]
+                        if w in MATERIAL_WORDS and w in _families().get(head, set()) and w not in refused]
                 unique_mats = list(dict.fromkeys(mats))
                 return _format_subject(head, unique_mats), head
     if turns:
@@ -127,7 +141,7 @@ def previous_product_subject(context: dict | None) -> tuple[str, str] | None:
             head = heads[0]
             refused = negated_words(canonical_text(last_client), tokens)
             mats = [w for w in re.findall(r"[a-z]+", canonical_text(last_client))
-                    if w in MATERIAL_WORDS and w in _FAMILY_WORDS.get(head, set()) and w not in refused]
+                    if w in MATERIAL_WORDS and w in _families().get(head, set()) and w not in refused]
             return _format_subject(head, list(dict.fromkeys(mats))), head
     return None
 
@@ -148,7 +162,7 @@ def is_elliptical_turn(message: str, context: dict | None) -> tuple[str, str] | 
     msg_atoms = measures(clean)
     if not words and not msg_atoms:
         return None
-    family_words = _FAMILY_WORDS.get(head, set())
+    family_words = _families().get(head, set())
     option_words = set().union(
         *(tokens(f"{opt.get('nombre', '')} {opt.get('variante', '')}")
           for grp in ((context or {}).get("opciones") or [])
@@ -156,7 +170,7 @@ def is_elliptical_turn(message: str, context: dict | None) -> tuple[str, str] | 
         set(),
     )
     known_modifiers = family_words | option_words | SALE_UNIT_TOKENS
-    foreign_heads = {w for w in words if w in _CANONICAL_HEAD and _CANONICAL_HEAD[w] != head}
+    foreign_heads = {w for w in words if w in _heads() and _heads()[w] != head}
     if any(w not in known_modifiers for w in foreign_heads):
         return None
     if foreign_heads and (_ASKS_WHAT_HAS.search(clean) or _NEW_PRODUCT_OPENING.search(clean)):
@@ -174,7 +188,7 @@ def enrich_elliptical_text(item_text: str, message: str, context: dict | None) -
     if elliptical is None:
         return item_text.strip(), None
     subject, head = elliptical
-    item_heads = {h for h in _heads_in_text(item_text) if h != head and h not in _FAMILY_WORDS.get(head, set())}
+    item_heads = {h for h in _heads_in_text(item_text) if h != head and h not in _families().get(head, set())}
     if item_heads:
         return item_text.strip(), None
     if head in tokens(item_text):
@@ -194,7 +208,7 @@ def _clause_spec(clause: str, head: str) -> dict[str, str]:
     spec: dict[str, str] = {}
     if ASKS_ALL_MEASURES.search(clean):
         spec["reset_medida"] = "1"
-    family = _FAMILY_WORDS.get(head, set())
+    family = _families().get(head, set())
     gal_frac = _GALLON_FRACTION.findall(clean)
     if gal_frac:
         spec["presentacion"] = f"{gal_frac[-1]} de galón"
@@ -573,7 +587,7 @@ def pending_quantity_target(context: dict | None) -> dict | None:
     if len(assistant_heads) == 1:
         head = next(iter(assistant_heads))
         candidates = []
-        for sku, name, variant, unit, *_ in PRODUCTS:
+        for sku, name, variant, unit, *_ in _rows():
             first = canonical_text(name.split()[0])
             row_head = first[:-1] if first.endswith("s") and first not in {"guantes", "gafas", "botas"} else first
             if row_head != head or not _item_fits_assistant(name, variant, assistant_norm):

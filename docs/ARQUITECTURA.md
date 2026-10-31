@@ -56,7 +56,7 @@ Cuatro módulos. Cada submódulo agrupa procesos que se ven desde afuera; las fu
 |---|---|
 | C1. Traza | `run_id`, latencia, tokens, costo por llamada, llave omitida |
 | C2. Mapa del harness | Nodos y conexiones atados al grafo compilado |
-| C3. Evaluación | 257 casos en 17 suites, sesiones con varios clientes, reporte y comparación |
+| C3. Evaluación | 334 casos en 20 suites y dos negocios, sesiones con varios clientes, oráculo de precios y códigos, reporte y comparación |
 
 ### D. Entregas (cómo se usa)
 

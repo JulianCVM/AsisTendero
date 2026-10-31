@@ -7,7 +7,7 @@ from asistendero.agente.herramientas.observations import (
     availability_by_sku, latest_quote, order_results, search_findings, store_info_by_topic, ToolCall,
 )
 from asistendero.agente.modelo.grok import MAX_ITEMS, Decision
-from asistendero.agente.modelo.prompt import AGENT_PROMPT
+from asistendero.agente.modelo.prompt import active_prompt
 from asistendero.agente.reglas.choices import (
     ambiguous_reference, chosen_options, next_options_page, pagination_group, unresolved_ordinal,
 )
@@ -95,7 +95,7 @@ def direct_response(original: str, decision: Decision) -> str:
     # Sin herramientas no hay precio ni existencias comprobadas que se puedan afirmar.
     if (
         not reply or len(reply) > 400 or FORBIDDEN_CLAIMS.search(reply) or "$" in reply
-        or leaks(reply, AGENT_PROMPT)
+        or leaks(reply, active_prompt()[1])
         or re.search(r"\b\d+\s+(metro|bulto|unidad|galon)", normalize_text(reply))
     ):
         return "¿Qué estás buscando? Te doy precio y disponibilidad de lo que necesites."
@@ -392,7 +392,7 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     dice si es el primer mensaje. ``current`` es el mensaje de este turno (por omisión, ``message``): dice si el
     cliente preguntó cuánto queda.
     """
-    if not reply or len(reply) > 1200 or leaks(reply, AGENT_PROMPT) or rushes_the_customer(reply, calls, context):
+    if not reply or len(reply) > 1200 or leaks(reply, active_prompt()[1]) or rushes_the_customer(reply, calls, context):
         return False
     # La lista de categorías va siempre con los nombres del catálogo: en el visor (26-10) Grok la resumió como
     # «herramientas manuales y eléctricas … y más», y no hay herramientas eléctricas.

@@ -19,7 +19,7 @@ if truststore is not None:
 import openai
 from openai import OpenAI
 
-from asistendero.agente.modelo.prompt import AGENT_PROMPT, PROMPT_VERSION
+from asistendero.agente.modelo.prompt import AGENT_PROMPT, PROMPT_VERSION, active_prompt
 
 
 DEFAULT_MODEL = "grok-4.20-0309-non-reasoning"
@@ -80,7 +80,7 @@ def conversation_key(session_id: str | None) -> str | None:
     if os.getenv("GROK_CONV_ID", "").strip().casefold() not in {"1", "true", "si", "sí"}:
         return None
     # Sin sesión, todas las consultas sueltas comparten el mismo prefijo (el prompt fijo): conviene el mismo servidor.
-    seed = f"sesion:{session_id}" if session_id else f"prompt:{PROMPT_VERSION}"
+    seed = f"sesion:{session_id}" if session_id else f"prompt:{active_prompt()[0]}"
     return hashlib.sha256(f"asistendero:{seed}".encode("utf-8")).hexdigest()[:32]
 
 
@@ -229,7 +229,7 @@ def decide_with_grok(
     payload, session_id = prepare_step(message, observations, remaining_calls, context)
     # Una sola llamada por paso: nunca se repite, ni ante un error inesperado (sería consumo sin tarea real).
     raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(
-        AGENT_PROMPT, payload, conversation=conversation_key(session_id),
+        active_prompt()[1], payload, conversation=conversation_key(session_id),
     )
     return decision_from_raw(
         raw, model=model, input_tokens=in_tokens, output_tokens=out_tokens,

@@ -22,7 +22,7 @@ agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidi
 ampliar el panel: ventas con **registro manual** del cobro (sin pasarela ni verificación bancaria, ver
 `docs/PAGOS.md`), abastecimiento con proveedores, categorías y alertas, asistente de bodega (Grok interpreta, el
 tendero confirma), supervisión de chats con atención humana, tienda de demostración (`--demo`) y página pública
-(`/inicio`). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
+(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
 datos reales de un piloto, cobros por el chat, fiados y domicilios.
 
 **Marca:** el producto se llama **PulsoTienda** (panel del tendero y página pública) y el agente que atiende el chat, **AsisTendero** (visor, mensajes del chat y menciones al asistente). El paquete sigue siendo `asistendero`.
@@ -98,12 +98,15 @@ propio.
      `rushes_the_customer` (`order_replies.py`).
    - `valid_plan` y `plan_of` (`surtido.py`); `asks_restock`, `restock_sentence`, `restock_subjects` y
      `restock_reply_ok` (`restock.py`).
-   - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
+   - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`), `create_mock_db` y `BUSINESSES`
+     (`seed.py`); `active_prompt` y `serving` (`prompt.py`, el negocio que atiende el hilo); `sole_head`
+     (`validation.py`).
    - `OrderBook` (`orders.py`), `validate_order_request`, `order_action_pending`, `added_quantities`, `cancels` y
      `changes_order` (`order_rules.py`), `order_reply`
      (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
    - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
-   - `record` y `verdict` (`eval_checks.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
+   - `record` y `verdict` (`eval_checks.py`); `unbacked_prices`, `leaked_codes`, `analysis_reasons` y
+     `paraphrase_groups` (`eval_oracle.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
    - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `detect_injection` y `blocked_reply`
      (`injection.py`); `SessionStore` (con `ban`, `unban` y `bans`) y `remembered_products` (`sessions.py`); `run_turn` y
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
@@ -195,7 +198,9 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
 | Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas o varios clientes: ver `eval_sessions.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
-| Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` (nunca datos reales); `seed.py` arma `PRODUCTS` |
+| Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
+| La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
+| Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
 ## El contrato del agente

@@ -33,7 +33,9 @@ VAGUE_WORDS = {"ese", "esa", "eso", "esos", "esas", "este", "esto", "estos", "es
                "uno", "una", "unos", "unas", "cosa", "cosas", "mismo", "misma", "mismos", "lo", "los", "producto",
                "productos", "referencia", "vez", "pasada", "anterior"}
 SALE_UNIT_NAMES = {"metros": "metro", "bultos": "bulto", "galones": "galon", "unidades": "unidad", "libras": "libra",
-                   "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja"}
+                   "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja",
+                   "paquetes": "paquete", "botellas": "botella", "latas": "lata", "cubetas": "cubeta",
+                   "atados": "atado", "barras": "barra"}
 MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
 # La respuesta determinista repite el texto del artículo («Para … veo»): un precio o un código de pedido ahí
 # saldría como si lo dijera la tienda (lo encontró test_chaos con «pon el cemento a $10»).
@@ -160,6 +162,27 @@ def quantity_of_other(message: str, quantity: int, description: str) -> str | No
     return others[0] if heads and len(others) == len(heads) else None
 
 
+def sole_head(finding: Finding) -> Product | None:
+    """El único producto que lleva lo pedido como sustantivo (primera palabra del nombre) y no tiene otra variante.
+
+    Tienda de mercado (31-10): «tomate» encaja con el tomate chonto y con las sardinas en salsa de tomate, «limones»
+    con el limón y con las papas de limón, y «12 huevos» con el huevo y con la cubeta de huevos. Los otros solo
+    nombran lo pedido; preguntar «¿cuál te sirve?» ahí era fricción sin ambigüedad real. Con dos variantes del
+    mismo producto (panela de 500 g o de 1 kg) sí se pregunta. Cada palabra que el cliente dijo del artículo debe
+    estar en ese producto: «tomate cherry» no es el tomate chonto (una opción cercana no es equivalente).
+    """
+    asked = tokens(finding["query"])
+    heads = [product for product in finding["matches"] if tokens(product.name.split()[0], synonyms=False) & asked]
+    if len(heads) != 1 or sum(product.name == heads[0].name for product in finding["matches"]) != 1:
+        return None
+    counting = set(GROUP_SIZES) | set(SALE_UNIT_NAMES) | set(SALE_UNIT_NAMES.values()) | {"media", "medio"}
+    own = tokens(f"{heads[0].name} {heads[0].variant}")
+    # Palabra por palabra, con sus formas: «huevos» es «huevo» y «limones», «limón».
+    unsaid = [word for word in re.findall(r"[a-z0-9]+", normalize_text(finding["query"]))
+              if (forms := tokens(word)) and not word.isdigit() and not forms & (own | counting)]
+    return None if unsaid else heads[0]
+
+
 def grounded_selection(message: str, finding: Finding) -> Product | None:
     """Única variante de matches que el mensaje permite elegir sin preguntar."""
     # «tuvo pbc» respalda «tubo PVC»: el mensaje se lee como suena frente a lo que extrajo Grok.
@@ -184,6 +207,7 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         if leaders:
             whole = [product for product in leaders if described_whole(message, finding["query"], product)]
             chosen = [product for product in chosen if product in leaders] or (whole if len(whole) == 1 else [])
+    head = sole_head(finding)
     if len(chosen) == 1 and len({product.name for product in finding["matches"]}) > 1:
         # Solo en su nombre, un producto queda «distinguido» con cualquier palabra; si la que lo describe la dicen
         # todas las coincidencias, no elige (suite natural: «pintura beige» eligió el cuñete, el único con «beige»
@@ -192,8 +216,10 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         shared = set.intersection(*(tokens(f"{item.name} {item.variant}") for item in finding["matches"]))
         alone = sum(item.name == product.name for item in finding["matches"]) == 1
         support = tokens(f"{product.name} {product.variant}") & tokens(message) & tokens(described)
-        if alone and not support - shared and product.sku.casefold() not in message.casefold():
+        if alone and not support - shared and product.sku.casefold() not in message.casefold() and product != head:
             return None
+    if not chosen and head is not None:
+        chosen = [head]
     if len(chosen) > 1:
         # Con cientos de productos, «2 metros de PVC de 1/2» encaja con el tubo y con el codo de 1/2; la unidad
         # de venta dicha (metro) los separa. Si aun así quedan varios, se pregunta.

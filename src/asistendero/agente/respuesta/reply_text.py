@@ -16,8 +16,10 @@ from asistendero.tienda.vocabulario import format_cop
 
 
 PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones", "libra": "libras",
-          "rollo": "rollos", "par": "pares", "pliego": "pliegos", "bolsa": "bolsas", "caja": "cajas"}
-FEMININE = {"unidad", "libra", "bolsa", "caja"}
+          "rollo": "rollos", "par": "pares", "pliego": "pliegos", "bolsa": "bolsas", "caja": "cajas",
+          "paquete": "paquetes", "botella": "botellas", "lata": "latas", "cubeta": "cubetas", "atado": "atados",
+          "barra": "barras"}
+FEMININE = {"unidad", "libra", "bolsa", "caja", "botella", "lata", "cubeta", "barra"}
 # Sustantivos femeninos del catálogo que no terminan en «a».
 FEMININE_NOUNS = {"llave", "lija", "cerradura"}
 # Una vez por conversación (el primer mensaje) o en cada consulta suelta: el catálogo es ficticio.
@@ -42,7 +44,8 @@ SUITABILITY_CLAIM = re.compile(r"\b(?:si\s+(?:te\s+)?sirve|claro\s+que\s+(?:si|s
                                r"|resiste\s+bien"
                                r"|aguanta\s+(?:bien|perfecto)|recomendad[oa]\s+para)\b")
 # Variantes que empiezan por la presentación: «cemento gris en bulto de 50 kg».
-PACKAGES = ("bulto", "galón", "galon", "caja", "bolsa", "rollo", "cuñete", "pliego", "juego", "par ", "kit")
+PACKAGES = ("bulto", "galón", "galon", "caja", "bolsa", "rollo", "cuñete", "pliego", "juego", "par ", "kit", "paquete",
+            "botella", "lata ", "cubeta", "vaso", "tubo de", "frasco", "sobre")
 
 
 def units(unit: str, amount: int) -> str:
