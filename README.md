@@ -121,6 +121,8 @@ GROK_BASE_URL=https://api.reto.pltk.mx/v1
 
 `.env` está excluido de Git. No subas la clave al repositorio ni la compartas en capturas o trazas. Cada consulta real puede consumir cupo o créditos.
 
+Si la llamada a la pasarela falla por el certificado (red con un proxy que firma con su propio certificado), `grok.py` usa los certificados del sistema cuando el paquete opcional `truststore` (MIT) está instalado; sin él, usa los de Python.
+
 En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes.
 
 ## Uso
@@ -249,7 +251,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `agente/modelo/` | `grok.py` (cliente de Grok, decisión y contrato de herramientas) y `prompt.py` (instrucciones del agente). |
 | `agente/flujo/` | `graph.py` (flujo LangGraph: Grok decide, el servidor valida, ejecuta y responde) y `reminders.py` (avisos cuando Grok responde sin un paso que el mensaje exige). |
 | `agente/entrada/` | Lo que se revisa antes de pensar: `injection.py` (inyecciones, con baneo), `guardrails.py` (temas delicados, datos personales, fugas del prompt) y `spelling.py` (mensajes mal escritos). |
-| `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `choices.py` (opciones mostradas) y `shopping_list.py` (lo cotizado en la conversación). |
+| `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `choices.py` (opciones mostradas y paginadas), `context_resolution.py` (turnos breves que se apoyan en el anterior y lo que el cliente ya dijo de cada producto) y `shopping_list.py` (lo cotizado en la conversación). |
 | `agente/herramientas/` | `tools.py` y `order_tools.py` (herramientas del servidor, `execute_tool`), `executor.py` (ejecutor real) y `observations.py` (lectura de sus respuestas). |
 | `agente/respuesta/` | `answers.py` (respuesta verificada contra las observaciones), `reply_text.py`, `store_replies.py`, `order_replies.py` y `restock.py` (qué puede afirmar Grok del surtido). |
 | `agente/conversacion/` | `sessions.py` (memoria acotada en SQLite), `chat.py` (un turno), `handoff.py` (paso al tendero), `order_watch.py` (vence pedidos y deja el aviso en la conversación) y `supervision.py` (bandeja de conversaciones del panel). |

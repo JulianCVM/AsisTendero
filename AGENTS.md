@@ -90,7 +90,10 @@ propio.
    - `list_lines`, `usable_lines`, `updated_list`, `removed_now` y `missing_from_quote` (`shopping_list.py`);
      `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount` y `without_negated`
      (`validation.py`); `without_quantities` y `negated_words` (`search.py`).
-   - `shown_options`, `chosen_options`, `ambiguous_reference` y `check_reference` (`choices.py`); `asks_stock`,
+   - `shown_options`, `chosen_options`, `ambiguous_reference`, `check_reference`, `pagination_group`,
+     `pending_quantity_quote` y `coherent_option_turn` (`choices.py`); `is_elliptical_turn`,
+     `enrich_elliptical_text`, `updated_specs`, `remembered_spec_for_item`, `filter_matches_by_spec`,
+     `affirms_active_item` y `pending_quantity_target` (`context_resolution.py`); `asks_stock`,
      `stock_note`, `gender_of`, `of_the`, `asks_suitability` y `whole_units_question` (`reply_text.py`);
      `rushes_the_customer` (`order_replies.py`).
    - `valid_plan` y `plan_of` (`surtido.py`); `asks_restock`, `restock_sentence`, `restock_subjects` y
@@ -160,6 +163,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Cambiar el texto de la respuesta (frases, líneas de cotización, opciones) | `reply_text.py` |
 | Qué recuerda la conversación de lo cotizado y cuándo se exige cotizar «todo» | `shopping_list.py`, con su prueba en `tests/test_shopping_list.py` |
 | Qué opciones se le mostraron al cliente y cómo se elige una por su orden o su atributo | `choices.py` (la tabla, en `sessions.py`), con su prueba en `tests/test_shopping_list.py` |
+| Un turno breve que se apoya en el anterior («de concreto», «sí, esa», «2 metros») o lo que el cliente ya fijó de un producto (medida, material) | `context_resolution.py` (la tabla `session_specs`, en `sessions.py`), con su prueba en `tests/test_shopping_list.py` |
 | Cuándo vuelve a llegar un producto o si ya no se trae, y qué puede decir Grok de eso | `restock.py` (la tabla, en `seed.py`; la edición, en `inventory.py`), con su prueba en `tests/test_restock.py` |
 | Un nodo o una ruta del flujo | `graph.py` (la traza usa `next_node`) |
 | Un aviso del servidor cuando Grok responde sin un paso que el mensaje exige | `reminders.py` (`pending_reminder`), con su prueba en `tests/test_graph.py` |

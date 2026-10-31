@@ -40,3 +40,21 @@ def test_grok_completion_reads_usage_from_api(monkeypatch):
     assert grok._complete("instrucciones", {"mensaje": "hola"}) == (
         '{"ok":true}', "grok-4.20-0309-non-reasoning", 1000, 200, 400, 13_300_000,
     )
+
+
+def test_truststore_is_optional_but_a_failure_injecting_it_is_not_hidden():
+    # En un proceso aparte: recargar grok aquí duplicaría ModelError para el resto de la suite.
+    import subprocess
+    import sys
+
+    def import_grok(setup: str) -> subprocess.CompletedProcess:
+        code = f"import sys, types\n{setup}\nimport asistendero.agente.modelo.grok\n"
+        return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
+
+    assert import_grok("sys.modules['truststore'] = None").returncode == 0
+    broken = import_grok(
+        "fake = types.ModuleType('truststore')\n"
+        "def inject_into_ssl():\n    raise RuntimeError('almacén de certificados roto')\n"
+        "fake.inject_into_ssl = inject_into_ssl\nsys.modules['truststore'] = fake"
+    )
+    assert broken.returncode != 0 and "almacén de certificados roto" in broken.stderr

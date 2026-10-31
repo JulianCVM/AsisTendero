@@ -377,3 +377,38 @@ def test_visual_server_keeps_the_session_on_the_server(monkeypatch, tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_visual_server_reuses_the_connection_only_after_reading_a_rejected_body(tmp_path):
+    # Con HTTP/1.1 la conexión sigue abierta: un cuerpo sin leer se leería como la siguiente solicitud.
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host = {"Host": f"127.0.0.1:{server.server_port}"}
+    body = json.dumps({"consulta": "GET /api/secreto HTTP/1.1"})
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            connection.request("POST", "/api/trace", body, {**host, "Content-Type": "text/plain"})
+        except PermissionError:
+            pytest.skip("Este entorno restringe conexiones a sockets locales")
+        rejected = connection.getresponse()
+        assert rejected.status == 415
+        rejected.read()
+        connection.request("POST", "/api/otra", body, {**host, "Content-Type": "application/json"})
+        missing = connection.getresponse()
+        assert missing.status == 404
+        missing.read()
+        connection.request("GET", "/api/harness", headers=host)
+        harness = connection.getresponse()
+        assert harness.status == 200 and "prompt_version" in json.loads(harness.read())
+        # Un cuerpo más largo que el límite no se lee: el servidor cierra la conexión en vez de reutilizarla.
+        connection.request("POST", "/api/trace", "x" * 5000, {**host, "Content-Type": "application/json"})
+        too_long = connection.getresponse()
+        assert too_long.status == 400 and too_long.getheader("Connection") == "close"
+        too_long.read()
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

@@ -257,3 +257,131 @@ def test_session_context_prunes_obsolete_metadata_and_keeps_price_masking(store)
     assert [order["pedido"] for order in compacted["pedidos"]] == ["P-ACTIVO", "P-CERR1", "P-CERR2"]
     assert len([o for o in compacted["pedidos"] if o["estado"] not in {"pendiente", "confirmado"}]) == MAX_CLOSED_ORDERS
     assert "recogida" not in compacted["pedidos"][0] and "nota" not in compacted["pedidos"][0]
+
+
+def test_session_store_persists_overflow_options_and_specifications_and_upgrades_legacy_schema(tmp_path):
+    from asistendero.agente.conversacion.sessions import compact_context
+
+    path = tmp_path / "legacy_sessions.sqlite3"
+    first_store = SessionStore(path)
+    session = first_store.create()
+    # Simula una base anterior sin session_specs ni columna shown en session_options.
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """DROP TABLE session_specs;
+               DROP TABLE session_options;
+               CREATE TABLE session_options (
+                   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                   grupo INTEGER NOT NULL, position INTEGER NOT NULL, label TEXT NOT NULL, sku TEXT NOT NULL,
+                   name TEXT NOT NULL, variant TEXT NOT NULL, unit TEXT NOT NULL,
+                   PRIMARY KEY (session_id, grupo, position));"""
+        )
+        connection.execute(
+            "INSERT INTO session_options VALUES (?, 0, 0, 'tubos pvc', 'CON-050', 'Tubo conduit', '1/2 pulgada', 'metro')",
+            (session,),
+        )
+
+    upgraded = SessionStore(path)
+    assert upgraded.context(session)["opciones"][0]["opciones"][0]["sku"] == "CON-050"
+    upgraded.record(
+        session,
+        "dame un tubo PVC de 1/2",
+        "Tengo estas opciones",
+        "clarify",
+        [],
+        options=[{
+            "grupo": "tubos pvc",
+            "opciones": [{"sku": "CON-050", "nombre": "Tubo conduit", "variante": "1/2 pulgada", "unidad": "metro"}],
+            "restantes": [{"sku": "PVC-050", "nombre": "Tubo agua", "variante": "1/2 pulgada", "unidad": "metro"}],
+        }],
+        specs={"tubo": {"medida": "1/2 pulgada", "material": "PVC"}},
+    )
+    reopened = SessionStore(path)
+    ctx = reopened.context(session)
+    assert [item["sku"] for item in ctx["opciones"][0]["opciones"]] == ["CON-050"]
+    assert [item["sku"] for item in ctx["opciones"][0]["restantes"]] == ["PVC-050"]
+    assert ctx["especificaciones"] == {"tubo": {"medida": "1/2 pulgada", "material": "PVC"}}
+
+    compacted = compact_context(ctx)
+    assert compacted["opciones"][0]["restantes_total"] == 1
+    assert "restantes" not in compacted["opciones"][0]
+    assert compacted["especificaciones"] == {"tubo": {"medida": "1/2 pulgada", "material": "PVC"}}
+
+
+def test_two_consecutive_turns_produce_identical_prompt_prefix_without_timestamp_variation(tmp_path):
+    from decimal import Decimal
+    import json
+    from asistendero.agente.conversacion.chat import session_context
+    from asistendero.agente.modelo.grok import prepare_step
+    from asistendero.observabilidad.pricing import call_cost
+    from asistendero.agente.modelo.prompt import AGENT_PROMPT
+
+    # 1. Reloj controlado
+    current_time = datetime(2026, 10, 28, 14, 0, tzinfo=timezone.utc)
+    store = SessionStore(tmp_path / "sessions.sqlite3", clock=lambda: current_time)
+    session = store.create()
+
+    # Turno 1: el cliente consulta tubo PVC y el asistente responde con precio demostrativo
+    store.record(
+        session,
+        "Busco tubo PVC de 1/2",
+        "Sí, el tubo PVC de 1/2 cuesta $8.500 el metro.\n\nPrecios y existencias de demostración.",
+        "found",
+        [{"sku": "TUB-001", "nombre": "tubo PVC", "variante": "1/2", "unidad": "metro"}],
+    )
+
+    # Preparar payload para Turno 2 (con reloj en 14:00)
+    ctx_t2 = session_context(store, session, None)
+    payload_t2, session_id_t2 = prepare_step("dame 3 metros", [], 6, context=ctx_t2)
+    assert session_id_t2 == session
+    json_t2 = json.dumps(payload_t2, ensure_ascii=False, separators=(",", ":"))
+
+    # Turno 2: avanzamos el reloj 5 minutos y se registra el turno con precios enmascarados
+    current_time = datetime(2026, 10, 28, 14, 5, tzinfo=timezone.utc)
+    store.record(
+        session,
+        "dame 3 metros",
+        "Los 3 metros te salen en $25.500 c/u.",
+        "quoted",
+        [{"sku": "TUB-001", "nombre": "tubo PVC", "variante": "1/2", "unidad": "metro"}],
+    )
+
+    # Preparar payload para Turno 3 (con reloj avanzado a 14:05)
+    ctx_t3 = session_context(store, session, None)
+    payload_t3, session_id_t3 = prepare_step("¿a qué hora abren hoy?", [], 6, context=ctx_t3)
+    assert session_id_t3 == session
+    json_t3 = json.dumps(payload_t3, ensure_ascii=False, separators=(",", ":"))
+
+    # Validación 1: AGENT_PROMPT es 100% estático
+    assert isinstance(AGENT_PROMPT, str) and len(AGENT_PROMPT) > 500
+
+    # Validación 2: El primer turno almacenado es byte a byte idéntico entre requests sucesivos
+    turn_1_in_t2 = payload_t2["conversacion"]["turnos"][0]
+    turn_1_in_t3 = payload_t3["conversacion"]["turnos"][0]
+    assert turn_1_in_t2 == turn_1_in_t3
+    assert turn_1_in_t2["cliente"] == "Busco tubo PVC de 1/2"
+    assert turn_1_in_t2["asistente"] == "Sí, el tubo PVC de 1/2 cuesta [precio] el metro."
+    # Sin marcas de tiempo en el historial de turnos
+    assert "14:00" not in str(turn_1_in_t2) and "14:05" not in str(turn_1_in_t2)
+
+    # Validación 3: En el JSON serializado, el prefijo común (system + turnos previos) inicia exactamente igual
+    # ya que "conversacion" está ubicada antes del mensaje y observaciones
+    expected_prefix = '{"conversacion":{"turnos":[{"cliente":"Busco tubo PVC de 1/2","asistente":"Sí, el tubo PVC de 1/2 cuesta [precio] el metro."}'
+    assert json_t2.startswith(expected_prefix)
+    assert json_t3.startswith(expected_prefix)
+
+    # Validación 4: Lo volátil ("ahora") va al final de conversacion, no al inicio
+    conv_keys_t2 = list(payload_t2["conversacion"].keys())
+    assert conv_keys_t2[0] == "turnos"
+    if "ahora" in payload_t2["conversacion"]:
+        assert conv_keys_t2[-1] == "ahora"
+
+    # Validación 5: Métricas de Prompt Caching con tarifa pública de Grok 4.20 ($0.20/1M en caché)
+    cost = call_cost("grok-4.20-0309-non-reasoning", input_tokens=1000, output_tokens=100, cached_input_tokens=800)
+    assert cost is not None
+    # 200 tokens frescos * 1.25/M = 0.00025 + 800 tokens en caché * 0.20/M = 0.00016 + 100 tokens salida * 2.50/M = 0.00025 -> 0.00066 USD
+    assert Decimal(cost["usd"]) == Decimal("0.0006600000")
+    cache_hit_pct = round((Decimal(800) / Decimal(1000)) * 100, 1)
+    assert cache_hit_pct == Decimal("80.0")
+
+

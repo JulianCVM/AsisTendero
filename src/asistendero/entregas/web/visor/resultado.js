@@ -110,7 +110,8 @@ function remember(final) {
 }
 
 function reset() {
-  run = {tools: [], costs: [], tokens: 0, tokensKnown: false, lastDecision: null, message: '', runningStep: null};
+  run = {tools: [], costs: [], tokens: 0, tokensKnown: false, prompt: 0, cached: 0, lastDecision: null, message: '',
+    runningStep: null};
   STEP_NAMES.forEach(name => setStep(name, ''));
   setStatus('Ejecutando', 'warning');
   setOutcome('En curso…', 'El estado final aparece cuando termine la ejecución.', '');
@@ -119,7 +120,9 @@ function reset() {
   toolList.replaceChildren();
   costLines.replaceChildren();
   renderCost(null, false);
-  for (const id of ['#metric-calls', '#metric-tokens', '#metric-duration']) document.querySelector(id).textContent = '—';
+  for (const id of ['#metric-calls', '#metric-tokens', '#metric-cache', '#metric-duration']) {
+    document.querySelector(id).textContent = '—';
+  }
   copy.disabled = true;
 }
 
@@ -147,6 +150,11 @@ function onEvent(event) {
       if (typeof value === 'number') { run.tokens += value; run.tokensKnown = true; }
     }
     document.querySelector('#metric-tokens').textContent = run.tokensKnown ? run.tokens.toLocaleString('es-CO') : 's/d';
+    if (typeof details.input_tokens === 'number') {
+      run.prompt += details.input_tokens;
+      run.cached += typeof details.cached_input_tokens === 'number' ? details.cached_input_tokens : 0;
+    }
+    renderCache();
     renderCost(null, false);
   }
   if (event.type === 'final') onFinal(details, event);
@@ -156,6 +164,12 @@ function onEvent(event) {
     setOutcome('La prueba se detuvo', (event.code ? event.code + ' · ' : '') + (event.message || 'Error de ejecución.'), 'error');
     renderCost(null, true);
   }
+}
+
+// Parte de la entrada que la pasarela sirvió desde la caché: dice si el prefijo estable del prompt se reutilizó.
+function renderCache() {
+  const target = document.querySelector('#metric-cache');
+  target.textContent = run.prompt > 0 ? Math.round((run.cached / run.prompt) * 100) + ' %' : '—';
 }
 
 function onFinal(final, event) {
@@ -171,6 +185,11 @@ function onFinal(final, event) {
   document.querySelector('#metric-calls').textContent = String(final.model_calls ?? '—');
   document.querySelector('#metric-duration').textContent = formatMs(final.duration_ms ?? event.elapsed_ms);
   if (!run.tokensKnown) document.querySelector('#metric-tokens').textContent = final.model_calls ? 's/d' : '0';
+  if (typeof final.input_tokens === 'number' && typeof final.cached_input_tokens === 'number') {
+    run.prompt = final.input_tokens;
+    run.cached = final.cached_input_tokens;
+    renderCache();
+  }
   renderCost(final.cost, true);
   copy.disabled = !final.respuesta;
   copy.dataset.answer = final.respuesta || '';

@@ -16,7 +16,13 @@ from asistendero.observabilidad.tracing import run_traced
 from asistendero.tienda.pedidos.orders import OrderBook
 
 
+MAX_BODY_BYTES = 4096
+
+
 class TraceHandler(BaseHTTPRequestHandler):
+    # HTTP/1.1 reutiliza la conexión entre los archivos del visor; por eso un cuerpo rechazado se lee o se cierra.
+    protocol_version = "HTTP/1.1"
+
     _assets = {
         "/assets/cercania-mark.png": ("cercania-mark.png", "image/png"),
         "/assets/NunitoSans.ttf": ("NunitoSans.ttf", "font/ttf"),
@@ -58,6 +64,29 @@ class TraceHandler(BaseHTTPRequestHandler):
         self._headers(status, "application/json; charset=utf-8", len(body))
         self.wfile.write(body)
 
+    def _reject_post(self, status: int, message: str) -> None:
+        """Responde un error sin dejar el cuerpo en el socket: se leería como la siguiente solicitud."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if 0 <= length <= MAX_BODY_BYTES:
+            self.rfile.read(length)
+            self.close_connection = False
+        else:
+            self.close_connection = True
+        body = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Length", str(len(body)))
+        if self.close_connection:
+            self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         asset = self._assets.get(self.path)
         if asset is not None:
@@ -65,51 +94,61 @@ class TraceHandler(BaseHTTPRequestHandler):
             body = web_file(filename)
             self._headers(200, content_type, len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         if self.path == "/api/harness":
             if not self._is_local_host():
                 self._json_error(403, "Origen local no permitido.")
+                self.close_connection = False
                 return
             body = json.dumps(describe_harness(), ensure_ascii=False).encode("utf-8")
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         url = urlsplit(self.path)
         if url.path == "/api/avisos":
             # Avisos del servidor para una conversación (pedido por vencer o vencido); se entregan una vez.
             if not self._is_local_host():
                 self._json_error(403, "Origen local no permitido.")
+                self.close_connection = False
                 return
             session_id = (parse_qs(url.query).get("sesion") or [""])[0]
             if not SESSION_ID.match(session_id):
                 self._json_error(400, "Sesión inválida.")
+                self.close_connection = False
                 return
             body = json.dumps({"avisos": self.server.sessions.take_notices(session_id)}, ensure_ascii=False).encode("utf-8")
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
+            self.close_connection = False
             return
         body = web_file("index.html")
         self._headers(200, "text/html; charset=utf-8", len(body))
-        self.wfile.write(body)
+        for offset in range(0, len(body), 32768):
+            self.wfile.write(body[offset:offset + 32768])
+        self.close_connection = False
 
     def do_POST(self) -> None:
         if self.path != "/api/trace":
-            self._json_error(404, "Ruta no encontrada.")
+            self._reject_post(404, "Ruta no encontrada.")
             return
         expected_origin = f"http://127.0.0.1:{self.server.server_port}"
         if not self._is_local_host() or self.headers.get("Origin") not in (None, expected_origin):
-            self._json_error(403, "Origen local no permitido.")
+            self._reject_post(403, "Origen local no permitido.")
             return
         if self.headers.get_content_type() != "application/json":
-            self._json_error(415, "Se requiere application/json.")
+            self._reject_post(415, "Se requiere application/json.")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 1 <= length <= 4096:
-                raise ValueError
+            if not 1 <= length <= MAX_BODY_BYTES:
+                self._reject_post(400, "Envía una consulta de texto de máximo 2000 caracteres.")
+                return
             request = json.loads(self.rfile.read(length))
             query = request["consulta"]
             if not isinstance(query, str) or len(query) > 2000:
@@ -119,6 +158,8 @@ class TraceHandler(BaseHTTPRequestHandler):
             if session_id is not None and not isinstance(session_id, str):
                 raise ValueError
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+            # Si el largo no era un número, el cuerpo quedó sin leer: la conexión se cierra.
+            self.close_connection = True
             self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres.")
             return
 
@@ -144,6 +185,8 @@ class TraceHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             # El SDK podría incluir datos de la solicitud en su excepción.
             emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}). Revisa red, clave, modelo y créditos."})
+        finally:
+            self.close_connection = True
 
     def log_message(self, format: str, *args: object) -> None:
         # No registrar texto de consultas ni detalles de las llamadas en consola.

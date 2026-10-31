@@ -17,9 +17,10 @@ Cabe en una sola cotización (``MAX_LIST_LINES``): si se pasa, quedan las línea
 
 import re
 
-from asistendero.agente.herramientas.observations import ToolCall, latest_quote, order_results
 from asistendero.agente.modelo.grok import MAX_ITEMS
+from asistendero.agente.herramientas.observations import latest_quote, order_results, search_findings, ToolCall
 from asistendero.agente.reglas.choices import chosen_options
+from asistendero.agente.reglas.context_resolution import RESTART
 from asistendero.agente.reglas.validation import quantities_in_message
 from asistendero.tienda.catalogo.catalog import tokens
 from asistendero.tienda.vocabulario import normalize_text
@@ -28,8 +29,17 @@ from asistendero.tienda.vocabulario import normalize_text
 MAX_LIST_LINES = MAX_ITEMS
 # Pedir el total de lo que lleva: siempre se cotiza la lista entera.
 WHOLE_LIST = re.compile(
-    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total|junto\s+con|lo\s+(?:demas|anterior|otro)"
-    r"|con\s+(?:el|la|los|las)\s+(?:otr[oa]s?|anterior\w*|\w+\s+que\s+te\s+dije|que\s+te\s+dije)|cuanto\s+(?:me\s+)?(?:sale|queda|seria|es)\s+todo)\b"
+    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total(?:\s+acumulado)?|junto\s+con|lo\s+(?:demas|anterior|otro)"
+    r"|con\s+(?:el|la|los|las)\s+(?:otr[oa]s?|anterior\w*|\w+\s+que\s+te\s+dije|que\s+te\s+dije)"
+    r"|(?:con\s+)?lo\s+que\s+llevamos(?:\s+hasta\s+el\s+momento)?|que\s+llevamos|llevamos\s+hasta\s+el\s+momento"
+    r"|(?:en\s+cuanto|cuanto)\s+(?:me\s+)?(?:sale|queda|quedo|seria|es|va|esta|da|suma)(?:\s+(?:la\s+)?cotizacion(?:\s+final)?|\s+la\s+cuenta|\s+el\s+total|\s+(?:de\s+)?todo|\s+en\s+total)?"
+    r"|cotizacion\s+final|la\s+cuenta(?:\s+final)?"
+    r"|(?:que|cuanto)\s+(?:productos?\s+)?(?:tengo|llevo|tenemos|hay)(?:\s+(?:anotad[oa]s?|cotizad[oa]s?|en\s+la\s+lista))?"
+    r"|como\s+va\s+(?:la\s+cuenta|la\s+cotizacion|todo)"
+    r"|resumen\s+de\s+(?:la\s+)?(?:cuenta|cotizacion|compra|pedido)"
+    r"|dame\s+la\s+cotizacion(?:\s+con\s+lo\s+que\s+llevamos)?(?:\s+hasta\s+el\s+momento)?"
+    r"|cotizacion\s+con\s+lo\s+que\s+llevamos"
+    r")\b"
 )
 # Sumar algo con su cantidad («agrega una manguera», «y también 2 brochas»): la lista más lo nuevo.
 ADDS = re.compile(r"\b(?:agreg\w*|anad\w*|suma(?:le|me)?|ponle|ponme|tambien|ademas)\b")
@@ -37,8 +47,6 @@ REMOVES = re.compile(
     r"\b(?:quit(?:a|ale|alo|ala|alos|alas|ame|ar|en)|saca(?:le|lo|la|los|las|me)?|elimin\w*"
     r"|ya\s+no\s+(?:quiero|necesito|me\s+lleves?)|no\s+(?:quiero|necesito)\s+(?:el|la|los|las))\b"
 )
-RESTART = re.compile(r"\b(?:borr\w*\s+(?:la\s+lista|todo)|(?:empe[zc]|comen[zc])\w*\s+de\s+(?:nuevo|cero)|desde\s+cero"
-                     r"|(?:nueva|otra)\s+cotizacion)\b")
 
 
 def list_lines(context: dict | None) -> dict[str, int]:
@@ -119,6 +127,9 @@ def missing_from_quote(message: str, calls: list[ToolCall], context: dict | None
     listed = [] if not whole or REMOVES.search(text) or RESTART.search(text) else list(list_lines(context))
     chosen = [item["sku"] for item in chosen_options(message, context)] if whole or quantities_in_message(message) else []
     if not listed + chosen or order_results(calls):
+        return []
+    findings = search_findings(calls)
+    if findings and all(not f["matches"] for f in findings):
         return []
     quote, quote_call = latest_quote(calls)
     if quote_call is not None and quote is None:

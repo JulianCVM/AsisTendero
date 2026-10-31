@@ -129,7 +129,7 @@ src/asistendero/
     modelo/               cliente de Grok y prompt
     flujo/                grafo de LangGraph, avisos del servidor, mapa del flujo
     entrada/              guardrails, inyección, ortografía
-    reglas/               validación, reglas de pedido, opciones, lista de compras
+    reglas/               validación, reglas de pedido, opciones, turnos breves y especificaciones, lista de compras
     herramientas/         herramientas de catálogo y de pedido, ejecutor, observaciones
     respuesta/            verificación y textos de la respuesta, reabastecimiento
     conversacion/         sesiones, turno de chat, paso al tendero, avisos de vencimiento, supervisión
