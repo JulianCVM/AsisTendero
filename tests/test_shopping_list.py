@@ -681,3 +681,68 @@ def test_collaborative_quantity_reply_quotes_focused_sku_and_resets_stagnation_c
     assert attention(sessions, s_reset) == "ia" and sessions.take_notices(s_reset) == []
 
 
+def test_asks_whole_list_matches_summary_and_status_questions():
+    questions = [
+        "En cuánto quedó la cotización final y qué productos tengo anotados?",
+        "¿Cuánto llevo?",
+        "¿Qué tengo anotado?",
+        "¿Cuánto va la cuenta?",
+        "En cuánto quedó la cuenta?",
+        "Dame la cotización final",
+        "¿Cómo va la cotización?",
+        "Cotízame todo",
+        "¿cuánto me sale todo?",
+    ]
+    for q in questions:
+        assert asks_whole_list(q), f"Debe reconocer '{q}' como consulta de lista completa"
+
+
+def test_shopping_list_quoted_on_final_summary_and_decoupled_from_new_items(chat):
+    turn, sessions, _ = chat
+    session = sessions.create()
+
+    # 1. Cotiza 2 bultos de cemento gris de 50 kg
+    t1 = turn(
+        session,
+        "Cotízame 2 bultos de cemento gris de 50 kg",
+        tool("buscar_productos", items=[{"text": "cemento gris de 50 kg", "product": "cemento", "measure": "50 kg"}]),
+        quote(("CEM-050", 2)),
+        say(),
+    )
+    assert t1["estado"] == "quoted" and "$79.000" in t1["respuesta"]
+    ctx1 = sessions.context(session)
+    assert len(ctx1["lista"]) == 1 and ctx1["lista"][0]["sku"] == "CEM-050"
+
+    # 2. Agregar ítem inexistente: "Y también agrégale 2 taladros percutores inalámbricos de 20V"
+    # El servidor NO debe interpretar esto como elipsis de cemento («cemento taladro»)
+    from asistendero.context_resolution import enrich_elliptical_text, is_elliptical_turn
+    msg_new = "Y también agrégale 2 taladros percutores inalámbricos de 20V"
+    assert is_elliptical_turn(msg_new, ctx1) is None
+    enriched, head = enrich_elliptical_text("taladro percutor inalámbrico 20V", msg_new, ctx1)
+    assert "cemento" not in enriched and head is None
+
+    t2 = turn(
+        session,
+        msg_new,
+        tool("buscar_productos", items=[{"text": "taladro percutor inalámbrico 20V", "product": "taladro"}]),
+    )
+    assert t2["estado"] == "not_found"
+    # La lista de compras previa sigue intacta con el cemento
+    ctx2 = sessions.context(session)
+    assert len(ctx2["lista"]) == 1 and ctx2["lista"][0]["sku"] == "CEM-050"
+
+    # 3. Pregunta de resumen: "¿En cuánto quedó la cotización final y qué productos tengo anotados?"
+    # Si Grok intenta responder sin cotizar la lista, el servidor debe emitir LIST_QUOTE_REQUIRED
+    t3 = turn(
+        session,
+        "¿En cuánto quedó la cotización final y qué productos tengo anotados?",
+        say("¿Qué estás buscando?"),  # Grok intenta responder sin cotizar
+        quote(("CEM-050", 2)),        # Tras el aviso LIST_QUOTE_REQUIRED, cotiza la lista
+        say(),
+    )
+    assert t3["estado"] == "quoted"
+    assert "$79.000" in t3["respuesta"]
+    assert "LIST_QUOTE_REQUIRED" in t3["avisos_enviados"]
+
+
+
