@@ -1,6 +1,6 @@
 // Editor de un producto (precio, conteo físico, alerta propia y surtido) y alta de productos. Solo envía lo que cambió;
 // lo que el tendero guarda es lo que el asistente lee en la siguiente consulta.
-import {$, api, art, busy, closeOnDismiss, cop, el, fill, icon, restockText, showError, toast, whenText} from './tendero-core.js';
+import {$, api, art, busy, closeOnDismiss, cop, el, fill, icon, restockText, showError, toast, units, whenText} from './tendero-core.js';
 
 const UNITS = ['unidad', 'metro', 'bulto', 'galón', 'libra', 'rollo', 'par', 'pliego', 'bolsa', 'caja'];
 const RESTOCK = [['', 'Sin dato'], ['lunes', 'Los lunes'], ['martes', 'Los martes'], ['miercoles', 'Los miércoles'],
@@ -13,6 +13,15 @@ export function availability(product) {
   if (product.disponible <= product.alerta) return {kind:'low', icon:'truck', text:'Pocas · ' + product.disponible};
   return {kind:'ok', icon:'check', text:product.disponible + ' para vender'};
 }
+// Lo que diría AsisTendero si un cliente pregunta por el producto: el mismo precio y lo que queda para vender.
+export function agentText(product) {
+  if (product.disponible <= 0) {
+    return 'Dice que está agotado' + (product.surtido ? ' y que ' + restockText(product.surtido).toLowerCase() : '') + '.';
+  }
+  return 'Cotiza ' + cop(product.precio_cop) + ' por ' + product.unidad + ' y ofrece hasta ' +
+    units(product.disponible, product.unidad) + '.';
+}
+
 export function availabilityPill(product) {
   const info = availability(product);
   const node = el('span', 'pill stock');
@@ -89,6 +98,7 @@ export async function openEditor(product, onSaved) {
   $('#pd-now-stock').textContent = String(product.stock);
   $('#pd-now-held').textContent = String(product.apartado);
   $('#pd-now-free').replaceChildren(availabilityPill(product));
+  $('#pd-agent').textContent = 'Si un cliente pregunta, AsisTendero ' + agentText(product).replace(/^./, c => c.toLowerCase());
   $('#pd-now-coming').textContent = product.en_camino ? product.en_camino + (product.llega ? ' · ' + product.llega : '') : '—';
   $('#pd-price').value = String(product.precio_cop);
   $('#pd-stock').value = String(product.stock);

@@ -1,10 +1,109 @@
-// Hoy: indicadores, lo que necesita revisión, la cola del mostrador, la plata del día, la actividad del asistente,
-// lo más vendido, la mercancía en camino y lo que está por surtir. Todo sale de /api/resumen y del inventario.
-import {$, api, art, cop, dayText, el, fill, foldList, icon, plural, units, whenText} from './tendero-core.js';
-import {byUrgency, orderCard} from './tendero-orders.js';
-import {availabilityPill, openEditor} from './tendero-inventory.js';
+// Hoy: las cifras del día en una franja y, debajo, la bandeja «Por hacer» que arma el servidor (bandeja.py) con lo
+// accionable en orden de urgencia. Al lado, lo que hizo AsisTendero, la mercancía en camino y lo más vendido.
+import {$, api, busy, cop, dayText, el, fill, foldList, icon, pill, plural, toast, units, whenText} from './tendero-core.js';
+import {orderTiming} from './tendero-orders.js';
+import {openPayment} from './tendero-payments.js';
 
-const ACTIVITY_ICON = {pedido:'bag', chat:'chat', bloqueo:'shield', ayuda:'user', incidencia:'alert'};
+const PRIORITY = {
+  urgente: {label:'Urgente', tone:'danger', icon:'alert'},
+  revisar: {label:'Revisar', tone:'warning', icon:'search'},
+  hoy: {label:'Hoy', tone:'info', icon:'calendar'},
+  aviso: {label:'Aviso', tone:'', icon:'truck'},
+};
+// El aviso de la bodega lleva la caja; el de un proveedor atrasado, el camión.
+const NOTICE_ICON = {agotados:'box', proveedor:'truck'};
+const INBOX_SHOWN = 6;
+
+function stripFact(label, value, note, href, filter, alert) {
+  const link = el('a', 'day-fact');
+  link.href = href;
+  if (filter) link.dataset.filter = filter;
+  if (alert) link.dataset.alert = 'true';
+  link.append(el('span', 'day-fact-label', label), el('strong', 'day-fact-value', value), el('span', 'day-fact-note', note));
+  return link;
+}
+
+function renderStrip(summary) {
+  const money = summary.dinero;
+  const counts = summary.por_estado;
+  const unpaid = money.por_cobrar.total_cop;
+  const toCheck = money.por_verificar.pagos;
+  const queue = summary.bandeja;
+  const stockLine = queue.find(item => item.tipo === 'agotados');
+  $('#day-strip').replaceChildren(
+    stripFact('Vendido hoy', cop(money.ventas_registradas.total_cop),
+      'Cobrado ' + cop(money.ingresos_confirmados.total_cop), '#ventas'),
+    stripFact('Por cobrar', cop(unpaid), toCheck ? plural(toCheck, 'comprobante por verificar', 'comprobantes por verificar')
+      : plural(money.por_cobrar.pedidos, 'venta sin pago', 'ventas sin pago'), '#ventas', null, unpaid > 0),
+    stripFact('Pedidos activos', String(counts.pendiente + counts.confirmado),
+      counts.pendiente + ' por confirmar · ' + counts.confirmado + ' por recoger', '#pedidos', 'activos', counts.pendiente > 0),
+    stripFact('Bodega', stockLine ? stockLine.titulo : 'Todo surtido', stockLine?.detalle[0] || 'Nada agotado ni por surtir',
+      '#inventario', stockLine?.filtro, Boolean(stockLine)));
+}
+
+function orderSummary(order) {
+  const lines = order.lineas.map(line => units(line.cantidad, line.unidad) + ' ' + line.nombre);
+  return lines.slice(0, 2).join(' · ') + (lines.length > 2 ? ' y ' + (lines.length - 2) + ' más' : '') + ' · ' + cop(order.total_cop);
+}
+
+async function act(path, order, done, refresh) {
+  try {
+    await api(path, {pedido:order.pedido});
+    toast(done, 'ok');
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+  await refresh();
+}
+
+// Lo que se puede hacer sin salir de Hoy: entregar lo confirmado, registrar un pago o abrir el chat que espera.
+function itemActions(item, refresh) {
+  const actions = el('div', 'inbox-actions');
+  const order = item.pedido;
+  if (order && order.estado === 'confirmado') {
+    const deliver = el('button', 'primary small');
+    deliver.type = 'button';
+    deliver.append(icon('check'), el('span', '', 'Entregar'));
+    deliver.setAttribute('aria-label', 'Marcar entregado el pedido ' + order.pedido);
+    deliver.addEventListener('click', () => busy(deliver, () => act('/api/pedidos/entregar', order,
+      'Pedido ' + order.pedido + ' entregado. Ya se descontó de la bodega.', refresh)));
+    actions.append(deliver);
+  }
+  if (order && order.pago && order.pago.estado !== 'confirmado' && order.estado !== 'pendiente') {
+    const pay = el('button', 'secondary small');
+    pay.type = 'button';
+    pay.append(icon('cash'), el('span', '', order.pago.estado === 'pendiente' ? 'Registrar pago' : 'Revisar pago'));
+    pay.setAttribute('aria-label', 'Registrar el pago del pedido ' + order.pedido);
+    pay.addEventListener('click', () => openPayment(order, refresh));
+    actions.append(pay);
+  }
+  const open = el('a', 'link', order ? 'Ver pedido' : item.tipo === 'chat' ? 'Abrir chat' : 'Ver');
+  open.href = order ? '#pedidos' : item.enlace;
+  if (item.filtro) open.dataset.filter = item.filtro;
+  if (order) open.dataset.filter = order.estado === 'entregado' ? 'revisar' : 'activos';
+  open.append(icon('arrow'));
+  actions.append(open);
+  return actions;
+}
+
+function inboxItem(item, refresh) {
+  const row = el('li', 'inbox-item');
+  row.dataset.priority = item.prioridad;
+  const info = PRIORITY[item.prioridad];
+  const body = el('div', 'inbox-body');
+  body.append(el('strong', 'inbox-title', item.titulo));
+  const details = [...item.detalle];
+  if (item.pedido) {
+    const timing = orderTiming(item.pedido);
+    // El primer motivo ya es el título de un pedido por revisar: no se repite debajo.
+    if (item.prioridad === 'revisar') details.shift();
+    details.unshift(timing.text);
+    body.append(el('span', 'inbox-detail', orderSummary(item.pedido)));
+  }
+  details.forEach(text => body.append(el('span', 'inbox-detail', text)));
+  row.append(pill(info.label, info.tone, NOTICE_ICON[item.tipo] || info.icon), body, itemActions(item, refresh));
+  return row;
+}
 
 function fact(label, value, note) {
   const box = el('div');
@@ -12,52 +111,6 @@ function fact(label, value, note) {
   if (note) amount.append(el('small', '', note));
   box.append(el('dt', '', label), amount);
   return box;
-}
-
-function renderKpis(summary, low) {
-  const counts = summary.por_estado;
-  const sold = summary.dinero.ventas_registradas;
-  $('#kpi-total').textContent = cop(sold.total_cop);
-  const paid = summary.dinero.ingresos_confirmados.total_cop;
-  $('#kpi-sales').textContent = plural(sold.pedidos, 'pedido entregado', 'pedidos entregados') + ' · cobrado ' + cop(paid);
-
-  const queue = byUrgency(summary.por_recoger);
-  const firstHold = queue.find(order => order.estado === 'pendiente');
-  $('#kpi-pending').textContent = String(counts.pendiente);
-  $('#kpi-pending-note').textContent = firstHold ? 'El primero vence ' + whenText(firstHold.aparta_hasta) : 'Nada esperando el «sí»';
-  $('#kpi-pending-card').dataset.alert = String(counts.pendiente > 0);
-  const nextPickup = queue.find(order => order.estado === 'confirmado' && order.recogida);
-  $('#kpi-confirmed').textContent = String(counts.confirmado);
-  $('#kpi-confirmed-note').textContent = nextPickup ? 'Próxima: ' + whenText(nextPickup.recogida)
-    : counts.confirmado ? 'Sin hora agendada' : 'Nadie por recoger';
-
-  const soldOut = low.filter(product => product.disponible <= 0).length;
-  $('#kpi-low').textContent = String(low.length);
-  $('#kpi-low-note').textContent = soldOut ? plural(soldOut, 'agotado', 'agotados') : 'Ninguno agotado';
-  $('#kpi-low-card').dataset.alert = String(soldOut > 0);
-  return queue;
-}
-
-function renderAttention(items) {
-  $('#attention-card').hidden = !items.length;
-  $('#attention-list').replaceChildren(...items.map(item => {
-    const row = el('li');
-    const link = el('a');
-    link.href = item.enlace;
-    link.append(icon(ACTIVITY_ICON[item.tipo] || 'alert'), el('span', '', item.texto));
-    if (item.dato) link.append(el('b', '', item.dato));
-    row.append(link);
-    return row;
-  }));
-  foldList($('#attention-list'), $('#attention-more'), 3, 'avisos');
-}
-
-function renderMoney(money) {
-  $('#money-facts').replaceChildren(
-    fact('Vendido (entregado)', cop(money.ventas_registradas.total_cop), plural(money.ventas_registradas.pedidos, 'pedido', 'pedidos')),
-    fact('Cobrado (confirmado)', cop(money.ingresos_confirmados.total_cop), plural(money.ingresos_confirmados.pagos, 'pago', 'pagos')),
-    fact('Por verificar', cop(money.por_verificar.total_cop), plural(money.por_verificar.pagos, 'comprobante', 'comprobantes')),
-    fact('Por cobrar', cop(money.por_cobrar.total_cop), plural(money.por_cobrar.pedidos, 'venta sin pago', 'ventas sin pago')));
 }
 
 function renderAgent(agent) {
@@ -76,12 +129,12 @@ function renderAgent(agent) {
     step.append(el('time', '', whenText(item.hora)), body);
     return step;
   });
-  foldList($('#activity-list'), $('#activity-more'), 4, 'movimientos');
+  foldList($('#activity-list'), $('#activity-more'), 3, 'movimientos');
 }
 
 function renderTop(best) {
   const top = best[0]?.cantidad || 1;
-  fill($('#top-list'), $('#top-empty'), best, line => {
+  fill($('#top-list'), $('#top-empty'), best.slice(0, 5), line => {
     const item = el('li');
     const bar = el('span', 'rank-bar');
     // El ancho sale de los datos; se fija con CSSOM porque la CSP no permite atributos style.
@@ -103,43 +156,25 @@ function renderIncoming(orders) {
       el('small', '', plural(order.pendiente, 'unidad pendiente', 'unidades pendientes') + ' de ' +
         plural(order.productos, 'producto', 'productos')));
     name.append(icon('truck'), text);
-    const when = el('span', 'pill', order.fecha_estimada ? 'Llega ' + dayText(order.fecha_estimada) : 'Sin fecha');
-    when.dataset.tone = order.atrasada ? 'danger' : 'info';
-    if (order.atrasada) when.textContent = 'Atrasado · ' + dayText(order.fecha_estimada);
+    const when = pill(order.atrasada ? 'Atrasado · ' + dayText(order.fecha_estimada)
+      : order.fecha_estimada ? 'Llega ' + dayText(order.fecha_estimada) : 'Sin fecha', order.atrasada ? 'danger' : 'info');
     link.append(name, when);
     item.append(link);
     return item;
   });
 }
 
-function renderRestock(low, refresh) {
-  const urgent = [...low].sort((a, b) => a.disponible - b.disponible).slice(0, 6);
-  fill($('#restock-list'), $('#restock-empty'), urgent, product => {
-    const item = el('li');
-    const open = el('button', 'mini-row');
-    open.type = 'button';
-    open.setAttribute('aria-label', 'Editar ' + product.nombre + ' ' + product.variante + ': ' +
-      (product.disponible ? product.disponible + ' para vender' : 'agotado'));
-    const name = el('span', 'mini-name');
-    const text = el('span');
-    text.append(el('strong', '', product.nombre + ' · ' + product.variante),
-      el('small', '', product.en_camino ? product.en_camino + ' en camino' : 'Alerta en ' + product.alerta));
-    name.append(art(product.sku, 'thumb', 40), text);
-    open.append(name, availabilityPill(product));
-    open.addEventListener('click', () => openEditor(product, refresh));
-    item.append(open);
-    return item;
-  });
-}
-
 export async function loadToday(refresh) {
-  const [summary, low] = await Promise.all([api('/api/resumen'), api('/api/inventario?bajo=1')]);
-  const queue = renderKpis(summary, low.productos);
-  renderAttention(summary.revisar);
-  fill($('#queue-list'), $('#queue-empty'), queue, order => orderCard(order, refresh, {compact:true}));
-  renderMoney(summary.dinero);
+  const summary = await api('/api/resumen');
+  renderStrip(summary);
+  const queue = summary.bandeja;
+  fill($('#inbox-list'), $('#inbox-empty'), queue, item => inboxItem(item, refresh));
+  // Lo más urgente queda a la vista; el resto se pliega para que el celular no sea una lista sin fin.
+  foldList($('#inbox-list'), $('#inbox-more'), INBOX_SHOWN, 'pendientes');
+  const urgent = queue.filter(item => item.prioridad === 'urgente').length;
+  $('#inbox-count').textContent = queue.length ? plural(queue.length, 'pendiente', 'pendientes') +
+    (urgent ? ' · ' + plural(urgent, 'urgente', 'urgentes') : '') : '';
   renderAgent(summary.asistente);
   renderTop(summary.mas_vendidos);
   renderIncoming(summary.en_camino);
-  renderRestock(low.productos, refresh);
 }

@@ -88,7 +88,7 @@ Problemas de estructura que el grafo deja ver:
    No hay un lugar que diga qué tablas existen y quién escribe en cada una.
 4. **`ui/` mezcla tres aplicaciones**: el visor, el panel y la página pública comparten carpeta y prefijos de nombre;
    `tendero.py` sirve también los archivos de la página pública.
-5. **Dos marcas**: el panel dice «PulsoTienda» (nombre del vault) y el resto, «AsisTendero».
+5. **Dos marcas** (resuelto el 31-10-2026): PulsoTienda es el producto (panel y página pública) y AsisTendero, el agente (visor, chat y menciones al asistente).
 
 ## 4. Diagnóstico del panel (`/#hoy` y las demás vistas)
 
@@ -177,5 +177,9 @@ Cada paso deja la suite en verde y se puede revisar solo:
    - `demo.py` pasa a `entregas`: arma la tienda completa con todos los módulos.
    Quedan para después, porque no cruzan capas: sacar el contrato de herramientas de `grok.py` a un
    `contrato.py` y reunir en `datos` las tablas que hoy crea cada módulo.
-4. **Rehacer el panel** con la bandeja de Hoy, la tabla de productos (Inventario + Catálogo + asistente de bodega),
-   Pedidos y Ventas en filas, y una sola marca.
+4. **Rehacer el panel** (hecho el 31-10-2026, salvo Ventas): bandeja «Por hacer» en Hoy (`bandeja.py`), una sola
+   tabla de productos (Inventario + Catálogo + asistente de bodega, con alias para `#catalogo` y `#asistente`),
+   Pedidos en filas con tres filtros y la marca PulsoTienda/AsisTendero. Medido en la tienda de demostración, sin
+   acciones: Hoy pasa a 1.424 px en escritorio y 3.007 a 390 px (seis pendientes a la vista); Pedidos, a 1.118 y
+   1.724; Inventario, a 3.745 y 5.407 con 50 filas, y Catálogo y Asistente dejan de ser vistas. Ventas sigue en
+   tarjetas: queda pasarla a filas.

@@ -8,6 +8,7 @@ nunca costos de compra. Las conversaciones se leen con ``supervision`` y no expo
 from asistendero.agente.conversacion.handoff import ATTENTION_STATES
 from asistendero.agente.conversacion.sessions import SESSION_ID, SessionStore
 from asistendero.agente.conversacion.supervision import conversation, conversations
+from asistendero.entregas.panel.bandeja import work_queue
 from asistendero.tienda.abastecimiento.purchasing import Purchasing
 from asistendero.tienda.catalogo.catalog_admin import CatalogAdmin
 from asistendero.tienda.inventario.inventory import Inventory
@@ -86,29 +87,20 @@ class PanelViews:
         chats = self._chats()
         review = [order for order in board if order["revisar"]]
         open_orders = [order for order in self.purchasing.orders() if order["estado"] in ("pedido", "parcial")]
+        products = self.products()
+        sold_out = sum(product["disponible"] <= 0 for product in products)
+        low = sum(0 < product["disponible"] <= product["alerta"] for product in products)
         return {
             **base,
-            "por_recoger": [order for order in board if order["estado"] in ("pendiente", "confirmado")][:20],
             "revisar_pedidos": len(review),
             "dinero": sales_summary(self.orders, self.payments, day, day),
-            "revisar": self._attention(review, chats, open_orders),
+            "bandeja": work_queue(board, chats, open_orders, sold_out, low, day),
             "asistente": self._agent(day, board, chats),
             "en_camino": [{"oc": order["oc"], "proveedor": order["proveedor"], "pendiente": order["pendiente"],
                            "productos": sum(line["pendiente"] > 0 for line in order["lineas"]),
                            "fecha_estimada": order["fecha_estimada"], "atrasada": order["atrasada"]}
                           for order in sorted(open_orders, key=lambda item: item["fecha_estimada"] or "9999")][:6],
         }
-
-    @staticmethod
-    def _attention(review: list[dict], chats: list[dict], purchases: list[dict]) -> list[dict]:
-        items = [{"tipo": "pedido", "texto": f"{order['pedido']}: {order['revisar'][0]}", "dato": None,
-                  "enlace": "#pedidos"} for order in review[:5]]
-        items += [{"tipo": "ayuda", "texto": f"El cliente {chat['id_corto']} pide hablar con el tendero", "dato": None,
-                   "enlace": f"#conversaciones/{chat['id']}"} for chat in chats if chat["atencion"] == "requiere_humano"][:5]
-        late = [order for order in purchases if order["atrasada"]]
-        items += [{"tipo": "incidencia", "texto": f"{order['oc']} de {order['proveedor']} está atrasado",
-                   "dato": f"{order['pendiente']} por llegar", "enlace": "#inventario/abastecimiento"} for order in late[:3]]
-        return items
 
     @staticmethod
     def _agent(day: str, board: list[dict], chats: list[dict]) -> dict:

@@ -25,6 +25,8 @@ tendero confirma), supervisión de chats con atención humana, tienda de demostr
 (`/inicio`). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
 datos reales de un piloto, cobros por el chat, fiados y domicilios.
 
+**Marca:** el producto se llama **PulsoTienda** (panel del tendero y página pública) y el agente que atiende el chat, **AsisTendero** (visor, mensajes del chat y menciones al asistente). El paquete sigue siendo `asistendero`.
+
 ## Reglas del reto (reglamento externo)
 
 Según [reto.pltk.mx](https://reto.pltk.mx/), consultado el 20-10-2026. Antes de una entrega, vuelve a comprobarlo:
@@ -112,7 +114,8 @@ propio.
      y `validate_interpretation` (`stock_assistant.py`), `identify` y `find_supplier` (`stock_matching.py`).
    - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
      (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
-   - `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
+   - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
+     `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
      (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
      (`launcher.py`).
 
@@ -165,6 +168,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Un estado, plazo o límite del pedido | `orders.py` (`OrderBook`); la herramienta, en `order_tools.py` |
 | Cómo se redacta un pedido o un aviso de vencimiento | `order_replies.py`; el barrido, en `order_watch.py` |
 | Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `entregas/panel/` y `entregas/web/panel/` |
+| Qué entra en la bandeja «Por hacer» de Hoy y en qué orden | `work_queue` de `bandeja.py` (lo pide `PanelViews.summary`), con su prueba en `tests/test_tendero.py` |
 | Una ruta del panel del tendero | Lectura en `tendero_views.py` y `READS` de `tendero.py`; cambios en `ROUTES` de `tendero_actions.py`, con su prueba en `tests/test_tendero.py` |
 | Una regla del cobro (método, estado, quién confirma) | `payments.py`, con su prueba en `tests/test_payments.py`; el historial, en `sales_history.py` |
 | Proveedores, pedidos al proveedor o llegadas de mercancía | `purchasing.py` (reglas en `purchasing_rules.py`), con su prueba en `tests/test_purchasing.py` |

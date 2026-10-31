@@ -1,23 +1,23 @@
 // Panel del tendero: navegación, tema, contadores y sincronización. Cada sección vive en su módulo.
 // Los pedidos y los chats llegan solos, así que Hoy, Pedidos y Chats se refrescan cada 15 s con la pestaña visible.
+// PulsoTienda es el panel; AsisTendero, el agente que atiende el chat.
 import {$, api, busy, clockText, longDay, toast} from './tendero-core.js';
 import {bindOrderSearch, loadOrders} from './tendero-orders.js';
 import {bindInventory, loadInventory} from './tendero-inventory.js';
 import {loadToday} from './tendero-today.js';
 import {bindSales, loadSales} from './tendero-sales.js';
-import {bindCatalog, loadCatalog} from './tendero-catalog.js';
-import {bindAssistant, loadAssistant} from './tendero-assistant.js';
+import {bindAssistant} from './tendero-assistant.js';
 import {bindChats, loadChats} from './tendero-chats.js';
 
 const VIEWS = {
   hoy: {title:'Hoy', subtitle:() => longDay().replace(/^./, letter => letter.toUpperCase())},
   pedidos: {title:'Pedidos', subtitle:() => 'Los pedidos del chat, del más urgente al más antiguo'},
   ventas: {title:'Ventas y pagos', subtitle:() => 'Lo vendido, lo cobrado y lo que falta por verificar'},
-  inventario: {title:'Inventario', subtitle:() => 'Precios, existencias, abastecimiento y movimientos'},
-  catalogo: {title:'Catálogo', subtitle:() => 'Lo que ve el asistente, para comprobar sus respuestas'},
-  asistente: {title:'Asistente de bodega', subtitle:() => 'Actualiza el inventario conversando; tú confirmas'},
-  conversaciones: {title:'Chats', subtitle:() => 'Lo que el asistente conversa con tus clientes'},
+  inventario: {title:'Inventario', subtitle:() => 'Productos, abastecimiento y movimientos; cuéntale a la bodega qué pasó'},
+  conversaciones: {title:'Chats', subtitle:() => 'Lo que AsisTendero conversa con tus clientes'},
 };
+// Direcciones de las vistas que se unieron al inventario: un enlace guardado sigue llevando a su lugar.
+const MOVED = {catalogo:'inventario', asistente:'inventario'};
 const LIVE = new Set(['hoy', 'pedidos', 'conversaciones']);
 const REFRESH_MS = 15000;
 const route = {view:'hoy', sub:''};
@@ -32,6 +32,7 @@ function setBadge(id, amount, label) {
 }
 async function loadBadges() {
   const counts = await api('/api/alertas');
+  setBadge('#badge-hoy', counts.chats_atencion, 'clientes que piden hablar contigo');
   setBadge('#badge-pedidos', counts.pedidos_activos, 'pedidos por atender');
   setBadge('#badge-inventario', counts.agotados, 'productos agotados');
   setBadge('#badge-chats', counts.chats_atencion + counts.bloqueos, 'chats que necesitan atención');
@@ -46,8 +47,6 @@ const loaders = {
   pedidos: () => loadOrders(refresh, takeFilter()),
   ventas: () => loadSales(),
   inventario: () => loadInventory(route.sub, takeFilter(), refresh),
-  catalogo: () => loadCatalog(),
-  asistente: () => loadAssistant(),
   conversaciones: () => loadChats(route.sub, refresh),
 };
 function takeFilter() {
@@ -73,6 +72,11 @@ async function refresh() {
 
 function show() {
   const [name, ...rest] = location.hash.slice(1).split('/');
+  if (MOVED[name]) {
+    location.replace('#' + MOVED[name]);
+    if (name === 'asistente') requestAnimationFrame(() => document.getElementById('assist-text')?.focus());
+    return;
+  }
   const changed = name !== route.view;
   route.view = VIEWS[name] ? name : 'hoy';
   route.sub = rest.join('/');
@@ -82,11 +86,11 @@ function show() {
     else link.removeAttribute('aria-current');
   });
   // En el celular, «Más» se marca cuando la sección actual está dentro de su menú.
-  $('#more-toggle').dataset.current = String(['ventas', 'catalogo', 'asistente'].includes(route.view));
+  $('#more-toggle').dataset.current = String(route.view === 'ventas');
   closeMore();
   $('#view-title').textContent = VIEWS[route.view].title;
   $('#view-subtitle').textContent = VIEWS[route.view].subtitle();
-  document.title = VIEWS[route.view].title + ' · Panel del tendero';
+  document.title = VIEWS[route.view].title + ' · PulsoTienda';
   if (changed) window.scrollTo({top:0});
   refresh();
 }
@@ -127,7 +131,6 @@ $('#refresh').addEventListener('click', event => busy(event.currentTarget, refre
 bindOrderSearch(refresh);
 bindInventory(refresh);
 bindSales();
-bindCatalog();
 bindAssistant(refresh);
 bindChats(refresh);
 setInterval(() => {

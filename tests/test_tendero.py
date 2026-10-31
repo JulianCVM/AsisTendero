@@ -181,6 +181,9 @@ def test_server_flow_edit_stock_deliver_and_summary(server, shop):
     assert status == 409 and json.loads(body)["code"] == "ORDER_CLOSED"
     summary = json.loads(_request(server, "GET", "/api/resumen")[1])
     assert summary["ventas"] == 1 and summary["total_cop"] == order["total_cop"]
+    # Entregado sin pago: la bandeja de Hoy lo pide revisar una sola vez; la lista vieja «revisar» ya no existe.
+    reviewed = [item for item in summary["bandeja"] if item["pedido"] and item["pedido"]["pedido"] == order["pedido"]]
+    assert [item["prioridad"] for item in reviewed] == ["revisar"] and "revisar" not in summary
     pedidos = json.loads(_request(server, "GET", "/api/pedidos?estado=entregado")[1])["pedidos"]
     assert [item["pedido"] for item in pedidos] == [order["pedido"]]
 
@@ -260,7 +263,12 @@ def test_every_panel_view_is_reachable_on_the_phone_and_on_the_desktop():
     # La barra del celular no pasa de cinco destinos (con «Más»); lo demás va agrupado en el menú, sin repetir.
     assert len(phone_bar) <= 5 and 'id="more-toggle"' in phone_bar[-1]
     assert not set(_nav_targets(menu)) & {view for item in phone_bar for view in _nav_targets(item)}
-    assert [group for group in re.findall(r'<p class="more-group">([^<]+)</p>', menu)] == ["El día", "La bodega", "Ajustes"]
+    assert [group for group in re.findall(r'<p class="more-group">([^<]+)</p>', menu)] == ["El día", "Ajustes"]
+    # Catálogo y asistente de bodega viven dentro del inventario: ya no son vistas, pero sus direcciones siguen llevando allá.
+    assert views == {"hoy", "pedidos", "ventas", "inventario", "conversaciones"}
+    assert "const MOVED = {catalogo:'inventario', asistente:'inventario'};" in _panel_scripts()["tendero.js"]
+    assert 'id="view-catalogo"' not in html and 'id="view-asistente"' not in html and 'id="catalog-dialog"' not in html
+    assert html.index('id="assist-form"') > html.index('id="view-inventario"')
     # Apariencia está a mano en el celular (menú «Más») y en el escritorio (barra superior), y «Más» avisa con número.
     assert "data-theme-switch" in menu and 'class="theme-switch topbar-theme"' in html
     assert 'id="badge-more"' in phone_bar[-1] and "setBadge('#badge-more'" in _panel_scripts()["tendero.js"]
@@ -711,7 +719,9 @@ def test_the_landing_first_sections_keep_code_out_of_the_page():
 def test_the_landing_title_and_description_say_what_it_does_and_that_it_ships_for_hardware_stores():
     page = (web("inicio.html")).read_text(encoding="utf-8")
     head = page.split("</head>")[0]
-    assert "<title>AsisTendero · Atiende consultas con los datos de tu negocio</title>" in head
+    # PulsoTienda es el producto; AsisTendero, el asistente que atiende el chat dentro de él.
+    assert "<title>PulsoTienda · Atiende consultas con los datos de tu negocio</title>" in head
+    assert "<strong>PulsoTienda</strong><small>Con AsisTendero, su asistente</small>" in page
     description = re.search(r'<meta name="description" content="([^"]+)">', head).group(1)
     assert "Hoy viene configurado para ferreterías" in description and "datos ficticios" in description
     assert 120 <= len(description) <= 320
@@ -812,7 +822,7 @@ def test_the_landing_header_and_footer_point_to_sections_that_exist():
     ids = set(re.findall(r'\bid="([\w-]+)"', page))
     header = page[page.index('<header class="land-top"'):page.index("</header>", page.index('<header class="land-top"'))]
     footer = page[page.index('<footer class="land-foot">'):page.index("</footer>")]
-    assert "Asistente para tu negocio" in header and "Ferretería de barrio" not in header
+    assert "<strong>PulsoTienda</strong><small>Con AsisTendero, su asistente</small>" in header and "Ferretería de barrio" not in header
     menu = header[header.index('<nav class="land-nav"'):header.index("</nav>")]
     nav = re.findall(r'<a (?:class="[^"]*" )?href="#([\w-]+)">([^<]+)</a>', menu)
     assert nav == [("demo", "Demo"), ("como-funciona", "Cómo funciona"), ("adaptable", "Adaptación"), ("confianza", "Confianza"),
@@ -957,3 +967,46 @@ def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path):
         instance.server_close()
     # Rehacerla no falla aunque ya exista: solo se borran sus propios archivos.
     assert build_demo(tmp_path / "demo")[0] == database
+
+
+def test_today_is_one_work_queue_ordered_by_urgency_with_each_order_once(shop):
+    from asistendero.entregas.panel.bandeja import work_queue
+    from asistendero.tienda.ventas.payments import Payments
+
+    _, book, _ = shop
+    payments = Payments(book.path, clock=book.clock)
+    unpaid = book.create("sesion-a", [("PVC-050", 1)])
+    book.confirm("sesion-a", unpaid["pedido"])
+    book.deliver(unpaid["pedido"])
+    tomorrow = book.create("sesion-b", [("PVC-050", 1)])
+    book.confirm("sesion-b", tomorrow["pedido"])
+    book.schedule("sesion-b", tomorrow["pedido"], datetime(2026, 10, 22, 11, 0, tzinfo=BOGOTA), None)
+    later = book.create("sesion-c", [("CEM-050", 1)])
+    book.confirm("sesion-c", later["pedido"])
+    book.schedule("sesion-c", later["pedido"], datetime(2026, 10, 21, 17, 30, tzinfo=BOGOTA), None)
+    soon = book.create("sesion-d", [("CEM-050", 1)])
+    book.confirm("sesion-d", soon["pedido"])
+    book.schedule("sesion-d", soon["pedido"], datetime(2026, 10, 21, 12, 0, tzinfo=BOGOTA), None)
+    waiting = book.create("sesion-e", [("PVC-050", 2)])
+    board = order_board(book, payments=payments)
+    chats = [{"id": "chat-1", "id_corto": "chat-1", "atencion": "requiere_humano", "ultima_actividad": "2026-10-21 09:55"},
+             {"id": "chat-2", "id_corto": "chat-2", "atencion": "ia", "ultima_actividad": "2026-10-21 09:58"}]
+    late = {"oc": "OC-0001", "proveedor": "Distribuidora", "pendiente": 8, "fecha_estimada": "2026-10-19", "atrasada": True}
+    on_time = {**late, "oc": "OC-0002", "atrasada": False}
+
+    queue = work_queue(board, chats, [late, on_time], sold_out=2, low=3, today="2026-10-21")
+    assert [(item["prioridad"], item["tipo"]) for item in queue] == [
+        ("urgente", "chat"), ("urgente", "pedido"), ("revisar", "pedido"), ("hoy", "pedido"), ("hoy", "pedido"),
+        ("aviso", "proveedor"), ("aviso", "agotados")]
+    codes = [item["pedido"]["pedido"] for item in queue if item["pedido"]]
+    # Lo que vence o pasa antes va primero; la recogida de mañana no está en la bandeja de hoy.
+    assert codes == [waiting["pedido"], unpaid["pedido"], soon["pedido"], later["pedido"]]
+    assert len(codes) == len(set(codes)) and tomorrow["pedido"] not in codes
+    assert queue[2]["titulo"] == f"{unpaid['pedido']}: Entregado sin pago confirmado: está vendido, pero no cobrado."
+    assert queue[3]["titulo"] == f"{soon['pedido']} pasa a recoger a las 12:00"
+    assert queue[0]["enlace"] == "#conversaciones/chat-1" and "OC-0002" not in str(queue)
+    assert (queue[-1]["titulo"], queue[-1]["detalle"], queue[-1]["filtro"]) == ("2 productos agotados", ["y 3 por surtir"], "agotado")
+    # Sin nada pendiente la bandeja queda vacía: nada de relleno.
+    assert work_queue([], [], [on_time], sold_out=0, low=0, today="2026-10-21") == []
+    singular = work_queue([], [], [], sold_out=0, low=1, today="2026-10-21")
+    assert [(item["titulo"], item["filtro"]) for item in singular] == [("1 producto por surtir", "bajo")]

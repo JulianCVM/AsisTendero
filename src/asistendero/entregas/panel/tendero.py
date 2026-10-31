@@ -41,7 +41,7 @@ JS = "text/javascript; charset=utf-8"
 CSS = "text/css; charset=utf-8"
 MODULES = ("tendero", "tendero-core", "tendero-theme", "tendero-today", "tendero-orders", "tendero-payments",
            "tendero-sales", "tendero-inventory", "tendero-product-editor", "tendero-supply", "tendero-categories",
-           "tendero-catalog", "tendero-assistant", "tendero-chats")
+           "tendero-assistant", "tendero-chats")
 LANDING_MODULES = ("inicio", "inicio-mostrador", "inicio-demo", "inicio-escenas", "inicio-cierre", "inicio-sectores")
 ASSETS = {
     **{f"/assets/{name}.js": (f"{name}.js", JS) for name in MODULES + LANDING_MODULES},

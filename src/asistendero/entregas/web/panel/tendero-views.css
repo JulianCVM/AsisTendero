@@ -3,15 +3,29 @@
 /* ---------- Hoy ---------- */
 .today-grid { display: grid; gap: 16px; align-items: start; }
 .side-stack { display: grid; gap: 16px; align-items: start; }
-.order-stack { display: grid; gap: 12px; }
-.attention { border-color: var(--amber); }
-.attention h2 .icon { stroke: var(--warning); }
-.attention-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-.attention-list a { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: 12px;
-  background: var(--amber-soft); color: var(--text); text-decoration: none; font-size: .9rem; font-weight: 700; }
-.attention-list a:hover { outline: 2px solid var(--amber); }
-.attention-list .icon { stroke: var(--warning); }
-.attention-list b { margin-left: auto; font: 800 .8rem var(--font-num); white-space: nowrap; }
+/* Franja de cifras: cuatro números, cada uno lleva a su lista. En el celular, dos por fila. */
+.day-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.day-fact { display: grid; gap: 2px; align-content: start; padding: 12px 14px; min-height: 88px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface-2); color: var(--text); text-decoration: none; transition: border-color .15s; }
+.day-fact:hover { border-color: var(--text-2); }
+.day-fact[data-alert="true"] { border-color: var(--amber); background: var(--amber-soft); }
+.day-fact-label { font-size: .76rem; font-weight: 800; color: var(--muted); }
+.day-fact-value { font: 800 1.25rem/1.2 var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.day-fact-note { font-size: .74rem; font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
+.day-fact[data-alert="true"] .day-fact-note { color: var(--warning); }
+/* Bandeja «Por hacer»: la prioridad se lee en la etiqueta (texto e ícono) y en el borde, nunca solo en el color. */
+.inbox-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inbox-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px; border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); min-width: 0; }
+.inbox-item > .pill { justify-self: start; }
+.inbox-item[data-priority="urgente"] { border-left-color: var(--danger); }
+.inbox-item[data-priority="revisar"] { border-left-color: var(--warning); }
+.inbox-item[data-priority="hoy"] { border-left-color: var(--info); }
+.inbox-body { display: grid; gap: 2px; min-width: 0; }
+.inbox-title { font-size: .95rem; font-weight: 800; overflow-wrap: anywhere; }
+.inbox-detail { font-size: .82rem; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.inbox-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.inbox-actions .link { margin-left: auto; }
 .money { margin: 8px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .money div { padding: 10px 12px; border-radius: 12px; background: var(--sunk); display: grid; gap: 2px; }
 .money dt { font-size: .74rem; font-weight: 800; color: var(--muted); }
@@ -49,6 +63,7 @@
 .thumb { width: 40px; height: 40px; flex: none; border-radius: 10px; }
 
 /* ---------- Pedidos ---------- */
+/* .order es la tarjeta de las órdenes de compra; .order-row, la fila de un pedido del chat. */
 .order { display: grid; gap: 10px; padding: 14px; background: var(--surface-2); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow); position: relative; overflow: hidden; min-width: 0; }
 .order::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--line-strong); }
@@ -63,6 +78,18 @@
 .order-total { display: grid; justify-items: end; text-align: right; }
 .order-total span { font-size: .7rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .order-total strong { font: 800 1.12rem var(--font-num); font-variant-numeric: tabular-nums; }
+.order-list { display: grid; gap: 8px; }
+.order-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 14px 12px 16px; box-shadow: none; }
+.order-row > .order-review, .order-row > .order-actions, .order-row > .order-detail { grid-column: 1 / -1; }
+.order-main { display: grid; gap: 4px; min-width: 0; }
+.order-items { font-size: .86rem; font-weight: 600; color: var(--text-2); overflow-wrap: anywhere; }
+.order-side { display: grid; justify-items: end; align-content: start; gap: 6px; text-align: right; }
+.order-amount { font: 800 1.05rem var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.order-row .order-when { padding: 0; background: none; font-size: .82rem; }
+.order-row .order-when.is-urgent { background: none; }
+.order-detail summary { min-height: 40px; display: flex; align-items: center; font-size: .82rem; font-weight: 800; color: var(--text-2);
+  cursor: pointer; }
+.order-detail[open] { display: grid; gap: 8px; }
 .order-when { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--sunk);
   font-size: .86rem; font-weight: 800; }
 .order-when.is-urgent { background: var(--amber-soft); color: var(--warning); }
@@ -81,9 +108,6 @@
 .line-what em { font-style: normal; overflow-wrap: anywhere; }
 .line-what small { font: 600 .72rem var(--font-num); color: var(--muted); }
 .line-sub { font: 700 .86rem var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.order-pay { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px;
-  border-radius: var(--radius-sm); background: var(--sunk); font-size: .84rem; font-weight: 700; }
-.order-pay > span { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .order-note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-left: 3px solid var(--amber);
   background: var(--amber-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: .86rem; font-weight: 700;
   overflow-wrap: anywhere; }
@@ -94,6 +118,7 @@
   cursor: pointer; }
 .order-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .order-actions .primary { flex: 1 1 140px; }
+.order-row .order-actions .primary { flex: 0 1 auto; }
 .order-grid { display: grid; gap: 12px; align-items: start; }
 
 /* ---------- Ventas ---------- */
@@ -174,6 +199,13 @@
 /* ---------- Tableta ---------- */
 @media (min-width: 640px) {
   .order-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .day-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Las acciones van debajo del texto, no en una tercera columna que estrecharía el título. */
+  .inbox-item { grid-template-columns: auto minmax(0, 1fr); }
+  .inbox-item > .pill { align-self: start; }
+  .inbox-actions { grid-column: 2; }
+  .order-row > .order-actions { grid-column: 1; }
+  .order-row > .order-detail { grid-column: 1 / -1; }
   .money { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 640px) and (max-width: 1023px) {

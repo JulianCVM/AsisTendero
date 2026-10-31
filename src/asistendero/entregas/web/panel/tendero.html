@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#173B4A" data-dark="#0A1519">
-  <title>Panel del tendero · PulsoTienda</title>
+  <title>Hoy · PulsoTienda</title>
   <link rel="icon" href="/assets/cercania-mark.png" type="image/png">
   <script src="/assets/tendero-theme.js"></script>
   <link rel="stylesheet" href="/assets/tendero-theme.css">
@@ -65,7 +65,8 @@
       </div>
       <ul class="nav-list">
         <li data-desktop><span class="nav-group">El día</span></li>
-        <li><a href="#hoy" data-view="hoy"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg><span>Hoy</span></a></li>
+        <li><a href="#hoy" data-view="hoy"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg><span>Hoy</span>
+          <b class="nav-badge is-danger" id="badge-hoy" hidden></b></a></li>
         <li><a href="#pedidos" data-view="pedidos"><svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg><span>Pedidos</span>
           <b class="nav-badge" id="badge-pedidos" hidden></b></a></li>
         <li data-desktop><a href="#ventas" data-view="ventas"><svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg><span>Ventas</span>
@@ -73,8 +74,6 @@
         <li data-desktop><span class="nav-group">La bodega</span></li>
         <li><a href="#inventario" data-view="inventario"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg><span>Inventario</span>
           <b class="nav-badge is-warning" id="badge-inventario" hidden></b></a></li>
-        <li data-desktop><a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>Catálogo</span></a></li>
-        <li data-desktop><a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span>Asistente de bodega</span></a></li>
         <li data-desktop><span class="nav-group">Clientes</span></li>
         <li><a href="#conversaciones" data-view="conversaciones"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Chats</span>
           <b class="nav-badge is-danger" id="badge-chats" hidden></b></a></li>
@@ -84,8 +83,8 @@
       </ul>
       <div class="nav-foot">
         <span class="env-tag">Datos simulados</span>
-        <p>Catálogo, pedidos, ventas y chats ficticios de demostración. Precios en pesos colombianos.</p>
-        <a href="/inicio">Ver la presentación del producto</a>
+        <p>Catálogo, pedidos, ventas y chats ficticios de demostración. AsisTendero atiende el chat; tú decides en este panel.</p>
+        <a href="/inicio">Ver la presentación de PulsoTienda</a>
       </div>
     </nav>
     <!-- Menú «Más» del celular: lo que no cabe en la barra inferior, agrupado como la columna del escritorio. -->
@@ -93,9 +92,6 @@
       <p class="more-head"><strong id="more-title">Más secciones</strong><span class="env-tag">Datos simulados</span></p>
       <p class="more-group">El día</p>
       <a href="#ventas" data-view="ventas"><svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>Ventas y pagos<small id="more-ventas"></small></a>
-      <p class="more-group">La bodega</p>
-      <a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Catálogo<small>lo que ve el asistente</small></a>
-      <a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Asistente de bodega<small>actualiza conversando</small></a>
       <p class="more-group">Ajustes</p>
       <div class="theme-row more-theme"><span class="theme-row-label">Apariencia</span>
         <div class="theme-switch" data-theme-switch role="group" aria-label="Apariencia">
@@ -104,7 +100,7 @@
           <button type="button" data-theme-choice="sistema" aria-pressed="false" title="Igual que el sistema">Igual que el sistema</button>
         </div>
       </div>
-      <a href="/inicio"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>Presentación del producto</a>
+      <a href="/inicio"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>Presentación de PulsoTienda</a>
     </div>
 
     <div class="workspace">
@@ -130,73 +126,37 @@
 
       <main id="main" tabindex="-1">
         <!-- ================= HOY ================= -->
+        <!-- Una sola bandeja con lo que hay que hacer (bandeja.py decide el orden) y, aparte, las cifras del día. -->
         <section id="view-hoy" class="view" aria-labelledby="view-title">
-          <div class="kpis">
-            <a class="kpi is-brand" href="#ventas">
-              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-trend"/></svg>Vendido hoy</span>
-              <strong class="kpi-value" id="kpi-total">—</strong>
-              <span class="kpi-note" id="kpi-sales"></span>
-            </a>
-            <a class="kpi" href="#pedidos" data-filter="pendiente" id="kpi-pending-card">
-              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Por confirmar</span>
-              <strong class="kpi-value" id="kpi-pending">—</strong>
-              <span class="kpi-note" id="kpi-pending-note"></span>
-            </a>
-            <a class="kpi" href="#pedidos" data-filter="confirmado">
-              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg>Por recoger</span>
-              <strong class="kpi-value" id="kpi-confirmed">—</strong>
-              <span class="kpi-note" id="kpi-confirmed-note"></span>
-            </a>
-            <a class="kpi" href="#inventario" data-filter="bajo" id="kpi-low-card">
-              <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Por surtir</span>
-              <strong class="kpi-value" id="kpi-low">—</strong>
-              <span class="kpi-note" id="kpi-low-note"></span>
-            </a>
-          </div>
-
-          <section class="card attention" aria-labelledby="attention-title" id="attention-card" hidden>
-            <div class="card-head"><h2 id="attention-title"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Necesita tu revisión</h2></div>
-            <ul class="attention-list" id="attention-list"></ul>
-            <button type="button" class="fold-toggle" id="attention-more" aria-expanded="false" aria-controls="attention-list" hidden></button>
-          </section>
+          <div class="day-strip" id="day-strip" aria-label="El día en cifras"></div>
 
           <div class="today-grid">
-            <section class="card queue" aria-labelledby="queue-title">
+            <section class="card inbox" aria-labelledby="inbox-title">
               <div class="card-head">
-                <h2 id="queue-title">Atiende ahora</h2>
-                <a class="link" href="#pedidos">Todos los pedidos<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+                <h2 id="inbox-title">Por hacer</h2>
+                <span class="result-line" id="inbox-count"></span>
               </div>
-              <p class="card-help">Primero los apartados que están por vencer, después las recogidas agendadas.</p>
-              <div id="queue-list" class="order-stack"></div>
-              <div id="queue-empty" class="empty" hidden>
+              <p class="card-help">Primero lo urgente: clientes que te llaman y apartados por vencer; después pagos por revisar,
+                recogidas de hoy y avisos de la bodega.</p>
+              <ol id="inbox-list" class="inbox-list"></ol>
+              <button type="button" class="fold-toggle" id="inbox-more" aria-expanded="false" aria-controls="inbox-list" hidden></button>
+              <div id="inbox-empty" class="empty" hidden>
                 <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
                 <strong>Todo al día</strong>
-                <span>Los pedidos que lleguen por el chat aparecen aquí solos.</span>
+                <span>Lo que llegue por el chat o necesite tu revisión aparece aquí solo.</span>
               </div>
             </section>
 
             <div class="side-stack">
-              <section class="card" aria-labelledby="money-title">
-                <div class="card-head">
-                  <h2 id="money-title">Plata del día</h2>
-                  <a class="link" href="#ventas">Ventas<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-                </div>
-                <dl class="money" id="money-facts"></dl>
-              </section>
               <section class="card" aria-labelledby="agent-title">
                 <div class="card-head">
-                  <h2 id="agent-title"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg>El asistente hoy</h2>
+                  <h2 id="agent-title"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg>AsisTendero hoy</h2>
                   <a class="link" href="#conversaciones">Chats<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
                 </div>
                 <dl class="money" id="agent-facts"></dl>
                 <ol class="timeline compact activity" id="activity-list"></ol>
                 <button type="button" class="fold-toggle" id="activity-more" aria-expanded="false" aria-controls="activity-list" hidden></button>
                 <p id="activity-empty" class="empty-line" hidden>Sin actividad del chat todavía.</p>
-              </section>
-              <section class="card" aria-labelledby="top-title">
-                <div class="card-head"><h2 id="top-title">Más vendidos hoy</h2></div>
-                <ol id="top-list" class="rank"></ol>
-                <p id="top-empty" class="empty-line" hidden>Todavía no hay ventas entregadas hoy.</p>
               </section>
               <section class="card" aria-labelledby="incoming-title">
                 <div class="card-head">
@@ -206,13 +166,10 @@
                 <ul id="incoming-list" class="mini-list"></ul>
                 <p id="incoming-empty" class="empty-line" hidden>No hay pedidos a proveedores pendientes.</p>
               </section>
-              <section class="card" aria-labelledby="restock-title">
-                <div class="card-head">
-                  <h2 id="restock-title">Por surtir</h2>
-                  <a class="link" href="#inventario" data-filter="bajo">Ver todo<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-                </div>
-                <ul id="restock-list" class="mini-list"></ul>
-                <p id="restock-empty" class="empty-line" hidden>Ningún producto está por debajo de su alerta.</p>
+              <section class="card" aria-labelledby="top-title">
+                <div class="card-head"><h2 id="top-title">Más vendidos hoy</h2></div>
+                <ol id="top-list" class="rank"></ol>
+                <p id="top-empty" class="empty-line" hidden>Todavía no hay ventas entregadas hoy.</p>
               </section>
             </div>
           </div>
@@ -221,15 +178,19 @@
         <!-- ================= PEDIDOS ================= -->
         <section id="view-pedidos" class="view" aria-labelledby="view-title" hidden>
           <div class="toolbar">
-            <div class="segmented" id="order-filter" role="group" aria-label="Filtrar pedidos por estado"></div>
+            <div class="segmented" id="order-filter" role="group" aria-label="Qué pedidos ver"></div>
+            <label class="select" id="order-status-box" hidden>
+              <span class="visually-hidden">Estado del pedido</span>
+              <select id="order-status"></select>
+            </label>
             <label class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
               <span class="visually-hidden">Buscar pedido</span>
               <input id="order-search" type="search" maxlength="40" placeholder="Código, producto o nota" autocomplete="off">
             </label>
           </div>
-          <p class="card-help">Todos los pedidos los registró el asistente en el chat, con lo que el cliente pidió. Tú los entregas y registras el pago.</p>
-          <div id="order-list" class="order-grid"></div>
+          <p class="card-help">AsisTendero registra cada pedido en el chat con lo que el cliente pidió. Tú lo entregas y registras el pago.</p>
+          <div id="order-list" class="order-list"></div>
           <div id="orders-empty" class="empty" hidden>
             <svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg>
             <strong id="orders-empty-title">No hay pedidos</strong>
@@ -277,7 +238,36 @@
         </section>
 
         <!-- ================= INVENTARIO ================= -->
+        <!-- Una sola lista de productos: lo que guarda el tendero y, con «Como lo ve AsisTendero», lo que responde el chat.
+             El asistente de bodega es la barra de arriba: otra forma de cambiar el inventario, siempre con confirmación. -->
         <section id="view-inventario" class="view" aria-labelledby="view-title" hidden>
+          <form id="assist-form" class="card assist-bar" aria-labelledby="ask-title">
+            <label class="assist-label" id="ask-title" for="assist-text"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Cuéntale qué pasó en la bodega</label>
+            <div class="assist-row">
+              <textarea id="assist-text" maxlength="1000" rows="1" required aria-describedby="assist-help"
+                placeholder="Ej.: llegaron 12 de los 20 bultos de cemento; sube el thinner de galón a 31.500"></textarea>
+              <button type="button" class="icon-button" id="assist-mic" aria-label="Dictar por voz" aria-pressed="false">
+                <svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></button>
+              <button type="submit" class="primary" id="assist-send"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Interpretar</button>
+            </div>
+            <div class="assist-meta">
+              <div class="chips" id="assist-examples" role="group" aria-label="Ejemplos"></div>
+              <p class="hint" id="assist-help">Propone los cambios y <strong>nada se aplica hasta que confirmes</strong>. Interpretar llama a Grok
+                y consume créditos del reto. <span id="assist-mic-hint"></span> <span id="assist-count">0/1000</span></p>
+            </div>
+          </form>
+          <section class="card" aria-labelledby="proposal-title" id="proposal-card" hidden>
+            <div class="card-head"><h2 id="proposal-title">Esto entendí</h2><span id="proposal-status"></span></div>
+            <p class="proposal-heard" id="proposal-heard"></p>
+            <div id="proposal-ops" class="proposal-ops"></div>
+            <ul id="proposal-warnings" class="warning-list"></ul>
+            <div class="sheet-foot inline" id="proposal-actions">
+              <button type="button" class="ghost" id="proposal-cancel">Descartar</button>
+              <button type="button" class="secondary" id="proposal-fix"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>Corregir el mensaje</button>
+              <button type="button" class="primary" id="proposal-apply"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Confirmar y aplicar</button>
+            </div>
+          </section>
+
           <div class="toolbar">
             <nav class="segmented" aria-label="Partes del inventario">
               <a href="#inventario" data-inv-tab="productos">Productos</a>
@@ -308,9 +298,17 @@
                 <button type="button" data-stock="agotado" aria-pressed="false">Agotados</button>
                 <button type="button" data-stock="camino" aria-pressed="false">En camino</button>
               </div>
+              <button type="button" class="secondary view-toggle" id="agent-view" aria-pressed="false">
+                <svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg><span>Como lo ve AsisTendero</span></button>
             </form>
             <p class="result-line" id="product-count" aria-live="polite"></p>
-            <div id="product-grid" class="product-grid"></div>
+            <div class="stock-table-wrap">
+              <table class="stock-table" id="product-table" role="table">
+                <caption class="visually-hidden" id="product-caption">Productos</caption>
+                <thead role="rowgroup"><tr id="product-head" role="row"></tr></thead>
+                <tbody id="product-rows" role="rowgroup"></tbody>
+              </table>
+            </div>
             <div id="products-empty" class="empty" hidden>
               <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
               <strong>Sin resultados</strong>
@@ -318,14 +316,12 @@
             </div>
             <button type="button" class="secondary more" id="show-more" hidden></button>
           </div>
-
           <div id="inv-abastecimiento" class="inv-pane" hidden>
             <p class="card-help">Registra lo que pides al proveedor (queda pendiente, sin sumar a la bodega) y lo que realmente llega
               (solo eso suma). Una entrega puede llegar completa, por partes o con productos de más.</p>
             <div class="button-row">
               <button type="button" class="primary" id="new-po"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Pedido al proveedor</button>
               <button type="button" class="secondary" id="open-receipt-2"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Registrar llegada</button>
-              <a class="ghost" href="#asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Contárselo al asistente</a>
             </div>
             <div class="segmented" id="po-filter" role="group" aria-label="Filtrar pedidos a proveedores"></div>
             <div id="po-list" class="order-grid"></div>
@@ -349,13 +345,17 @@
               <strong>Sin cambios todavía</strong>
               <span>Cuando cambies un precio o lleguen productos, aparecerá aquí.</span>
             </div>
+            <section class="card" aria-labelledby="assist-log-title">
+              <div class="card-head"><h2 id="assist-log-title">Lo que has contado al asistente de bodega</h2></div>
+              <ol id="assist-log" class="timeline"></ol>
+              <p id="assist-log-empty" class="empty-line" hidden>Todavía no has confirmado cambios con el asistente de bodega.</p>
+            </section>
           </div>
-
           <div id="inv-categorias" class="inv-pane" hidden>
             <div class="cat-grid">
               <section class="card" aria-labelledby="cats-title">
                 <div class="card-head"><h2 id="cats-title">Categorías</h2></div>
-                <p class="card-help">El orden es el de los filtros y el catálogo. Renombrar una categoría también cambia lo que el asistente
+                <p class="card-help">El orden es el de los filtros y el catálogo. Renombrar una categoría también cambia lo que AsisTendero
                   dice cuando le preguntan qué venden.</p>
                 <ul id="cat-list" class="cat-list"></ul>
                 <form id="cat-form" class="cat-add">
@@ -375,71 +375,6 @@
               </section>
             </div>
           </div>
-        </section>
-
-        <!-- ================= CATÁLOGO ================= -->
-        <section id="view-catalogo" class="view" aria-labelledby="view-title" hidden>
-          <div class="callout is-soft">
-            <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
-            <p><strong>Vista de consulta.</strong> Es lo mismo que lee el asistente: precio y lo que queda para vender (la bodega menos lo
-              apartado). Úsala para comprobar sus respuestas; aquí no se cambia nada ni se ven costos de compra.</p>
-          </div>
-          <div class="filters">
-            <label class="search">
-              <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-              <span class="visually-hidden">Buscar en el catálogo</span>
-              <input id="cat-search" type="search" maxlength="60" placeholder="Busca como lo pediría un cliente" autocomplete="off">
-            </label>
-          </div>
-          <div class="chips" id="cat-chips" role="group" aria-label="Categorías"></div>
-          <p class="result-line" id="cat-count" aria-live="polite"></p>
-          <div id="catalog-grid" class="catalog-grid"></div>
-          <button type="button" class="secondary more" id="cat-more" hidden></button>
-          <div id="catalog-empty" class="empty" hidden>
-            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-            <strong>Sin resultados</strong>
-            <span>Prueba con otra palabra o elige «Todo».</span>
-          </div>
-        </section>
-
-        <!-- ================= ASISTENTE DE BODEGA ================= -->
-        <section id="view-asistente" class="view" aria-labelledby="view-title" hidden>
-          <div class="assistant-grid">
-            <section class="card composer-card" aria-labelledby="ask-title">
-              <div class="card-head"><h2 id="ask-title"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Cuéntale qué pasó en la bodega</h2></div>
-              <p class="card-help">Escribe o dicta como hablas: «Llegaron 12 de los 20 bultos de cemento que pedimos y el proveedor mandó 5 brochas
-                de más». El asistente propone los cambios; <strong>nada se aplica hasta que confirmes</strong>.</p>
-              <form id="assist-form" class="assist-form">
-                <label class="field"><span class="visually-hidden">Mensaje para el asistente de bodega</span>
-                  <textarea id="assist-text" maxlength="1000" required placeholder="Ej.: mañana llegan 30 galones de vinilo blanco; sube el thinner de galón a 31.500"></textarea></label>
-                <div class="assist-actions">
-                  <button type="button" class="icon-button" id="assist-mic" aria-label="Dictar por voz" aria-pressed="false">
-                    <svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></button>
-                  <span class="hint" id="assist-mic-hint"></span>
-                  <span class="hint" id="assist-count">0/1000</span>
-                  <button type="submit" class="primary" id="assist-send"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Interpretar</button>
-                </div>
-              </form>
-              <div class="chips" id="assist-examples" role="group" aria-label="Ejemplos"></div>
-              <p class="hint">Interpretar llama a Grok y consume créditos del reto. El dictado usa el reconocimiento de voz del navegador.</p>
-            </section>
-            <section class="card" aria-labelledby="proposal-title" id="proposal-card" hidden>
-              <div class="card-head"><h2 id="proposal-title">Esto entendí</h2><span id="proposal-status"></span></div>
-              <p class="proposal-heard" id="proposal-heard"></p>
-              <div id="proposal-ops" class="proposal-ops"></div>
-              <ul id="proposal-warnings" class="warning-list"></ul>
-              <div class="sheet-foot inline" id="proposal-actions">
-                <button type="button" class="ghost" id="proposal-cancel">Descartar</button>
-                <button type="button" class="secondary" id="proposal-fix"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>Corregir el mensaje</button>
-                <button type="button" class="primary" id="proposal-apply"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Confirmar y aplicar</button>
-              </div>
-            </section>
-          </div>
-          <section class="card" aria-labelledby="assist-log-title">
-            <div class="card-head"><h2 id="assist-log-title">Lo que has registrado con el asistente</h2></div>
-            <ol id="assist-log" class="timeline"></ol>
-            <p id="assist-log-empty" class="empty-line" hidden>Todavía no has confirmado cambios con el asistente.</p>
-          </section>
         </section>
 
         <!-- ================= CONVERSACIONES ================= -->
@@ -484,7 +419,7 @@
             <div class="empty chat-placeholder" id="chat-placeholder">
               <svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>
               <strong>Elige una conversación</strong>
-              <span>Verás los mensajes, los pedidos que salieron de ella y lo que hizo el asistente.</span>
+              <span>Verás los mensajes, los pedidos que salieron de ella y lo que hizo AsisTendero.</span>
             </div>
           </div>
         </section>
@@ -514,6 +449,7 @@
           <div><dt>Para vender</dt><dd id="pd-now-free">—</dd></div>
           <div><dt>En camino</dt><dd id="pd-now-coming">—</dd></div>
         </dl>
+        <p class="agent-says"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg><span id="pd-agent"></span></p>
         <div class="field">
           <label for="pd-price">Precio de venta</label>
           <div class="affix"><span aria-hidden="true">$</span>
@@ -538,7 +474,7 @@
         </div>
         <fieldset class="field">
           <legend>Surtido</legend>
-          <p class="hint">Es lo que responde el asistente cuando un cliente pregunta cuándo llega más. Sin dato, no promete fecha.</p>
+          <p class="hint">Es lo que responde AsisTendero cuando un cliente pregunta cuándo llega más. Sin dato, no promete fecha.</p>
           <div class="pair">
             <label><span>Llega</span><select id="pd-restock"></select></label>
             <label><span>O en la fecha</span><input id="pd-date" type="date"></label>
@@ -564,7 +500,7 @@
       <header class="sheet-head">
         <div>
           <h2 id="np-title">Nuevo producto</h2>
-          <p class="sheet-sub">El asistente lo encuentra desde que lo guardas.</p>
+          <p class="sheet-sub">AsisTendero lo encuentra desde que lo guardas.</p>
         </div>
         <button type="button" class="icon-button" data-close aria-label="Cerrar sin guardar">
           <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
@@ -662,27 +598,5 @@
     </form>
   </dialog>
 
-  <!-- Detalle de un producto en el catálogo (solo lectura) -->
-  <dialog id="catalog-dialog" class="sheet" aria-labelledby="cd-title">
-    <div class="sheet-frame">
-      <header class="sheet-head">
-        <img class="sheet-art" id="cd-art" alt="" width="56" height="56">
-        <div>
-          <h2 id="cd-title">Producto</h2>
-          <p class="sheet-sub" id="cd-meta"></p>
-        </div>
-        <button type="button" class="icon-button" data-close aria-label="Cerrar">
-          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
-        </button>
-      </header>
-      <div class="sheet-body">
-        <dl class="stock-facts" id="cd-facts"></dl>
-        <p class="callout is-soft"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg><span id="cd-agent"></span></p>
-      </div>
-      <footer class="sheet-foot">
-        <button type="button" class="secondary" data-close>Cerrar</button>
-      </footer>
-    </div>
-  </dialog>
 </body>
 </html>

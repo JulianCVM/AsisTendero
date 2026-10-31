@@ -1,48 +1,74 @@
-// Inventario: pestañas (productos, abastecimiento, movimientos, categorías y alertas) y la cuadrícula de productos con
-// imagen, precio, lo que queda para vender y lo que viene en camino. Pensada para el celular: tarjetas, no una tabla.
-import {$, api, art, button, cop, el, fill, icon, plural, toast, whenText} from './tendero-core.js';
-import {availabilityPill, bindEditor, historyItem, openEditor, setCategoryOptions} from './tendero-product-editor.js';
+// Inventario: pestañas (productos, abastecimiento, movimientos, categorías y alertas) y una sola tabla de productos.
+// La tabla tiene dos lecturas: la del tendero (precio, bodega, apartado, para vender, en camino) y «Como lo ve
+// AsisTendero» (precio, para vender y lo que responde el chat). Antes eran dos vistas con los mismos 384 productos.
+import {$, api, art, cop, dayText, el, fill, plural, toast} from './tendero-core.js';
+import {agentText, availabilityPill, bindEditor, historyItem, openEditor, setCategoryOptions} from './tendero-product-editor.js';
 import {bindSupply, loadSupply, openReceipt} from './tendero-supply.js';
 import {bindCategories, loadCategories} from './tendero-categories.js';
+import {loadAssistant} from './tendero-assistant.js';
 
 export {availabilityPill, openEditor};
-const PAGE = 48;
+const PAGE = 50;
 const TABS = ['productos', 'abastecimiento', 'movimientos', 'categorias'];
 const FILTER_TEXT = {bajo:' por surtir', agotado:' agotados', camino:' con mercancía en camino'};
-const state = {tab:'productos', stock:'todos', products:[], shown:PAGE, names:new Map(), refresh:null};
+// Columnas de cada lectura; «opt» se esconde en el celular para que la fila quepa sin desplazarse de lado.
+const COLUMNS = {
+  tendero: [['Producto', 'name'], ['Precio', 'num'], ['En bodega', 'num opt'], ['Apartado', 'num opt'],
+    ['Para vender', 'state'], ['En camino', 'opt']],
+  asistente: [['Producto', 'name'], ['Precio', 'num opt'], ['Para vender', 'state'], ['Lo que responde AsisTendero', 'says']],
+};
+const state = {tab:'productos', stock:'todos', agent:false, products:[], shown:PAGE, names:new Map(), refresh:null};
 
-function productCard(product) {
-  const card = el('button', 'product-card');
-  card.type = 'button';
-  card.setAttribute('aria-label', 'Editar ' + product.nombre + ' ' + product.variante + ', ' + cop(product.precio_cop) +
-    ', ' + (product.disponible ? product.disponible + ' para vender' : 'agotado'));
-  const info = el('span', 'product-info');
-  info.append(el('strong', '', product.nombre), el('small', '', product.variante + ' · ' + product.sku));
-  const stats = el('span', 'product-stats');
-  const price = el('span', 'product-price', cop(product.precio_cop));
-  price.append(el('small', '', ' / ' + product.unidad));
-  stats.append(price, availabilityPill(product));
-  const foot = el('span', 'product-foot');
-  const stock = el('span');
-  stock.append(icon('box'), el('span', '', product.stock + ' en bodega' + (product.apartado ? ' · ' + product.apartado + ' apartados' : '')));
-  foot.append(stock);
-  if (product.en_camino) {
-    const coming = el('span');
-    coming.append(icon('truck'), el('span', '', product.en_camino + ' en camino' + (product.llega ? ' · ' + product.llega : '')));
-    foot.append(coming);
+// Los roles se fijan a mano: en el celular la fila se dibuja como bloque y algunos lectores de pantalla dejan de verla
+// como tabla si solo cuentan las etiquetas.
+function cell(className, content) {
+  const node = el('td', className);
+  node.setAttribute('role', 'cell');
+  if (content instanceof Node) node.append(content);
+  else node.textContent = content;
+  return node;
+}
+
+function productRow(product) {
+  const row = el('tr');
+  row.setAttribute('role', 'row');
+  const name = el('button', 'row-open');
+  name.type = 'button';
+  name.setAttribute('aria-label', 'Editar ' + product.nombre + ' ' + product.variante);
+  const text = el('span');
+  text.append(el('strong', '', product.nombre), el('small', '', product.variante + ' · ' + product.sku));
+  name.append(art(product.sku, 'thumb', 36), text);
+  name.addEventListener('click', () => openEditor(product, state.refresh));
+  const price = cop(product.precio_cop) + ' / ' + product.unidad;
+  if (state.agent) {
+    row.append(cell('name', name), cell('num opt', price), cell('state', availabilityPill(product)),
+      cell('says', agentText(product)));
+  } else {
+    row.append(cell('name', name), cell('num', price), cell('num opt', String(product.stock)),
+      cell('num opt', product.apartado ? String(product.apartado) : '—'), cell('state', availabilityPill(product)),
+      cell('opt', product.en_camino ? product.en_camino + (product.llega ? ' · llega ' + dayText(product.llega) : '') : '—'));
   }
-  card.append(art(product.sku), info, stats, foot);
-  card.addEventListener('click', () => openEditor(product, state.refresh));
-  return card;
+  return row;
 }
 
 function renderProducts() {
+  const columns = COLUMNS[state.agent ? 'asistente' : 'tendero'];
+  $('#product-head').replaceChildren(...columns.map(([label, className]) => {
+    const head = el('th', className, label);
+    head.scope = 'col';
+    head.setAttribute('role', 'columnheader');
+    return head;
+  }));
+  $('#product-table').dataset.mode = state.agent ? 'asistente' : 'tendero';
+  $('#product-caption').textContent = state.agent ? 'Productos como los ve AsisTendero' : 'Productos de la bodega';
   const shown = state.products.slice(0, state.shown);
-  fill($('#product-grid'), $('#products-empty'), shown, productCard);
+  fill($('#product-rows'), $('#products-empty'), shown, productRow);
+  $('#product-table').hidden = !shown.length;
   const rest = state.products.length - state.shown;
   $('#show-more').hidden = rest <= 0;
   $('#show-more').textContent = 'Mostrar ' + Math.min(rest, PAGE) + ' más (quedan ' + rest + ')';
-  $('#product-count').textContent = plural(state.products.length, 'producto', 'productos') + (FILTER_TEXT[state.stock] || '');
+  $('#product-count').textContent = plural(state.products.length, 'producto', 'productos') + (FILTER_TEXT[state.stock] || '') +
+    (state.agent ? ' · así responde el chat: precio y lo que queda para vender (bodega menos apartado)' : '');
 }
 
 async function loadProducts() {
@@ -72,7 +98,7 @@ function setStock(kind) {
 export function loadInventory(sub, filter, refresh) {
   state.refresh = refresh;
   state.tab = TABS.includes(sub) ? sub : 'productos';
-  if (filter === 'bajo') setStock('bajo');
+  if (filter === 'bajo' || filter === 'agotado') setStock(filter);
   document.querySelectorAll('[data-inv-tab]').forEach(link => {
     if (link.dataset.invTab === state.tab) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -87,7 +113,7 @@ export function loadInventory(sub, filter, refresh) {
   const box = tab.getBoundingClientRect();
   if (box.left < bar.left || box.right > bar.right) tab.parentElement.scrollLeft += box.left - bar.left - 8;
   if (state.tab === 'abastecimiento') return loadSupply(refresh);
-  if (state.tab === 'movimientos') return loadHistory();
+  if (state.tab === 'movimientos') return Promise.all([loadHistory(), loadAssistant()]);
   if (state.tab === 'categorias') return loadCategories(refresh);
   return loadProducts();
 }
@@ -103,6 +129,11 @@ export function bindInventory(refresh) {
     reload();
   }));
   $('#show-more').addEventListener('click', () => { state.shown += PAGE; renderProducts(); });
+  $('#agent-view').addEventListener('click', () => {
+    state.agent = !state.agent;
+    $('#agent-view').setAttribute('aria-pressed', String(state.agent));
+    renderProducts();
+  });
   $('#open-receipt').addEventListener('click', () => openReceipt(refresh));
   bindEditor(refresh);
   bindSupply(refresh);
