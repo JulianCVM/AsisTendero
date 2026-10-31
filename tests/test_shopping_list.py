@@ -4,12 +4,12 @@ from datetime import datetime
 
 import pytest
 
-from asistendero.chat import run_turn
-from asistendero.grok import Decision
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionStore
-from asistendero.shopping_list import MAX_LIST_LINES, asks_whole_list, missing_from_quote, updated_list
+from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.agente.modelo.grok import Decision
+from asistendero.agente.reglas.shopping_list import MAX_LIST_LINES, asks_whole_list, missing_from_quote, updated_list
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
 
 
 CONDUIT = {"text": "tubo conduit eléctrico de media pulgada", "product": "tubo", "use": "eléctrico", "measure": "1/2 pulgada"}
@@ -174,7 +174,7 @@ def test_a_nearby_option_names_what_it_is_and_shows_no_price(chat):
 
 
 def test_without_a_registered_order_adding_is_not_buying(chat):
-    from asistendero.order_rules import wants_to_buy
+    from asistendero.agente.reglas.order_rules import wants_to_buy
 
     assert not wants_to_buy("agrega una manguera de abasto de 40 cm, cuanto seria todo", {"pedidos": []})
     assert wants_to_buy("agrega una manguera", {"pedidos": [{"pedido": "P-ABCDEF", "estado": "pendiente"}]})
@@ -183,7 +183,7 @@ def test_without_a_registered_order_adding_is_not_buying(chat):
 @pytest.mark.parametrize("message", ["¿a qué hora puedo pasar a recogerlo?", "¿hasta qué hora atienden?",
                                      "y a que horas abren mañana"])
 def test_asking_when_to_come_asks_for_the_store_hours(message):
-    from asistendero.reminders import pending_reminder
+    from asistendero.agente.flujo.reminders import pending_reminder
 
     assert pending_reminder(message, say(intent="pedido"), [], set()) == "INFO_REQUIRED"
 
@@ -246,7 +246,7 @@ def test_the_whole_list_is_not_demanded_after_removing_or_ordering():
     (1, "unidad", "Manguera de abasto", "1/2 x 40 cm", "• Manguera de abasto de 1/2 x 40 cm: $25.500"),
 ])
 def test_a_quote_line_reads_like_the_counter(quantity, unit, name, variant, expected):
-    from asistendero.reply_text import item_line
+    from asistendero.agente.respuesta.reply_text import item_line
 
     assert item_line(quantity, unit, name, variant, 8500, 25500) == expected
 
@@ -335,7 +335,7 @@ def test_the_visor_conversation_follows_the_options_the_list_and_the_hold(chat):
     assert "¿me confirmas con un «sí» antes de las 10:05?" in answer and "te lo guardo hasta 24 horas" in answer
     assert "pú" not in answer.casefold() and "llegar a pagar" not in answer
     # Con el código real del pedido, la misma redacción sin la prisa sí se usaría: lo que la descarta es la prisa.
-    from asistendero.answers import reply_is_grounded
+    from asistendero.agente.respuesta.answers import reply_is_grounded
 
     code, context = book.session_orders(session)[0]["pedido"], sessions.context(session)
     calm = f"Listo, registré tu pedido {code} por $47.400. Confírmame con un sí antes de las 10:05."
@@ -345,7 +345,7 @@ def test_the_visor_conversation_follows_the_options_the_list_and_the_hold(chat):
 
 
 def test_an_option_is_chosen_only_by_an_ordinal_with_its_article():
-    from asistendero.choices import chosen_options
+    from asistendero.agente.reglas.choices import chosen_options
 
     tubes = {"grupo": "tubos pvc", "opciones": [{"sku": "CON-050"}, {"sku": "CON-075"}, {"sku": "PVC-050"}]}
     hoses = {"grupo": "mangueras", "opciones": [{"sku": "MAB-40"}, {"sku": "MAB-60"}]}
@@ -378,7 +378,7 @@ def test_a_rejected_quote_names_the_option_the_client_chose_by_its_order(chat):
 
 
 def test_an_option_is_chosen_by_the_attribute_only_it_has():
-    from asistendero.choices import chosen_options
+    from asistendero.agente.reglas.choices import chosen_options
 
     # Suite natural (H-02, H-08, H-14): en el mostrador se elige «el de 12» o «la talla L», no solo «el primero».
     bulbs = {"grupo": "bombillos LED de luz blanca", "opciones": [
@@ -404,7 +404,7 @@ def test_an_option_is_chosen_by_the_attribute_only_it_has():
 
 
 def _product(stock, unit="metro"):
-    from asistendero.catalog import Product
+    from asistendero.tienda.catalogo.catalog import Product
 
     return Product("PVC-050", "Tubo PVC presión para agua", "1/2 pulgada", unit, 8500, stock, "2026-10-23")
 
@@ -418,7 +418,7 @@ def _product(stock, unit="metro"):
 ])
 def test_stock_is_said_only_when_asked_low_short_or_out(stock, asked, needed, expected):
     # Visor, 23-10: cada opción decía «quedan 12 metros» aunque el cliente no preguntó cuánto había.
-    from asistendero.reply_text import found_sentence
+    from asistendero.agente.respuesta.reply_text import found_sentence
 
     assert found_sentence(_product(stock), stock, True, asked, needed) == expected
 
@@ -428,8 +428,8 @@ def test_stock_is_said_only_when_asked_low_short_or_out(stock, asked, needed, ex
     ("¿cuánto vale el tubo de 1/2?", False), ("necesito 3 metros de tubo", False),
 ])
 def test_what_asks_how_many_are_left(message, expected):
-    from asistendero.reply_text import asks_stock
-    from asistendero.validation import normalize_text
+    from asistendero.agente.reglas.validation import normalize_text
+    from asistendero.agente.respuesta.reply_text import asks_stock
 
     assert asks_stock(normalize_text(message)) is expected
 
@@ -459,8 +459,8 @@ def test_a_bare_ese_after_two_products_asks_which_one(chat):
 
 def test_the_options_remembered_are_the_ones_shown_without_what_the_client_refused():
     # Z-17: la respuesta quita la pintura blanca; si la sesión la guardara, «la primera» elegiría una que no vio.
-    from asistendero.choices import shown_options
-    from asistendero.catalog import Product
+    from asistendero.agente.reglas.choices import shown_options
+    from asistendero.tienda.catalogo.catalog import Product
     paints = [Product(sku, name, "galón", "unidad", 58900, 10, "2026-10-15") for sku, name in
               (("PIN-BLA", "Pintura blanca vinilo"), ("PIV-BEI-G", "Pintura vinilo beige"), ("PIV-GRI-G", "Pintura vinilo gris"))]
     calls = [{"requested_tool": "buscar_productos", "executed": True, "arguments": {"items": [{"text": "pintura en galón"}]},
@@ -479,7 +479,7 @@ def test_a_bare_answer_to_which_one_chooses_the_option_it_names(chat):
     assert result["estado"] == "quoted" and "$40.500" in result["respuesta"]
     assert result["tool_calls"][0]["executed"]
 
-    from asistendero.choices import chosen_options
+    from asistendero.agente.reglas.choices import chosen_options
     context = sessions.context(session)
     # Otro número, otro producto, dos colores o solo la cantidad no eligen nada.
     for message in ["necesito cable negro de 14", "negro, y un taladro", "blanco y negro, 5 de cada uno", "15 metros"]:
@@ -500,7 +500,7 @@ def test_a_bare_de_and_a_number_after_which_one_chooses_that_option(chat):
     assert not rejected["executed"] and rejected["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
     assert quoted["executed"] and result["estado"] == "quoted" and "$79.000" in result["respuesta"]
 
-    from asistendero.choices import chosen_options
+    from asistendero.agente.reglas.choices import chosen_options
     context = sessions.context(session)
     # «deme 50» es una cantidad, un número que ninguna opción tiene no elige, y «de 25 o de 50» sigue en duda.
     for message in ["deme 50", "de 40", "de 25 o de 50", "de 50 y un taladro"]:

@@ -6,14 +6,14 @@
 // tools/castillo/vendor/). Los colores no van en el SVG: cada sólido lleva su material (data-mat) y
 // inicio-mostrador.css lo pinta con los tokens de la página, en claro y en oscuro.
 //
-// Escribe el SVG dentro de src/asistendero/ui/inicio.html, entre <!-- mostrador:inicio --> y <!-- mostrador:fin -->.
+// Escribe el SVG dentro de src/asistendero/entregas/web/pagina/inicio.html, entre <!-- mostrador:inicio --> y <!-- mostrador:fin -->.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../castillo/vendor/iso-kit.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PAGE = join(HERE, "..", "..", "src", "asistendero", "ui", "inicio.html");
+const PAGE = join(HERE, "..", "..", "src", "asistendero", "entregas", "web", "pagina", "inicio.html");
 
 const WIDTH = 560;
 const HEIGHT = 430;

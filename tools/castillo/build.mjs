@@ -5,8 +5,8 @@
 // vendor/); castillo.js solo mueve el mensaje, el rastrillo, la talanquera, el letrero y la balanza.
 //
 // Escribe:
-//   - el SVG dentro de src/asistendero/ui/index.html, entre <!-- castillo:inicio --> y <!-- castillo:fin -->;
-//   - src/asistendero/ui/iso.css, los estilos del kit;
+//   - el SVG dentro de src/asistendero/entregas/web/visor/index.html, entre <!-- castillo:inicio --> y <!-- castillo:fin -->;
+//   - src/asistendero/entregas/web/visor/iso.css, los estilos del kit;
 //   - .local/castillo-preview.html, una página suelta para revisar el dibujo (no se sube).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -15,7 +15,7 @@ import * as k from "./vendor/iso-kit.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
-const UI = join(ROOT, "src", "asistendero", "ui");
+const UI = join(ROOT, "src", "asistendero", "entregas", "web", "visor");
 
 const WIDTH = 760;
 const HEIGHT = 500;
@@ -397,6 +397,6 @@ const license = "/* Estilos del kit isométrico de anatomy (MIT, Copyright (c) 2
 writeFileSync(join(UI, "iso.css"), license + k.ISO_CSS.trim() + "\n");
 
 mkdirSync(join(ROOT, ".local"), { recursive: true });
-const preview = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Castillo</title><link rel="stylesheet" href="../src/asistendero/ui/iso.css"><link rel="stylesheet" href="../src/asistendero/ui/castillo.css"></head><body class="iso castle-preview" data-theme="light"><div id="castle-stage" class="castle-stage">${svg}</div><p id="castle-readout"></p><button id="castle-pause" hidden>p</button><script src="../src/asistendero/ui/castillo.js"></script></body></html>`;
+const preview = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Castillo</title><link rel="stylesheet" href="../src/asistendero/entregas/web/visor/iso.css"><link rel="stylesheet" href="../src/asistendero/entregas/web/visor/castillo.css"></head><body class="iso castle-preview" data-theme="light"><div id="castle-stage" class="castle-stage">${svg}</div><p id="castle-readout"></p><button id="castle-pause" hidden>p</button><script src="../src/asistendero/entregas/web/visor/castillo.js"></script></body></html>`;
 writeFileSync(join(ROOT, ".local", "castillo-preview.html"), preview);
 console.log(`castillo: ${scene.length} piezas en escena, ${svg.length.toLocaleString("es-CO")} caracteres`);

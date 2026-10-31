@@ -7,8 +7,8 @@ from threading import Thread
 
 import pytest
 
-from asistendero import cli, launcher
-from asistendero.seed import create_mock_db
+from asistendero.datos.seed import create_mock_db
+from asistendero.entregas import cli, launcher
 
 
 def _get(server, path):

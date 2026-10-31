@@ -5,13 +5,13 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.executor import catalog_executor
-from asistendero.graph import build_graph
-from asistendero.grok import Decision
-from asistendero.seed import create_mock_db
-from asistendero import tools
-from asistendero.tools import BOGOTA, execute_tool
+from asistendero.agente.flujo.graph import build_graph
+from asistendero.agente.herramientas import tools
+from asistendero.agente.herramientas.executor import catalog_executor
+from asistendero.agente.herramientas.tools import BOGOTA, execute_tool
+from asistendero.agente.modelo.grok import Decision
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 @pytest.fixture

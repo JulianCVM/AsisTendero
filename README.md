@@ -134,7 +134,7 @@ En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python
 
 Arranca en un solo proceso el [visor](#visor-local) (chat del cliente y traza, [http://127.0.0.1:8765/](http://127.0.0.1:8765/)) y el [panel del tendero](#panel-del-tendero) ([http://127.0.0.1:8766/](http://127.0.0.1:8766/), con la página de presentación en `/inicio`). Los dos usan la misma tienda, los mismos pedidos y las mismas conversaciones: lo que un cliente pide en el chat aparece en el panel, y lo que el tendero responde al tomar una conversación llega al chat. Si el catálogo ficticio no existe, lo crea en `.local/mock_catalog_s3.sqlite3` (384 variantes); si ya existe, no lo toca. `Ctrl+C` detiene todo. Abrir las páginas no llama a Grok: cada mensaje del chat y cada **Interpretar** del asistente de bodega sí, y consumen créditos.
 
-El mismo comando, con un mensaje o con `--chat`, responde en la terminal (abajo). Los comandos de cada parte por separado (`asistendero.visual`, `asistendero.tendero`, `asistendero.seed`) siguen disponibles. Si prefieres crear el catálogo sin arrancar nada, usa `python -m asistendero.seed`, que se detiene si la base ya existe.
+El mismo comando, con un mensaje o con `--chat`, responde en la terminal (abajo). Los comandos de cada parte por separado (`asistendero.entregas.visor`, `asistendero.entregas.panel`, `asistendero.datos`) siguen disponibles. Si prefieres crear el catálogo sin arrancar nada, usa `python -m asistendero.datos`, que se detiene si la base ya existe.
 
 ### Terminal
 
@@ -163,7 +163,7 @@ Para una conversación de varios turnos con memoria de sesión (por ejemplo, «B
 Lo abre el comando único; para abrirlo solo:
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.visual
+.\.venv\Scripts\python.exe -m asistendero.entregas.visor
 ```
 
 Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **castillo del harness** muestra el flujo como un castillo isométrico que recorre el mensaje: repite recorridos de ejemplo y, durante una prueba, el recorrido real. Debajo, el **Mapa del harness** es un grafo de decisión que se recorre con mouse, toque o teclado: cada nodo dice qué hace, qué recibe, qué decide y a dónde sigue, y tras una prueba marca el camino recorrido. La **inspección técnica** muestra cada evento en paneles (entrada, decisión de Grok, resultado de la herramienta, evidencia, errores) con el JSON original plegado. El selector de apariencia (claro, oscuro o el del sistema) es el mismo del panel y de la página pública y se recuerda en las tres. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. En el chat, **Enter** envía y **Shift + Enter** hace un salto de línea; el hilo se desplaza dentro de su caja. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
@@ -173,13 +173,13 @@ Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor 
 Lo abre el comando único; para abrirlo solo:
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.tendero
+.\.venv\Scripts\python.exe -m asistendero.entregas.panel
 ```
 
 Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Secciones: **Hoy** (vendido y cobrado, lo que hay que revisar, la cola del mostrador, la mercancía en camino), **Pedidos** (con su pago y los motivos para revisarlos), **Ventas y pagos** (vendido no es cobrado; un comprobante no es un pago confirmado), **Inventario** (tarjetas con imagen, abastecimiento con pedidos al proveedor y llegadas parciales, movimientos, categorías y alertas de stock), **Catálogo** (lo que lee el asistente, en solo lectura), **Asistente de bodega** (actualiza el inventario escribiendo o dictando; nada se aplica sin confirmar) y **Chats** (supervisión, tomar o devolver una conversación, responder y bloquear). Tema claro u oscuro; en el celular la navegación va abajo y en el computador, a la izquierda. Solo escucha en `127.0.0.1` y no tiene usuarios: es una demostración local. Ver [el panel en HARNESS](docs/HARNESS.md#panel-del-tendero).
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.tendero --demo   # tienda de demostración con ventas, pagos, proveedores y chats simulados
+.\.venv\Scripts\python.exe -m asistendero.entregas.panel --demo   # tienda de demostración con ventas, pagos, proveedores y chats simulados
 ```
 
 `--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. Con `python -m asistendero --demo`, el chat del visor también usa esa tienda. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio): explica el producto y trae una demo en un celular que se reproduce sola con casos fijos (no llama a Grok), junto a lo que pasa por dentro y lo que ve el tendero. **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
@@ -225,14 +225,14 @@ La [evidencia S3](evaluation/S3_EVIDENCIA.md) mide el set propio de **43 casos (
 El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama a Grok si se usa `--live`**:
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --include-failures
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite seguridad conversacion   # solo esas suites
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --model grok-4.20-0309-reasoning   # otro modelo permitido
-.\.venv\Scripts\python.exe -m asistendero.evaluate --compare .local\eval-A.json .local\eval-B.json   # tabla, sin Grok
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --include-failures
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite seguridad conversacion   # solo esas suites
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --model grok-4.20-0309-reasoning   # otro modelo permitido
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --compare .local\eval-A.json .local\eval-B.json   # tabla, sin Grok
 # S4: conversaciones largas con pedidos, clientes a la vez y varios modelos, con tope de gasto
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite ruido pedidos sesion_larga concurrencia --budget-usd 1
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite extremos flujos variados --concurrency 3 --budget-usd 1
-.\.venv\Scripts\python.exe -m asistendero.evaluate --live --suite pedidos concurrencia --concurrency 3 `
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite ruido pedidos sesion_larga concurrencia --budget-usd 1
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite extremos flujos variados --concurrency 3 --budget-usd 1
+.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite pedidos concurrencia --concurrency 3 `
     --models grok-4.20-0309-non-reasoning grok-4.5 grok-4.7 --budget-usd 2
 ```
 
@@ -240,46 +240,38 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 
 ## Estructura del repositorio
 
+El paquete se organiza por lo que hace cada parte del sistema; el detalle y el porqué están en
+[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
+
 | Ruta | Contenido |
 | --- | --- |
-| `src/asistendero/graph.py` | Flujo LangGraph: Grok decide, el servidor ejecuta y se responde. |
-| `src/asistendero/injection.py` | Detecta inyecciones de instrucciones (también disfrazadas) antes de Grok; la sesión queda baneada. |
-| `src/asistendero/guardrails.py` | Barreras ante preguntas trampa, datos personales y fugas del prompt. |
-| `src/asistendero/sessions.py` y `chat.py` | Sesiones de chat con memoria acotada en SQLite local. |
-| `src/asistendero/shopping_list.py` | Lista de la conversación: lo cotizado con su cantidad, para «¿cuánto es todo?». |
-| `src/asistendero/choices.py` | Opciones mostradas al cliente, en orden, para entender «dame del primero», «la segunda» o «el de 12». |
-| `src/asistendero/restock.py` | Surtido que anota el tendero: cuándo vuelve a llegar un producto o si ya no se trae, y qué puede afirmar Grok. |
-| `src/asistendero/store_replies.py` | Respuestas y comprobaciones de la información de la tienda. |
-| `src/asistendero/reminders.py` | Avisos del servidor cuando Grok responde sin buscar, sin cotizar, sin la lista o sin consultar el surtido. |
-| `src/asistendero/validation.py` | Reglas que una solicitud de Grok cumple antes de ejecutarse. |
-| `src/asistendero/product_fit.py` | Cuál de varios productos distintos describe el cliente con sus palabras. |
-| `src/asistendero/observations.py` y `executor.py` | Lectura de las respuestas de herramientas y conexión con el ejecutor real. |
-| `src/asistendero/answers.py` y `reply_text.py` | Respuesta final verificada contra lo que devolvieron las herramientas, redactada como un tendero por chat. |
-| `src/asistendero/grok.py` | Instrucciones del agente e integración con Grok. |
-| `src/asistendero/tools.py` | Las cinco herramientas del servidor (`execute_tool`) sobre el catálogo. |
-| `src/asistendero/search.py` y `catalog.py` | Contrato de búsqueda y lectura del catálogo SQLite. |
-| `src/asistendero/evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py` | Evaluador de casos de uno o varios turnos, conversaciones con pedidos, clientes a la vez, fallos controlados, costo por tarea y por modelo. |
-| `src/asistendero/orders.py`, `order_rules.py`, `order_tools.py`, `order_replies.py` y `order_watch.py` | Pedidos para recoger: apartado, reglas, herramientas, respuestas y avisos de vencimiento. |
-| `src/asistendero/inventory.py`, `sales.py`, `sales_history.py`, `tendero.py`, `tendero_views.py`, `tendero_actions.py` y `ui/tendero*` | Panel local del tendero: inventario, pedidos, ventas y las rutas del panel. |
-| `src/asistendero/payments.py` | Registro manual del cobro: método, comprobante, confirmación del tendero; sin verificación bancaria ([PAGOS.md](docs/PAGOS.md)). |
-| `src/asistendero/purchasing.py`, `purchasing_rules.py`, `purchasing_lookup.py` y `purchasing_views.py` | Proveedores, pedidos al proveedor y llegadas completas, parciales o con productos de más. |
-| `src/asistendero/catalog_admin.py` y `stock_thresholds.py` | Categorías del tendero y alertas de stock bajo. |
-| `src/asistendero/stock_*.py` | Asistente de bodega: Grok interpreta el mensaje del tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
-| `src/asistendero/handoff.py` y `supervision.py` | Atención humana de las conversaciones y su supervisión desde el panel. |
-| `src/asistendero/product_art.py`, `product_art_shapes.py` y `product_art_tools.py` | Imágenes generadas de los productos (pictogramas, sin fotos ni marcas). |
-| `src/asistendero/demo.py` | Tienda de demostración del panel (`--demo`), con datos simulados. |
-| `src/asistendero/spelling.py` | Lectura de mensajes mal escritos para respaldar lo que Grok extrajo. |
-| `src/asistendero/harness_info.py` y `harness_flow.py` | Datos del mapa del harness que muestra el visor; los nodos y conexiones del flujo de decisión, atados al grafo real. |
-| `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |
-| `src/asistendero/cli.py` y `launcher.py` | Comando único: sin mensaje arranca el visor y el panel sobre la misma tienda; con un mensaje o `--chat`, la terminal. |
-| `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |
+| `src/asistendero/agente/` | **AsisTendero**, el agente que atiende a los clientes, y su harness. |
+| `agente/modelo/` | `grok.py` (cliente de Grok, decisión y contrato de herramientas) y `prompt.py` (instrucciones del agente). |
+| `agente/flujo/` | `graph.py` (flujo LangGraph: Grok decide, el servidor valida, ejecuta y responde) y `reminders.py` (avisos cuando Grok responde sin un paso que el mensaje exige). |
+| `agente/entrada/` | Lo que se revisa antes de pensar: `injection.py` (inyecciones, con baneo), `guardrails.py` (temas delicados, datos personales, fugas del prompt) y `spelling.py` (mensajes mal escritos). |
+| `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `search.py`, `product_fit.py`, `measures.py`, `choices.py` (opciones mostradas) y `shopping_list.py` (lo cotizado en la conversación). |
+| `agente/herramientas/` | `tools.py` y `order_tools.py` (herramientas del servidor, `execute_tool`), `executor.py` (ejecutor real) y `observations.py` (lectura de sus respuestas). |
+| `agente/respuesta/` | `answers.py` (respuesta verificada contra las observaciones), `reply_text.py`, `store_replies.py`, `order_replies.py` y `restock.py` (qué puede afirmar Grok del surtido). |
+| `agente/conversacion/` | `sessions.py` (memoria acotada en SQLite), `chat.py` (un turno) y `handoff.py` (paso al tendero). |
+| `src/asistendero/tienda/` | Lo que administra el tendero sobre la misma base. |
+| `tienda/catalogo/` | `catalog.py` (lectura en solo lectura), `catalog_admin.py` y `stock_thresholds.py` (categorías y alertas) y `product_art*.py` (pictogramas de producto). |
+| `tienda/inventario/` | `inventory.py`: precio y existencias con historial. |
+| `tienda/pedidos/` | `orders.py` (pedidos para recoger) y `order_watch.py` (vencimiento a los 5 minutos). |
+| `tienda/ventas/` | `payments.py` (registro manual del cobro, ver [PAGOS.md](docs/PAGOS.md)), `sales.py` y `sales_history.py`. |
+| `tienda/abastecimiento/` | `purchasing*.py` (proveedores y pedidos al proveedor) y `stock_*.py` (llegadas y cambios de bodega). |
+| `tienda/bodega/` | `stock_assistant.py` y `stock_proposal.py`: Grok interpreta lo que cuenta el tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
+| `tienda/supervision/` | `supervision.py`: bandeja de conversaciones del panel. |
+| `src/asistendero/datos/` | `catalog_data.py` y `seed.py` (catálogo ficticio y base) y `demo.py` (tienda de demostración, `--demo`). |
+| `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py` y `harness_flow.py` (mapa del harness atado al grafo real). |
+| `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
+| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766) y `estaticos.py`. |
+| `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
 | `tools/mostrador/` | Generador de la tienda isométrica de «Cómo funciona» en `/inicio` (`node tools/mostrador/build.mjs`); usa el mismo kit de anatomy. |
-| `src/asistendero/tracing.py` y `pricing.py` | Trazas, uso y costos de ejecución. |
 | `tests/` | Pruebas automatizadas. |
 | `evaluation/` | Casos y evidencia de verificaciones. |
 | `docs/` | Notas técnicas del prototipo. |
-| `PLANIFICACION.md` y `DESIGN.md` | Backlog e identidad visual del visor. |
+| `PLANIFICACION.md` y `DESIGN.md` | Backlog e identidad visual. |
 
 ## Estado y próximos pasos
 

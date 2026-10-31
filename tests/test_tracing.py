@@ -5,12 +5,13 @@ from threading import Thread
 
 import pytest
 
-from asistendero import evaluate, visual
-from asistendero.catalog import MockCatalog
-from asistendero.grok import Decision, ModelError
-from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionStore
-from asistendero.tracing import run_traced
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.agente.modelo.grok import Decision, ModelError
+from asistendero.datos.seed import create_mock_db
+from asistendero.entregas.visor import visual
+from asistendero.evaluacion import evaluate
+from asistendero.observabilidad.tracing import run_traced
+from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 PVC = {"sku": "PVC-050", "name": "Tubo PVC presión para agua", "variant": "1/2 pulgada", "unit": "metro",
@@ -277,7 +278,7 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
 
 
 def test_evaluate_cli_exits_without_calling_grok_when_live_flag_is_absent(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["asistendero.evaluate"])
+    monkeypatch.setattr("sys.argv", ["asistendero.evaluacion.evaluate"])
     assert evaluate.main() == 0
     assert "Usa --live" in capsys.readouterr().out
 

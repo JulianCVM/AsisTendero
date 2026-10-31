@@ -17,8 +17,8 @@ hizo ninguna llamada a una API de pagos.
 Sin credenciales ni proveedores: el registro manual del cobro que ya puede hacer el tendero desde su panel.
 
 - **Dónde:** `payments.py` (reglas y tablas `payments` y `payment_events` en la base de la tienda),
-  `sales_history.py` (historial y resumen) y la sección **Ventas y pagos** del panel (`ui/tendero-sales.js` y la hoja
-  de pago de `ui/tendero-payments.js`).
+  `sales_history.py` (historial y resumen) y la sección **Ventas y pagos** del panel (`entregas/web/panel/tendero-sales.js` y la hoja
+  de pago de `tendero-payments.js`).
 - **Métodos:** efectivo, datáfono, Nequi, Daviplata, transferencia bancaria y Bre-B.
 - **Estados:** `pendiente` → `comprobante_recibido` → `confirmado` o `rechazado`. Efectivo y datáfono solo pasan de
   `pendiente` a `confirmado` y se confirman «en el mostrador»; un pago digital solo se confirma con la revisión del

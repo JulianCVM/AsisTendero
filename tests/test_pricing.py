@@ -1,8 +1,8 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from asistendero import grok
-from asistendero.pricing import call_cost, run_cost
+from asistendero.agente.modelo import grok
+from asistendero.observabilidad.pricing import call_cost, run_cost
 
 
 def test_cost_prefers_api_reported_ticks_and_sums_two_calls():

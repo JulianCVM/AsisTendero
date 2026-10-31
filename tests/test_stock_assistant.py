@@ -10,13 +10,13 @@ import sqlite3
 
 import pytest
 
-from asistendero.grok import ModelError
-from asistendero.inventory import Inventory
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.seed import create_mock_db
-from asistendero.stock_assistant import (MAX_OPERATIONS, MAX_TEXT_CHARS, STOCK_PROMPT, STOCK_PROMPT_VERSION,
+from asistendero.agente.modelo.grok import ModelError
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.bodega.stock_assistant import (MAX_OPERATIONS, MAX_TEXT_CHARS, STOCK_PROMPT, STOCK_PROMPT_VERSION,
                                          StockAssistantError, interpret_text)
-from asistendero.stock_proposal import VALID_MINUTES, StockAssistant
+from asistendero.tienda.bodega.stock_proposal import VALID_MINUTES, StockAssistant
+from asistendero.tienda.inventario.inventory import Inventory
+from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
 
 EXAMPLE = ("ya llegaron los 20 bultos de cemento, de los 15 galones de pintura blanca solo llegaron 10 y el "
            "proveedor mandó 6 brochas de 2 pulgadas de más")

@@ -4,19 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.chat import run_turn
-from asistendero.executor import catalog_executor
-from asistendero.grok import Decision, ModelError
-from asistendero.handoff import (
+from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.handoff import (
     ESCALATION_NOTICE, FINISHED_NOTICE, HANDOFF_AGAIN_REPLY, HANDOFF_REPLY, MAX_STAFF_REPLY_CHARS, RELEASED_NOTICE,
     STAFF_HOLD_REPLY, TAKEN_NOTICE, AttentionError, asks_for_human, attention, ban_manually, finish, release,
     request_human, staff_reply, take_over,
 )
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionError, SessionStore
-from asistendero.supervision import LIVE_WINDOW, conversation, conversations
+from asistendero.agente.conversacion.sessions import SessionError, SessionStore
+from asistendero.agente.herramientas.executor import catalog_executor
+from asistendero.agente.modelo.grok import Decision, ModelError
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.supervision.supervision import LIVE_WINDOW, conversation, conversations
 
 
 def never(*_args, **_kwargs):

@@ -8,14 +8,21 @@ from threading import Thread
 
 import pytest
 
-from asistendero import visual
-from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
-from asistendero.grok import AGENT_PROMPT, PROMPT_VERSION, TOOL_NAMES
-from asistendero.harness_info import describe_harness
-from asistendero.sessions import SessionStore
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
+from asistendero.agente.modelo.grok import AGENT_PROMPT, PROMPT_VERSION, TOOL_NAMES
+from asistendero.entregas.estaticos import web_file
+from asistendero.entregas.visor import visual
+from asistendero.observabilidad.harness_info import describe_harness
 
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "asistendero"
+
+
+def module_file(name: str) -> Path:
+    """Un módulo del paquete, en el subpaquete donde viva."""
+    (path,) = SRC.rglob(name)
+    return path
 
 
 def test_description_comes_from_the_code_constants():
@@ -33,14 +40,14 @@ def test_description_comes_from_the_code_constants():
 
 
 def test_every_rejection_code_in_the_flow_is_on_the_map():
-    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("validation.py", "graph.py", "order_rules.py"))
+    source = "".join(module_file(name).read_text(encoding="utf-8") for name in ("validation.py", "graph.py", "order_rules.py"))
     codes = set(re.findall(r'Rejected\("([A-Z_]+)"', source))
     assert codes, "no se encontraron rechazos en el código"
     assert codes <= set(describe_harness()["rejections"])
 
 
 def test_every_final_state_in_the_flow_is_classified():
-    source = "".join((SRC / name).read_text(encoding="utf-8") for name in ("answers.py", "graph.py", "order_replies.py", "chat.py"))
+    source = "".join(module_file(name).read_text(encoding="utf-8") for name in ("answers.py", "graph.py", "order_replies.py", "chat.py"))
     patterns = [
         r'_(?:pedido|recogida)": "([a-z_]+)"',  # STATUS_BY_TOOL de order_replies
         r'if results else "([a-z_]+)"',  # estado de order_reply sin pedidos válidos
@@ -104,16 +111,16 @@ def test_visual_server_serves_harness_map_only_to_local_host(monkeypatch, tmp_pa
 
 
 def _castle_data(name: str) -> dict:
-    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    page = web_file("index.html").decode("utf-8")
     match = re.search(rf'data-{name}="([^"]+)"', page)
     assert match, f"el castillo no trae data-{name}"
     return json.loads(match.group(1).replace("&quot;", '"').replace("&amp;", "&"))
 
 
 def test_the_castle_animates_every_node_of_the_graph():
-    source = (SRC / "graph.py").read_text(encoding="utf-8")
+    source = module_file("graph.py").read_text(encoding="utf-8")
     nodes = set(re.findall(r'add_node\("([a-z_]+)"', source))
-    script = (SRC / "ui" / "castillo.js").read_text(encoding="utf-8")
+    script = web_file("castillo.js").decode("utf-8")
     assert nodes == {"validate", "interpret", "retrieve", "respond"}
     for node in nodes:
         assert f"event.node === '{node}'" in script, f"el castillo no muestra el nodo {node}"
@@ -124,10 +131,10 @@ def test_the_castle_route_only_joins_stations_that_exist():
     points = set(route["points"])
     assert {"cliente", "puerta", "torre", "cruce", "aduana", "bodega", "balanza", "mostrador", "salida"} <= points
     assert route["edges"] and all(a in points and b in points for a, b in route["edges"])
-    script = (SRC / "ui" / "castillo.js").read_text(encoding="utf-8")
+    script = web_file("castillo.js").decode("utf-8")
     walked = set(re.findall(r"go\('([a-z]+)'", script)) | set(re.findall(r"live\('([a-z]+)'", script))
     assert walked and walked <= points, walked - points
-    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    page = web_file("index.html").decode("utf-8")
     for name in ("token", "portcullis", "barrier", "sign", "beam", "pan-left", "pan-right", "strings", "flag",
                  "lantern", "crates", "lock"):
         assert f'data-part="{name}"' in page, f"falta la pieza {name} que mueve castillo.js"
@@ -162,8 +169,8 @@ def test_visual_server_serves_the_castle_without_unsafe_html(tmp_path):
 def test_the_chat_script_finds_every_element_it_uses():
     # El chat se rearmó (hilo con desplazamiento propio, Enter para enviar): un id que app.js busca y la página ya
     # no tiene rompe el visor sin que ninguna otra prueba lo note.
-    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
-    script = (SRC / "ui" / "app.js").read_text(encoding="utf-8")
+    page = web_file("index.html").decode("utf-8")
+    script = web_file("app.js").decode("utf-8")
     used = set(re.findall(r"querySelector\('#([\w-]+)'\)", script))
     assert {"chat-scroll", "chat-thread", "jump-latest", "query", "run", "form"} <= used
     missing = [name for name in sorted(used) if f'id="{name}"' not in page]
@@ -174,7 +181,7 @@ def test_the_chat_script_finds_every_element_it_uses():
 def test_the_decision_map_is_the_real_graph():
     # El mapa separa la ruta (arista condicional de interpret) y la aduana y la bodega (dentro de retrieve); sin las
     # conexiones internas, cada conexión del mapa debe ser una arista del grafo compilado, y ninguna puede faltar.
-    from asistendero.graph import build_graph
+    from asistendero.agente.flujo.graph import build_graph
 
     flow = describe_harness()["flow"]
     graph = build_graph(lambda name, arguments: {}, lambda *args, **kwargs: None).get_graph()
@@ -195,12 +202,12 @@ def test_the_decision_map_is_the_real_graph():
 
 def _visor_files() -> dict[str, str]:
     served = {name for name, _ in visual.TraceHandler._assets.values()}
-    return {name: (SRC / "ui" / name).read_text(encoding="utf-8") for name in sorted(served)
+    return {name: web_file(name).decode("utf-8") for name in sorted(served)
             if name.endswith((".js", ".css"))}
 
 
 def test_the_visor_page_loads_only_served_files_and_its_scripts_find_their_elements():
-    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    page = web_file("index.html").decode("utf-8")
     files = _visor_files()
     served = set(visual.TraceHandler._assets)
     assert set(re.findall(r'(?:href|src)="(/assets/[\w.-]+)"', page)) <= served
@@ -217,13 +224,13 @@ def test_the_visor_page_loads_only_served_files_and_its_scripts_find_their_eleme
 
 
 def test_the_inspection_keeps_the_original_json_and_the_download():
-    script = (SRC / "ui" / "traza.js").read_text(encoding="utf-8")
+    script = web_file("traza.js").decode("utf-8")
     assert "JSON.stringify(event, null, 2)" in script and "JSON original del evento" in script
     assert "JSON.stringify(events, null, 2)" in script and "'#download'" in script
 
 
 def test_the_visor_colors_are_tokens_with_the_same_dark_palette_twice():
-    sheet = (SRC / "ui" / "conversacion.css").read_text(encoding="utf-8")
+    sheet = web_file("conversacion.css").decode("utf-8")
     media = re.search(r':root:not\(\[data-theme="light"\]\) \{(.*?)\n  \}', sheet, re.S).group(1)
     chosen = re.search(r':root\[data-theme="dark"\] \{(.*?)\n\}', sheet, re.S).group(1)
     tokens = lambda block: dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
@@ -232,10 +239,10 @@ def test_the_visor_colors_are_tokens_with_the_same_dark_palette_twice():
     assert set(tokens(media)) <= set(light)
     # Fuera de las paletas no hay colores fijos: con uno suelto, el modo oscuro deja una caja clara.
     for name in ("conversacion.css", "visor-panels.css", "harness-map.css"):
-        text = (SRC / "ui" / name).read_text(encoding="utf-8")
+        text = web_file(name).decode("utf-8")
         outside = re.sub(r":root[^{]*\{.*?\n\s*\}", "", text, flags=re.S)
         assert len(outside) > len(text) / 2, name  # quitar las paletas no puede borrar la hoja entera
         assert not re.findall(r"#[0-9A-Fa-f]{3,8}\b", outside), name
-    castle = (SRC / "ui" / "castillo.css").read_text(encoding="utf-8")
+    castle = web_file("castillo.css").decode("utf-8")
     assert '.castle-stage.iso[data-theme="dark"]' in castle
-    assert 'id="castle-stage"' in (SRC / "ui" / "index.html").read_text(encoding="utf-8").split("data-follow-theme")[0][-200:]
+    assert 'id="castle-stage"' in web_file("index.html").decode("utf-8").split("data-follow-theme")[0][-200:]

@@ -2,12 +2,12 @@
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.executor import catalog_executor
-from asistendero.graph import build_graph
-from asistendero.grok import Decision
-from asistendero.seed import create_mock_db
-from asistendero.spelling import heard_as, sound_key
+from asistendero.agente.entrada.spelling import heard_as, sound_key
+from asistendero.agente.flujo.graph import build_graph
+from asistendero.agente.herramientas.executor import catalog_executor
+from asistendero.agente.modelo.grok import Decision
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 PVC_HALF = {"text": "tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}

@@ -12,12 +12,12 @@ import threading
 
 import pytest
 
-from asistendero import evaluate
-from asistendero.catalog import MockCatalog
-from asistendero.eval_sessions import SIM_START, StoreClock
-from asistendero.grok import Decision, current_model
-from asistendero.orders import BOGOTA
-from asistendero.seed import create_mock_db
+from asistendero.agente.modelo.grok import Decision, current_model
+from asistendero.datos.seed import create_mock_db
+from asistendero.evaluacion import evaluate
+from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.pedidos.orders import BOGOTA
 
 
 S4_SUITES = {"ruido", "pedidos", "sesion_larga", "concurrencia", "extremos", "flujos", "variados", "inyeccion",
@@ -623,7 +623,7 @@ def test_wait_turn_expires_the_order_and_leaves_the_notice_without_calling_grok(
 
 
 def test_one_of_several_wordings_is_enough():
-    from asistendero.eval_checks import verdict
+    from asistendero.evaluacion.eval_checks import verdict
 
     check = {"expected_status": "found", "must_include_any": [["ya no", "descontinu"]]}
     assert verdict(check, {"estado": "found", "respuesta": "No, está descontinuado."}, []) == []

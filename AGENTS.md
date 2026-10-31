@@ -12,7 +12,7 @@ mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor ne
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
 reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
 por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero` con un mensaje o `--chat`),
-visor local (`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`); el panel del tendero
+visor local (`asistendero-visual`) y evaluador (`python -m asistendero.evaluacion`); el panel del tendero
 (`asistendero-tendero`) administra inventario y pedidos sobre la misma base. `python -m asistendero` sin mensaje
 arranca el visor y el panel juntos sobre la misma tienda (`launcher.py`). Código, comentarios, documentación, commits
 y PR en **español**.
@@ -138,6 +138,13 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 ## Dónde va cada cosa
 
+El paquete se divide por función (`docs/ARQUITECTURA.md`): `agente/` (AsisTendero y su harness), `tienda/` (lo que
+administra el tendero), `datos/` (catálogo ficticio, esquema y demo), `observabilidad/`, `evaluacion/` y `entregas/`
+(terminal, comando único, visor, panel y los archivos de las pantallas en `entregas/web/`). Cada nombre de módulo es
+único, por eso la tabla los nombra sin ruta; el subpaquete de cada uno está en el README. Un módulo nuevo va en el
+paquete de su función y solo importa los de abajo (`entregas → evaluacion → observabilidad → agente → tienda →
+datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda evitar se anota ahí con su motivo.
+
 | Necesito… | Va en |
 |---|---|
 | Cambiar qué decide Grok o su formato de salida | `grok.py` (`AGENT_PROMPT`, `parse_decision`), subiendo `PROMPT_VERSION` |
@@ -154,7 +161,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Una regla antes de registrar, confirmar, agendar o cancelar un pedido | `validate_order_request` de `order_rules.py`, con su prueba en `tests/test_orders.py` |
 | Un estado, plazo o límite del pedido | `orders.py` (`OrderBook`); la herramienta, en `order_tools.py` |
 | Cómo se redacta un pedido o un aviso de vencimiento | `order_replies.py`; el barrido, en `order_watch.py` |
-| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `tendero.py` y `ui/tendero*` |
+| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `entregas/panel/` y `entregas/web/panel/` |
 | Una ruta del panel del tendero | Lectura en `tendero_views.py` y `READS` de `tendero.py`; cambios en `ROUTES` de `tendero_actions.py`, con su prueba en `tests/test_tendero.py` |
 | Una regla del cobro (método, estado, quién confirma) | `payments.py`, con su prueba en `tests/test_payments.py`; el historial, en `sales_history.py` |
 | Proveedores, pedidos al proveedor o llegadas de mercancía | `purchasing.py` (reglas en `purchasing_rules.py`), con su prueba en `tests/test_purchasing.py` |
@@ -163,10 +170,10 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Cuándo pasa una conversación al tendero o qué puede hacer él | `handoff.py` y `supervision.py`, con su prueba en `tests/test_supervision.py` |
 | La imagen de un producto | `product_art.py` (reglas) y `product_art_shapes.py`/`product_art_tools.py` (dibujos), con su prueba en `tests/test_product_art.py` |
 | Qué arranca el comando único y con qué tienda | `launcher.py` (lo llama `cli.py` sin mensaje), con su prueba en `tests/test_launcher.py` |
-| La página pública `/inicio` o los casos de su demo | `ui/inicio.html`, `inicio*.css` e `inicio*.js` (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
-| Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `ui/harness-map.js` y `harness-map.css` |
-| Cómo se lee un evento de la traza o el resultado de una prueba en el visor | `ui/traza.js` y `traza-lectura.js`, `ui/resultado.js` (piezas comunes en `visor-comun.js`); cada archivo se registra en `TraceHandler._assets` de `visual.py` |
-| La apariencia (claro, oscuro o la del sistema) de la página pública, el panel y el visor | `ui/tendero-theme.js` (se carga en `<head>`; guarda la elección en una cookie común a los dos puertos) y `ui/tendero-theme.css`, con su prueba en `tests/test_tendero.py` |
+| La página pública `/inicio` o los casos de su demo | `entregas/web/pagina/` (`inicio.html`, `inicio*.css` e `inicio*.js`) (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
+| Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/harness-map.js` y `harness-map.css` |
+| Cómo se lee un evento de la traza o el resultado de una prueba en el visor | `traza.js`, `traza-lectura.js` y `resultado.js` de `entregas/web/visor/` (piezas comunes en `visor-comun.js`); cada archivo se registra en `TraceHandler._assets` de `visual.py` |
+| La apariencia (claro, oscuro o la del sistema) de la página pública, el panel y el visor | `entregas/web/comun/tendero-theme.js` (se carga en `<head>`; guarda la elección en una cookie común a los dos puertos) y `tendero-theme.css`, con su prueba en `tests/test_tendero.py` |
 | Datos de la tienda de demostración | `demo.py` (siempre ficticios y con los módulos reales), con su prueba en `tests/test_tendero.py` |
 | Entender mejor un mensaje mal escrito | `spelling.py` (`heard_as`), con su prueba en `tests/test_spelling.py` |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
@@ -207,7 +214,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 - Los dos escuchan solo en `127.0.0.1` y rechazan otro `Host` u `Origin`. No se exponen a la red.
 - Los datos se pintan con `textContent`, nunca con `innerHTML`. Nada de `alert()`, `confirm()`, `prompt()` ni
-  JavaScript inline: listeners en los módulos de `ui/`.
+  JavaScript inline: listeners en los módulos de `entregas/web/`.
 - Celular primero: se revisa a 390 px de ancho, sin desplazamiento horizontal. Cada botón de solo ícono lleva
   `aria-label` y un estado nunca se indica solo con color. El estilo sigue `DESIGN.md`.
 
@@ -250,7 +257,7 @@ Una tarea no está terminada hasta que esto pase sin errores (en Windows, `.venv
 
 - Si cambiaste algo que se ve en el visor o en el panel del tendero, **ábrelo en el navegador** (escritorio y 390 px)
   y recorre el flujo.
-- Las corridas reales (`asistendero`, el visor o `python -m asistendero.evaluate --live`) **consumen créditos del
+- Las corridas reales (`asistendero`, el visor o `python -m asistendero.evaluacion --live`) **consumen créditos del
   reto**. Solo se hacen cuando la persona lo pide y con un objetivo de evaluación. Su resultado se registra en
   bitácora con commit, fecha, `PROMPT_VERSION` y costo, aunque falle.
 - Si algo falla, dilo con la salida; nunca digas «listo» con algo en rojo. Lo que no se probó con Grok real se dice así.

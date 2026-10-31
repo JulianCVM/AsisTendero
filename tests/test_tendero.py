@@ -10,17 +10,24 @@ from threading import Thread
 
 import pytest
 
-from asistendero import tendero
-from asistendero.tendero_actions import ROUTES
-from asistendero.catalog import MockCatalog
-from asistendero.inventory import Inventory, InventoryError
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.sales import day_summary, order_board
-from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionStore
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.datos.seed import create_mock_db
+from asistendero.entregas.panel import tendero
+from asistendero.entregas.panel.tendero_actions import ROUTES
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.inventario.inventory import Inventory, InventoryError
+from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.ventas.sales import day_summary, order_board
 
 
-UI = Path(__file__).resolve().parents[1] / "src" / "asistendero" / "ui"
+REPO = Path(__file__).resolve().parents[1]
+WEB = REPO / "src" / "asistendero" / "entregas" / "web"
+
+
+def web(name: str) -> Path:
+    """Un archivo de las pantallas, esté en comun, visor, panel o pagina (ver entregas/estaticos.py)."""
+    (path,) = WEB.glob(f"*/{name}")
+    return path
 
 
 class Clock:
@@ -43,7 +50,7 @@ def test_price_and_stock_edits_reach_the_agent_and_leave_an_audit_trail(shop):
     assert updated["precio_cop"] == 9000 and updated["stock"] == 20 and updated["disponible"] == 20
     assert catalog.get("PVC-050").price_cop == 9000 and catalog.get("PVC-050").stock == 20
     # Las herramientas que invoca el agente leen la base, no datos fijos: ven el cambio del tendero al instante.
-    from asistendero.tools import execute_tool
+    from asistendero.agente.herramientas.tools import execute_tool
     availability = execute_tool("consultar_disponibilidad", {"sku": "PVC-050"}, catalog=catalog)
     quote = execute_tool("calcular_cotizacion_informativa", {"lines": [{"sku": "PVC-050", "quantity": 15}]}, catalog=catalog)
     assert availability["data"]["stock"] == 20 and quote["data"]["total_cop"] == 135000
@@ -198,11 +205,11 @@ def test_shopkeeper_sees_banned_conversations_and_can_lift_a_ban(server, session
 
 
 def _panel_scripts() -> dict[str, str]:
-    return {path.name: path.read_text(encoding="utf-8") for path in sorted(UI.glob("tendero*.js"))}
+    return {path.name: path.read_text(encoding="utf-8") for path in sorted(WEB.glob("*/" + "tendero*.js"))}
 
 
 def test_ui_never_uses_inline_code_html_injection_or_blocking_dialogs():
-    html = (UI / "tendero.html").read_text(encoding="utf-8")
+    html = (web("tendero.html")).read_text(encoding="utf-8")
     assert not re.search(r"<script>(?!\s*</script>)|\son\w+=|style=", html)
     scripts = _panel_scripts()
     # Cada módulo del panel lo sirve el servidor: uno nuevo sin registrar dejaría la página en blanco.
@@ -213,7 +220,7 @@ def test_ui_never_uses_inline_code_html_injection_or_blocking_dialogs():
 
 
 def test_panel_scripts_only_use_what_the_page_and_the_server_have():
-    html = (UI / "tendero.html").read_text(encoding="utf-8")
+    html = (web("tendero.html")).read_text(encoding="utf-8")
     scripts = _panel_scripts()
     ids = set(re.findall(r'\bid="([\w-]+)"', html))
     for name, script in scripts.items():
@@ -240,7 +247,7 @@ def _nav_targets(markup: str) -> list[str]:
 
 
 def test_every_panel_view_is_reachable_on_the_phone_and_on_the_desktop():
-    html = (UI / "tendero.html").read_text(encoding="utf-8")
+    html = (web("tendero.html")).read_text(encoding="utf-8")
     views = set(re.findall(r"^  ([a-z]+): \{title:", _panel_scripts()["tendero.js"], re.M))
     nav = html.split('<ul class="nav-list">')[1].split("</ul>")[0]
     items = re.findall(r"<li(?: (data-desktop|data-mobile))?>(.*?)</li>", nav, re.S)
@@ -261,10 +268,10 @@ def test_every_panel_view_is_reachable_on_the_phone_and_on_the_desktop():
 def test_every_class_the_panel_scripts_create_has_a_style():
     # Una clase sin estilo deja el elemento con el aspecto del navegador: así se salía de la tarjeta el campo para
     # renombrar una categoría («cat-info» no tenía reglas).
-    css = "".join(path.read_text(encoding="utf-8") for path in UI.glob("tendero*.css"))
-    html = (UI / "tendero.html").read_text(encoding="utf-8")
+    css = "".join(path.read_text(encoding="utf-8") for path in WEB.glob("*/" + "tendero*.css"))
+    html = (web("tendero.html")).read_text(encoding="utf-8")
     # Cada hoja del panel está enlazada y la sirve el servidor: una que falte deja vistas sin estilo.
-    for path in UI.glob("tendero*.css"):
+    for path in WEB.glob("*/" + "tendero*.css"):
         assert f'href="/assets/{path.name}"' in html and f"/assets/{path.name}" in tendero.ASSETS, path.name
     styled = set(re.findall(r"\.([a-zA-Z][\w-]*)", css))
     # Ganchos sin regla propia: «chip» se pinta con «.chips button» y «stock» con su atributo data-stock.
@@ -315,7 +322,7 @@ def test_a_failed_catalog_creation_leaves_no_half_built_file(tmp_path, monkeypat
     # Con la conexión abierta, en Windows borrar la base a medio crear fallaba y tapaba el error original.
     import sqlite3
 
-    from asistendero import seed
+    from asistendero.datos import seed
 
     broken = [(*seed.PRODUCTS[0][:5], -1, *seed.PRODUCTS[0][6:])]  # existencias negativas: las rechaza el CHECK
     monkeypatch.setattr(seed, "PRODUCTS", broken)
@@ -428,7 +435,7 @@ def test_product_images_and_the_public_page_are_served_without_inline_code(serve
 
 
 def _landing_scripts() -> dict[str, str]:
-    return {path.name: path.read_text(encoding="utf-8") for path in sorted(UI.glob("inicio*.js"))}
+    return {path.name: path.read_text(encoding="utf-8") for path in sorted(WEB.glob("*/" + "inicio*.js"))}
 
 
 def test_the_public_page_serves_everything_it_uses_and_says_the_demo_is_simulated(server):
@@ -459,11 +466,11 @@ def test_the_public_page_serves_everything_it_uses_and_says_the_demo_is_simulate
 
 
 def test_the_three_screens_share_one_appearance_switch_that_survives_the_port_change():
-    from asistendero import visual
+    from asistendero.entregas.visor import visual
     served = {path for path, _ in visual.TraceHandler._assets.items()} | set(tendero.ASSETS)
     assert {"/assets/tendero-theme.js", "/assets/tendero-theme.css"} <= served
     for name in ("tendero.html", "inicio.html", "index.html"):
-        page = (UI / name).read_text(encoding="utf-8")
+        page = (web(name)).read_text(encoding="utf-8")
         head = page.split("</head>")[0]
         # El tema se aplica antes de la primera hoja de estilos: si no, el modo oscuro parpadea en claro.
         assert head.index('<script src="/assets/tendero-theme.js"></script>') < head.index('rel="stylesheet"'), name
@@ -478,12 +485,12 @@ def test_the_three_screens_share_one_appearance_switch_that_survives_the_port_ch
             assert "#i-moon" in oscuro and {"sun", "moon"} <= symbols, name
             # «Igual que el sistema» se nombra con texto visible, no con otro ícono.
             assert re.search(r">(Sistema|Igual que el sistema)</button>", sistema), name
-    script = (UI / "tendero-theme.js").read_text(encoding="utf-8")
+    script = (web("tendero-theme.js")).read_text(encoding="utf-8")
     # El visor (8765) y el panel (8766) son orígenes distintos: localStorage no se comparte entre puertos.
     assert "document.cookie = KEY" in script and "SameSite" in script
     assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
     for name in ("tendero.js", "inicio.js", "app.js"):
-        assert "theme-toggle" not in (UI / name).read_text(encoding="utf-8"), name
+        assert "theme-toggle" not in (web(name)).read_text(encoding="utf-8"), name
 
 
 def test_the_landing_never_injects_html_opens_dialogs_or_calls_the_network():
@@ -495,13 +502,13 @@ def test_the_landing_never_injects_html_opens_dialogs_or_calls_the_network():
 
 
 def test_the_demo_quotes_the_real_replies_prices_and_categories():
-    from asistendero.grok import TOOL_NAMES
-    from asistendero.handoff import HANDOFF_REPLY
-    from asistendero.injection import blocked_reply
-    from asistendero.reply_text import format_cop
-    from asistendero.seed import CATEGORIES, PRODUCTS
+    from asistendero.agente.conversacion.handoff import HANDOFF_REPLY
+    from asistendero.agente.entrada.injection import blocked_reply
+    from asistendero.agente.modelo.grok import TOOL_NAMES
+    from asistendero.agente.respuesta.reply_text import format_cop
+    from asistendero.datos.seed import CATEGORIES, PRODUCTS
 
-    scenes = (UI / "inicio-escenas.js").read_text(encoding="utf-8")
+    scenes = (web("inicio-escenas.js")).read_text(encoding="utf-8")
     assert blocked_reply({"pedidos": []}) in scenes and HANDOFF_REPLY in scenes
     # Lo que pasa por dentro se cuenta en palabras del negocio: los nombres de las herramientas viven en el README.
     assert "code:" not in scenes and not any(name in scenes for name in TOOL_NAMES)
@@ -521,10 +528,10 @@ def _landing_section(page, section_id):
 
 
 def test_the_landing_first_view_speaks_to_any_business_and_its_example_uses_real_catalog_data():
-    from asistendero.orders import PAYMENT
-    from asistendero.reply_text import format_cop
-    from asistendero.seed import PRODUCTS
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    from asistendero.agente.respuesta.reply_text import format_cop
+    from asistendero.datos.seed import PRODUCTS
+    from asistendero.tienda.pedidos.orders import PAYMENT
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     hero = _landing_section(page, "inicio")
     text = re.sub(r"<[^>]+>", " ", hero)
     # La primera vista habla del beneficio para cualquier negocio: sin jerga, sin rubro fijo ni cifras de evaluación.
@@ -538,17 +545,17 @@ def test_the_landing_first_view_speaks_to_any_business_and_its_example_uses_real
     _, name, size, unit, price, stock, _ = {product[0]: product for product in PRODUCTS}["PIN-BLA"]
     assert (name, size, unit) == ("Pintura blanca vinilo", "galón", "galón") and stock >= 2
     assert f"{format_cop(price)} el galón" in text and text.count(format_cop(price * 2)) == 2
-    scenes = (UI / "inicio-escenas.js").read_text(encoding="utf-8")
+    scenes = (web("inicio-escenas.js")).read_text(encoding="utf-8")
     assert "pintura blanca" not in scenes.casefold()
     # La solicitud no se da por hecha: espera el «sí» y el cobro es al recoger, como dice el pedido real.
     assert "«sí» del cliente" in text and "se paga al recoger" in text and "al recoger" in PAYMENT
 
 
 def test_the_landing_benefits_are_three_and_promise_only_what_the_product_does():
-    from asistendero.orders import HOLD_MINUTES
-    from asistendero.reply_text import format_cop
-    from asistendero.seed import PRODUCTS
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    from asistendero.agente.respuesta.reply_text import format_cop
+    from asistendero.datos.seed import PRODUCTS
+    from asistendero.tienda.pedidos.orders import HOLD_MINUTES
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "beneficios")
     benefits = re.findall(r'<li class="benefit[\w -]* reveal">(.*?)\n        </li>', section, re.S)
     titles = [re.search(r"<h3>([^<]+)</h3>", benefit).group(1) for benefit in benefits]
@@ -572,7 +579,7 @@ def test_the_landing_benefits_are_three_and_promise_only_what_the_product_does()
 
 
 def test_the_landing_demo_starts_with_a_sale_says_it_is_simulated_and_shows_there_are_more_cases():
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     demo = _landing_section(page, "demo")
     text = " ".join(re.sub(r"<[^>]+>", " ", demo).split())
     # Etiqueta visible antes de los controles y una explicación corta plegada que dice la verdad sobre la simulación.
@@ -594,24 +601,24 @@ def test_the_landing_demo_starts_with_a_sale_says_it_is_simulated_and_shows_ther
     # El panel de demostración se abre desde el cierre, con su aviso de datos ficticios; la demo no repite ese llamado.
     closing = page[page.index('id="probar"'):page.index("</section>", page.index('id="probar"'))]
     assert 'href="/">Abrir panel' in closing and "datos ficticios" in closing and 'href="/"' not in demo
-    readme = (UI.parents[2] / "README.md").read_text(encoding="utf-8")
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
     assert 'href="https://github.com/JulianCVM/AsisTendero#instalación"' in page and "## Instalación" in readme
     # Empieza por cotizar y apartar; el intento de manipulación queda al final.
-    scenes = (UI / "inicio-escenas.js").read_text(encoding="utf-8")
+    scenes = (web("inicio-escenas.js")).read_text(encoding="utf-8")
     order = re.findall(r"^    id: '(\w+)',", scenes, re.M)
     assert len(order) == 6 and order[0] == "apartar" and order[-1] == "seguridad"
-    script = (UI / "inicio-demo.js").read_text(encoding="utf-8")
+    script = (web("inicio-demo.js")).read_text(encoding="utf-8")
     assert "`Caso ${index + 1} de ${SCENES.length}`" in script and "rail.dataset.fade" in script
-    css = (UI / "inicio-demo.css").read_text(encoding="utf-8")
+    css = (web("inicio-demo.css")).read_text(encoding="utf-8")
     # Las columnas del costado miden lo que su contenido: ya no guardan 642 px vacíos.
     assert "min-height: 642px" not in css and "align-self: start" in css
     assert '[data-fade~="end"]' in css and "mask-image" in css
 
 
 def test_the_landing_how_it_works_uses_a_generic_scene_and_real_catalog_data():
-    from asistendero.reply_text import format_cop
-    from asistendero.seed import PRODUCTS
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    from asistendero.agente.respuesta.reply_text import format_cop
+    from asistendero.datos.seed import PRODUCTS
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "como-funciona")
     # La escena es un SVG decorativo generado (tools/mostrador/build.mjs), liviano, sin estilos en línea y sin rubro.
     scene = re.search(r"<!-- mostrador:inicio -->(.*?)<!-- mostrador:fin -->", section, re.S).group(1)
@@ -630,21 +637,21 @@ def test_the_landing_how_it_works_uses_a_generic_scene_and_real_catalog_data():
     details = " ".join(re.findall(r'<span class="mo-detail">([^<]+)</span>', section))
     assert f"{format_cop(price)} el {unit}, {stock} disponibles" in details and format_cop(price * 4) in details
     assert f">{format_cop(price)}</text>" in scene
-    hero, scenes = _landing_section(page, "inicio"), (UI / "inicio-escenas.js").read_text(encoding="utf-8")
+    hero, scenes = _landing_section(page, "inicio"), (web("inicio-escenas.js")).read_text(encoding="utf-8")
     assert "teflón" not in hero and "teflón" not in scenes
-    script = (UI / "inicio-mostrador.js").read_text(encoding="utf-8")
+    script = (web("inicio-mostrador.js")).read_text(encoding="utf-8")
     for pause in ("pointerenter", "focusin", "IntersectionObserver", "visibilitychange", "let stopped = calm.matches"):
         assert pause in script, pause
     assert "Reproducir el recorrido" in script and "innerHTML" not in script
     # Cada paso cambia el dibujo (la pieza activa se levanta) y en el celular los pasos se leen completos, en vertical.
-    css = (UI / "inicio-mostrador.css").read_text(encoding="utf-8")
+    css = (web("inicio-mostrador.css")).read_text(encoding="utf-8")
     assert "transform: translateY(-4px)" in css and "@media (max-width: 559px) {\n  .mo-steps { grid-template-columns: 1fr; }" in css
 
 
 def test_the_landing_sector_examples_tell_what_works_today_from_what_could_be_adapted():
-    from asistendero.reply_text import format_cop
-    from asistendero.seed import PRODUCTS
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    from asistendero.agente.respuesta.reply_text import format_cop
+    from asistendero.datos.seed import PRODUCTS
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "adaptable")
     assert '<h2 id="adapt-title">Cómo podría adaptarse a tu negocio</h2>' in section
     # Sin JavaScript la lista de pestañas no aparece y los ejemplos se leen seguidos.
@@ -676,18 +683,18 @@ def test_the_landing_sector_examples_tell_what_works_today_from_what_could_be_ad
     assert "preparadas para una ferretería" in note and "todavía no viene lista" in note
     for claim in ("WhatsApp", "cliente real", "clientes reales", "agendada", "Nequi", "Adaptable a tu negocio"):
         assert claim not in section, claim
-    script = (UI / "inicio-sectores.js").read_text(encoding="utf-8")
+    script = (web("inicio-sectores.js")).read_text(encoding="utf-8")
     for key in ("ArrowRight", "ArrowLeft", "Home", "End", "aria-selected", "tabIndex", ".hidden = !on", "list.hidden = false"):
         assert key in script, key
     assert "innerHTML" not in script
     # Los ejemplos ocultos comparten celda con el visible: cambiar de pestaña no cambia el alto de la sección.
-    css = (UI / "inicio-secciones.css").read_text(encoding="utf-8")
+    css = (web("inicio-secciones.css")).read_text(encoding="utf-8")
     assert "list.parentElement.classList.add('is-live')" in script
     assert ".sectors.is-live .sector { grid-area: panel;" in css and ".sectors.is-live .sector[hidden] { display: block !important; visibility: hidden;" in css
 
 
 def test_the_landing_first_sections_keep_code_out_of_the_page():
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     ids = re.findall(r'<section class="(?:hero|land-section)[^"]*" id="([\w-]+)"', page)
     assert ids[:5] == ["inicio", "beneficios", "demo", "como-funciona", "adaptable"]
     for section_id in ids[:5]:
@@ -701,7 +708,7 @@ def test_the_landing_first_sections_keep_code_out_of_the_page():
 
 
 def test_the_landing_title_and_description_say_what_it_does_and_that_it_ships_for_hardware_stores():
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     head = page.split("</head>")[0]
     assert "<title>AsisTendero · Atiende consultas con los datos de tu negocio</title>" in head
     description = re.search(r'<meta name="description" content="([^"]+)">', head).group(1)
@@ -718,14 +725,14 @@ def _landing_sections(page):
 
 
 def test_the_landing_closing_sections_speak_business_and_their_claims_match_the_code():
-    from asistendero.catalog import Product
-    from asistendero.grok import TOOL_NAMES
-    from asistendero.orders import HOLD_MINUTES
-    from asistendero.payments import METHODS
-    from asistendero.reply_text import format_cop, found_sentence
-    from asistendero.seed import PRODUCTS
+    from asistendero.agente.modelo.grok import TOOL_NAMES
+    from asistendero.agente.respuesta.reply_text import format_cop, found_sentence
+    from asistendero.datos.seed import PRODUCTS
+    from asistendero.tienda.catalogo.catalog import Product
+    from asistendero.tienda.pedidos.orders import HOLD_MINUTES
+    from asistendero.tienda.ventas.payments import METHODS
 
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     sections = _landing_sections(page)
     ids = re.findall(r'<section class="(?:hero|land-section)[^"]*" id="([\w-]+)"', page)
     assert ids[ids.index("adaptable") + 1:] == ["confianza", "alcance", "preguntas", "probar"]
@@ -750,7 +757,7 @@ def test_the_landing_closing_sections_speak_business_and_their_claims_match_the_
     assert "Ejemplo ilustrativo" in closing and "no puede tocar precios" in trust
     assert len(re.findall(r"<li><svg", trust)) == 3
     assert "la clave del servicio de inteligencia\n          artificial vive en tu equipo" in trust.lower()
-    readme = (UI.parents[2] / "README.md").read_text(encoding="utf-8")
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
     repo = "https://github.com/JulianCVM/AsisTendero"
     assert f'href="{repo}#lo-que-respalda-la-página-pública"' in trust and "### Lo que respalda la página pública" in readme
 
@@ -789,8 +796,8 @@ def test_the_landing_closing_sections_speak_business_and_their_claims_match_the_
         assert any(label.startswith(method) for label in METHODS.values()), method
         assert method.lower() in faq.lower(), method
     # Donde el navegador no sabe de <details name>, el módulo cierra la anterior.
-    assert "startFaq();" in (UI / "inicio.js").read_text(encoding="utf-8")
-    assert "'name' in HTMLDetailsElement.prototype" in (UI / "inicio-cierre.js").read_text(encoding="utf-8")
+    assert "startFaq();" in (web("inicio.js")).read_text(encoding="utf-8")
+    assert "'name' in HTMLDetailsElement.prototype" in (web("inicio-cierre.js")).read_text(encoding="utf-8")
 
     # Llamada final: la demo es la acción principal y el panel, la secundaria.
     final = sections["probar"]
@@ -799,7 +806,7 @@ def test_the_landing_closing_sections_speak_business_and_their_claims_match_the_
 
 
 def test_the_landing_header_and_footer_point_to_sections_that_exist():
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
+    page = (web("inicio.html")).read_text(encoding="utf-8")
     ids = set(re.findall(r'\bid="([\w-]+)"', page))
     header = page[page.index('<header class="land-top"'):page.index("</header>", page.index('<header class="land-top"'))]
     footer = page[page.index('<footer class="land-foot">'):page.index("</footer>")]
@@ -820,11 +827,11 @@ def test_the_landing_header_and_footer_point_to_sections_that_exist():
 
 
 def test_the_landing_keeps_each_piece_in_its_own_box_so_nothing_moves_or_blocks_other_sections():
-    page = (UI / "inicio.html").read_text(encoding="utf-8")
-    styles = {path.name: re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S) for path in UI.glob("inicio*.css")}
+    page = (web("inicio.html")).read_text(encoding="utf-8")
+    styles = {path.name: re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.S) for path in WEB.glob("*/" + "inicio*.css")}
     css = "\n".join(styles.values())
-    script = (UI / "inicio.js").read_text(encoding="utf-8")
-    closing = (UI / "inicio-cierre.js").read_text(encoding="utf-8")
+    script = (web("inicio.js")).read_text(encoding="utf-8")
+    closing = (web("inicio-cierre.js")).read_text(encoding="utf-8")
     # Las animaciones solo mueven opacidad, transform o color. Las dos que tocan el diseño lo hacen dentro de su caja:
     # el contenido de una pregunta y la píldora absoluta de la navegación. El globo de la escena se mueve con translate.
     layout = {"height", "width", "top", "left", "right", "bottom", "margin", "padding", "min-height", "max-height", "inset",
@@ -845,7 +852,7 @@ def test_the_landing_keeps_each_piece_in_its_own_box_so_nothing_moves_or_blocks_
     # Ningún panel atrapa el desplazamiento: al llegar al final del chat o de una lista, el dedo sigue bajando la página.
     assert "overscroll-behavior" not in css
     # Las fuentes llegan antes del primer pintado: el cambio de letra no mueve la página al cargar.
-    fonts = re.findall(r'@font-face \{[^}]*url\("([^"]+)"\)', (UI / "tendero.css").read_text(encoding="utf-8"))
+    fonts = re.findall(r'@font-face \{[^}]*url\("([^"]+)"\)', (web("tendero.css")).read_text(encoding="utf-8"))
     assert fonts == ["/assets/NunitoSans.ttf", "/assets/Inter.ttf"]
     for font in fonts:
         assert f'<link rel="preload" href="{font}" as="font" type="font/ttf" crossorigin>' in page, font
@@ -870,17 +877,17 @@ def test_the_landing_keeps_each_piece_in_its_own_box_so_nothing_moves_or_blocks_
     assert "@media (max-width: 879px) {\n  .sector-tabs { display: grid; grid-template-columns: 1fr 1fr;" in styles["inicio-secciones.css"]
     # Limpieza: cada ícono del sprite se usa y no queda la cuenta animada de cifras que ya no existen.
     for icon in re.findall(r'<symbol id="([\w-]+)"', page):
-        assert f'href="#{icon}"' in page or f"'#{icon}'" in "".join(p.read_text(encoding="utf-8") for p in UI.glob("inicio*.js")), icon
+        assert f'href="#{icon}"' in page or f"'#{icon}'" in "".join(p.read_text(encoding="utf-8") for p in WEB.glob("*/" + "inicio*.js")), icon
     assert "data-count" not in page and "countUp" not in script
 
 
 def test_the_readme_backs_the_landing_with_figures_taken_from_the_repository():
     from collections import Counter
-    from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
-    from asistendero.grok import DEFAULT_BASE_URL, DEFAULT_MODEL, TOOL_NAMES
-    from asistendero.orders import HOLD_MINUTES, MAX_ACTIVE_PER_SESSION, MAX_PICKUP_DAYS
+    from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
+    from asistendero.agente.modelo.grok import DEFAULT_BASE_URL, DEFAULT_MODEL, TOOL_NAMES
+    from asistendero.tienda.pedidos.orders import HOLD_MINUTES, MAX_ACTIVE_PER_SESSION, MAX_PICKUP_DAYS
 
-    root = UI.parents[2]
+    root = REPO
     readme = (root / "README.md").read_text(encoding="utf-8")
     backing = readme[readme.index("### Lo que respalda la página pública"):]
     backing = backing[:backing.index("\n## ")]
@@ -891,13 +898,13 @@ def test_the_readme_backs_the_landing_with_figures_taken_from_the_repository():
     assert f"**{suites['inyeccion']} de ellos en la suite `inyeccion`**" in backing and f"**{len(attacks)} ataques**" in backing
     assert f"**{len(TOOL_NAMES)} herramientas**" in backing and "**más de 850 pruebas automáticas**" in backing
     # Cada garantía nombra una regla que existe donde dice.
-    source = root / "src" / "asistendero"
+    source = {path.name: path for path in (root / "src" / "asistendero").rglob("*.py")}
     for function, module in [("reply_is_grounded", "answers.py"), ("validate_order_request", "order_rules.py"),
                              ("validate_request", "validation.py"), ("detect_injection", "injection.py"),
                              ("blocked_reply", "injection.py")]:
-        assert f"`{function}`" in backing and f"def {function}(" in (source / module).read_text(encoding="utf-8"), function
+        assert f"`{function}`" in backing and f"def {function}(" in source[module].read_text(encoding="utf-8"), function
     assert '`"api_key": "[omitida]"`' in backing
-    assert '"api_key": "[omitida]"' in (source / "tracing.py").read_text(encoding="utf-8")
+    assert '"api_key": "[omitida]"' in source["tracing.py"].read_text(encoding="utf-8")
     for path in ("docs/PAGOS.md", "evaluation/cases.json"):
         assert f"({path})" in backing and (root / path).exists(), path
     # Los topes con número salen de las constantes del código.
@@ -924,8 +931,8 @@ def test_extra_keys_never_slip_through_a_panel_action(server):
 
 
 def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path):
-    from asistendero.demo import build_demo
-    from asistendero.seed import DEFAULT_DB_PATH
+    from asistendero.datos.demo import build_demo
+    from asistendero.datos.seed import DEFAULT_DB_PATH
 
     database, sessions_path = build_demo(tmp_path / "demo")
     assert database.parent == tmp_path / "demo" and database.resolve() != DEFAULT_DB_PATH.resolve()

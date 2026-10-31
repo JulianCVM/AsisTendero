@@ -139,15 +139,20 @@ src/asistendero/
   datos/                  esquema, semilla ficticia y tienda de demostración
   observabilidad/         C · traza, costo, mapa del harness
   evaluacion/             C · evaluador, sesiones y reporte
-  entregas/               D · cli, lanzador, visor/, panel/ y pagina/ (cada uno con su servidor y su static/)
+  entregas/               D · cli, lanzador, visor/ y panel/ (cada uno con su servidor), estaticos.py
+    web/                  archivos de las pantallas: comun/, visor/, panel/ y pagina/
 ```
 
-Reglas de dependencia (una prueba las comprobará, como hoy se comprueban las cifras del README):
+Reglas de dependencia, comprobadas por `tests/test_arquitectura.py`. Cada paquete importa solo los de abajo:
+`entregas → evaluacion → observabilidad → agente → tienda → datos`. Los cruces que aún existen están anotados con su
+motivo en `KNOWN_CROSSINGS`; la lista solo puede achicarse (la prueba falla con un cruce nuevo y con uno anotado que
+ya desapareció).
 
 1. `entregas` usa todo y nadie importa `entregas`.
 2. `agente` usa `tienda` solo para leer el catálogo y registrar pedidos, por medio de `herramientas`.
 3. `tienda` no importa `agente`: formatos de moneda, patrones de SKU y fechas de reabastecimiento bajan a `tienda`.
-4. `datos` no importa a nadie del paquete y concentra el esquema.
+4. La base de `datos` (`seed.py`, `catalog_data.py`) no importa a nadie del paquete y concentra el esquema; la demo
+   se arma con los módulos reales de la tienda.
 5. `observabilidad` y `evaluacion` leen el agente y la tienda; no les escriben reglas.
 
 ## 6. Migración por pasos
@@ -156,9 +161,10 @@ Cada paso deja la suite en verde y se puede revisar solo:
 
 1. **Fijar lo pendiente**: dejar en commits ordenados el trabajo actual de la rama antes de mover archivos, para que
    la reorganización sea un diff de solo renombres.
-2. **Mover sin cambiar comportamiento**: `git mv` a los paquetes, importaciones absolutas reescritas por un script,
+2. **Mover sin cambiar comportamiento** (hecho el 31-10-2026): `git mv` a los paquetes, importaciones absolutas reescritas por un script,
    puntos de entrada de `pyproject.toml` y rutas de `ui/` actualizados; `AGENTS.md`, `HARNESS.md` y el README en el
-   mismo cambio. Prueba nueva de reglas de dependencia.
+   mismo cambio. Prueba nueva de reglas de dependencia. Los nombres de archivo no cambiaron; los comandos cortos son
+   `python -m asistendero.evaluacion`, `asistendero.datos`, `asistendero.entregas.visor` y `asistendero.entregas.panel`.
 3. **Cortar los cruces de capa**: `contrato.py`, formato de moneda y patrón de SKU en `tienda`, esquema en `datos`.
 4. **Rehacer el panel** con la bandeja de Hoy, la tabla de productos (Inventario + Catálogo + asistente de bodega),
    Pedidos y Ventas en filas, y una sola marca.

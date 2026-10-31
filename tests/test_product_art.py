@@ -4,10 +4,10 @@ from xml.etree import ElementTree
 
 import pytest
 
-from asistendero.catalog_data import FAMILIES
-from asistendero.product_art import (ART_KINDS, CATEGORY_COLORS, CATEGORY_KINDS, DEFAULT_TINTS, FALLBACK_KIND,
+from asistendero.datos.catalog_data import FAMILIES
+from asistendero.datos.seed import CATEGORIES, PRODUCTS
+from asistendero.tienda.catalogo.product_art import (ART_KINDS, CATEGORY_COLORS, CATEGORY_KINDS, DEFAULT_TINTS, FALLBACK_KIND,
                                      MAX_ART_TEXT, SHAPES, art_kind, art_tint, category_color, product_svg)
-from asistendero.seed import CATEGORIES, PRODUCTS
 
 
 SVG_NS = "{http://www.w3.org/2000/svg}"

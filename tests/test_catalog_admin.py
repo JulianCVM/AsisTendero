@@ -5,11 +5,11 @@ import sqlite3
 
 import pytest
 
-from asistendero import inventory
-from asistendero.catalog import MockCatalog
-from asistendero.catalog_admin import DEFAULT_LOW_STOCK, MAX_CATEGORY_CHARS, CatalogAdmin, CatalogError
-from asistendero.product_art import category_color
-from asistendero.seed import CATEGORIES, DEMO_BUSINESS_ID, DEMO_STORE_ID, create_mock_db
+from asistendero.datos.seed import CATEGORIES, DEMO_BUSINESS_ID, DEMO_STORE_ID, create_mock_db
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.catalogo.catalog_admin import DEFAULT_LOW_STOCK, MAX_CATEGORY_CHARS, CatalogAdmin, CatalogError
+from asistendero.tienda.catalogo.product_art import category_color
+from asistendero.tienda.inventario import inventory
 
 
 OTHER_STORE = "sede-norte"

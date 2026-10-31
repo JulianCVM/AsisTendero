@@ -4,7 +4,7 @@ import httpx
 import openai
 import pytest
 
-from asistendero import grok
+from asistendero.agente.modelo import grok
 
 
 def fake_complete(payload):

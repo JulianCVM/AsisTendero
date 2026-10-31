@@ -6,13 +6,13 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.inventory import Inventory
-from asistendero.orders import BOGOTA
-from asistendero.purchasing import Purchasing, PurchasingError
-from asistendero.purchasing_rules import MAX_LINES
-from asistendero.seed import create_mock_db
-from asistendero.tools import execute_tool
+from asistendero.agente.herramientas.tools import execute_tool
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.abastecimiento.purchasing import Purchasing, PurchasingError
+from asistendero.tienda.abastecimiento.purchasing_rules import MAX_LINES
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.inventario.inventory import Inventory
+from asistendero.tienda.pedidos.orders import BOGOTA
 
 
 class Clock:

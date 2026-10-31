@@ -5,6 +5,6 @@ COPY pyproject.toml ./
 COPY src ./src
 COPY evaluation ./evaluation
 RUN pip install --no-cache-dir .
-RUN python -m asistendero.seed
+RUN python -m asistendero.datos
 
 ENTRYPOINT ["asistendero"]

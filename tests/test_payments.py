@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from asistendero.inventory import Inventory
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.payments import MAX_REFERENCE_CHARS, PaymentError, Payments
-from asistendero.sales import order_board
-from asistendero.sales_history import sales_history, sales_summary
-from asistendero.seed import create_mock_db
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.inventario.inventory import Inventory
+from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.ventas.payments import MAX_REFERENCE_CHARS, PaymentError, Payments
+from asistendero.tienda.ventas.sales import order_board
+from asistendero.tienda.ventas.sales_history import sales_history, sales_summary
 
 
 class Clock:
