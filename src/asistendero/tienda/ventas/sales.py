@@ -10,7 +10,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 import sqlite3
 
-from asistendero.tienda.pedidos.orders import ACTIVE, BOGOTA, OrderBook, local_text
+from asistendero.tienda.pedidos.orders import ACTIVE, OrderBook, local_text
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.payments import Payments
 
 

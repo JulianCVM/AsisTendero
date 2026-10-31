@@ -28,7 +28,6 @@ from datetime import date, datetime
 from pathlib import Path
 import sqlite3
 
-from asistendero.agente.respuesta.restock import DISCONTINUED
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
 from asistendero.tienda.abastecimiento.purchasing_lookup import (current_restock, earliest_arrival, find_order, find_product,
                                            find_supplier, next_id, pending_skus)
@@ -37,7 +36,9 @@ from asistendero.tienda.abastecimiento.purchasing_rules import (MAX_LISTED, MAX_
                                           expected_date, short_text, whole)
 from asistendero.tienda.abastecimiento.purchasing_views import order_view, receipt_view
 from asistendero.tienda.inventario.inventory import ACTOR, Inventory, InventoryError
-from asistendero.tienda.pedidos.orders import BOGOTA, _store_now, utc_text
+from asistendero.tienda.inventario.surtido import DISCONTINUED
+from asistendero.tienda.pedidos.orders import _store_now, utc_text
+from asistendero.tienda.reloj import BOGOTA
 
 __all__ = ["Purchasing", "PurchasingError"]
 

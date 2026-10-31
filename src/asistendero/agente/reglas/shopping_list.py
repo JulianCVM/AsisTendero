@@ -20,8 +20,9 @@ import re
 from asistendero.agente.herramientas.observations import ToolCall, latest_quote, order_results
 from asistendero.agente.modelo.grok import MAX_ITEMS
 from asistendero.agente.reglas.choices import chosen_options
-from asistendero.agente.reglas.validation import normalize_text, quantities_in_message
+from asistendero.agente.reglas.validation import quantities_in_message
 from asistendero.tienda.catalogo.catalog import tokens
+from asistendero.tienda.vocabulario import normalize_text
 
 
 MAX_LIST_LINES = MAX_ITEMS

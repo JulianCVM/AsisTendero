@@ -6,7 +6,8 @@ import pytest
 
 from asistendero.datos.seed import create_mock_db
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.payments import MAX_REFERENCE_CHARS, PaymentError, Payments
 from asistendero.tienda.ventas.sales import order_board
 from asistendero.tienda.ventas.sales_history import sales_history, sales_summary

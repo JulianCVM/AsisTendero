@@ -15,13 +15,13 @@ advertencia, para que el tendero vea qué no se hará y por qué. Las reglas que
 
 from datetime import date
 
-from asistendero.agente.respuesta.reply_text import format_cop
 from asistendero.tienda.abastecimiento.purchasing import Purchasing, PurchasingError
 from asistendero.tienda.abastecimiento.purchasing_rules import MAX_QUANTITY, expected_date
 from asistendero.tienda.abastecimiento.stock_arrivals import arrival_operations, move_operations, purchase_operations
 from asistendero.tienda.abastecimiento.stock_matching import find_supplier, identify, sounds_future
 from asistendero.tienda.catalogo.catalog import MockCatalog, Product
 from asistendero.tienda.inventario.inventory import MAX_PRICE_COP, MAX_STOCK
+from asistendero.tienda.vocabulario import format_cop
 
 EXTRA_KEYS = {"recepcion": ("oc", "proveedor"), "pedido_proveedor": ("proveedor", "fecha_estimada"),
               "programar_entrega": ("oc", "proveedor", "fecha_antes", "fecha_nueva")}

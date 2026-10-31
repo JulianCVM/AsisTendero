@@ -15,9 +15,9 @@ import json
 import re
 
 from asistendero.agente.modelo import grok
-from asistendero.agente.reglas.validation import SKU_PATTERN
 from asistendero.observabilidad.pricing import call_cost
 from asistendero.tienda.abastecimiento.purchasing_rules import PURCHASE_ID
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 STOCK_PROMPT_VERSION = "bodega-2026-10-26.1"

@@ -13,11 +13,11 @@ from pathlib import Path
 import re
 import sqlite3
 
-from asistendero.agente.reglas.validation import SKU_PATTERN
-from asistendero.agente.respuesta.restock import valid_plan
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID, upgrade_db
 from asistendero.tienda.catalogo.catalog import RESERVED_SQL, RESTOCK_SQL
+from asistendero.tienda.inventario.surtido import valid_plan
 from asistendero.tienda.pedidos.orders import local_text
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 MAX_PRICE_COP = 50_000_000

@@ -12,6 +12,7 @@ si quedan pocas o si no alcanzan; un producto se cotiza en una frase y varios, e
 import re
 
 from asistendero.tienda.catalogo.catalog import Product
+from asistendero.tienda.vocabulario import format_cop
 
 
 PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones", "libra": "libras",
@@ -42,10 +43,6 @@ SUITABILITY_CLAIM = re.compile(r"\b(?:si\s+(?:te\s+)?sirve|claro\s+que\s+(?:si|s
                                r"|aguanta\s+(?:bien|perfecto)|recomendad[oa]\s+para)\b")
 # Variantes que empiezan por la presentación: «cemento gris en bulto de 50 kg».
 PACKAGES = ("bulto", "galón", "galon", "caja", "bolsa", "rollo", "cuñete", "pliego", "juego", "par ", "kit")
-
-
-def format_cop(value: int) -> str:
-    return f"${value:,}".replace(",", ".")
 
 
 def units(unit: str, amount: int) -> str:

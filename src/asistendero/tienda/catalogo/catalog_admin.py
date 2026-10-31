@@ -14,10 +14,10 @@ import re
 import sqlite3
 import unicodedata
 
-from asistendero.agente.reglas.validation import normalize_text
 from asistendero.tienda.catalogo.catalog import RESERVED_SQL
 from asistendero.tienda.catalogo.product_art import category_color
 from asistendero.tienda.catalogo.stock_thresholds import DEFAULT_LOW_STOCK, CatalogError, StockThresholds
+from asistendero.tienda.vocabulario import normalize_text
 
 
 __all__ = ["DEFAULT_LOW_STOCK", "MAX_CATEGORIES", "MAX_CATEGORY_CHARS", "CatalogAdmin", "CatalogError"]

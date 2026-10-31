@@ -12,7 +12,7 @@ from asistendero.tienda.abastecimiento.purchasing import Purchasing, PurchasingE
 from asistendero.tienda.abastecimiento.purchasing_rules import MAX_LINES
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.orders import BOGOTA
+from asistendero.tienda.reloj import BOGOTA
 
 
 class Clock:

@@ -12,13 +12,13 @@ import os
 from pathlib import Path
 from threading import Thread
 
+from asistendero.agente.conversacion.order_watch import Watcher
 from asistendero.agente.conversacion.sessions import DEFAULT_SESSIONS_PATH, SessionStore
-from asistendero.datos.demo import build_demo
 from asistendero.datos.seed import DEFAULT_DB_PATH, create_mock_db
+from asistendero.entregas.demo import build_demo
 from asistendero.entregas.panel import tendero
 from asistendero.entregas.visor import visual
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.order_watch import Watcher
 from asistendero.tienda.pedidos.orders import OrderBook
 
 

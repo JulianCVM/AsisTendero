@@ -1,6 +1,6 @@
 """Tienda de demostración para el panel del tendero: pedidos, ventas, pagos, proveedores y chats simulados.
 
-Ejecutar: python -m asistendero.entregas.panel --demo   (o python -m asistendero.datos.demo para solo crear la base)
+Ejecutar: python -m asistendero.entregas.panel --demo   (o python -m asistendero.entregas.demo para solo crear la base)
 
 Todo es **ficticio** y se arma con los mismos módulos que usa la tienda real (``OrderBook``, ``Payments``,
 ``Purchasing``, ``handoff``), así que los datos cumplen las mismas reglas: un pedido aparta stock, entregarlo lo
@@ -14,13 +14,13 @@ from pathlib import Path
 
 from asistendero.agente.conversacion import handoff
 from asistendero.agente.conversacion.sessions import SessionStore
-from asistendero.agente.respuesta.reply_text import format_cop
 from asistendero.datos.seed import create_mock_db
 from asistendero.tienda.abastecimiento.purchasing import Purchasing
 from asistendero.tienda.catalogo.catalog_admin import CatalogAdmin
 from asistendero.tienda.inventario.inventory import Inventory
 from asistendero.tienda.pedidos.orders import OrderBook, OrderError
 from asistendero.tienda.ventas.payments import Payments
+from asistendero.tienda.vocabulario import format_cop
 
 
 DEMO_DIR = Path(".local/demo")

@@ -17,7 +17,7 @@ from asistendero.datos.seed import create_mock_db
 from asistendero.evaluacion import evaluate
 from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
 from asistendero.tienda.catalogo.catalog import MockCatalog
-from asistendero.tienda.pedidos.orders import BOGOTA
+from asistendero.tienda.reloj import BOGOTA
 
 
 S4_SUITES = {"ruido", "pedidos", "sesion_larga", "concurrencia", "extremos", "flujos", "variados", "inyeccion",

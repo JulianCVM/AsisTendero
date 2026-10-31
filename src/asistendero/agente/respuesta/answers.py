@@ -7,16 +7,19 @@ from asistendero.agente.herramientas.observations import (ToolCall, availability
                                       store_info_by_topic)
 from asistendero.agente.modelo.grok import AGENT_PROMPT, MAX_ITEMS, Decision
 from asistendero.agente.reglas.choices import ambiguous_reference
-from asistendero.agente.reglas.validation import (fractional_amount, grounded_products, grounded_selection, naming_numbers,
-                                    normalize_text, quantities_in_message, without_negated)
+from asistendero.agente.reglas.validation import (fractional_amount, grounded_products, grounded_selection,
+                                                  naming_numbers, quantities_in_message, without_negated)
 from asistendero.agente.respuesta.order_replies import order_allowances, order_reply, rushes_the_customer
-from asistendero.agente.respuesta.reply_text import (DEMO_NOTE, FEMININE, LOW_STOCK, MAX_NEARBY, MAX_OPTIONS, SUITABILITY_CLAIM,
-                                    SUITABILITY_NOTE, asks_stock, asks_suitability, format_cop, found_sentence,
-                                    in_sentence, label, of_the, option_lines, quote_block, quote_offer, short_stock_text,
-                                    units, whole_units_question)
+from asistendero.agente.respuesta.reply_text import (DEMO_NOTE, FEMININE, LOW_STOCK, MAX_NEARBY, MAX_OPTIONS,
+                                                     SUITABILITY_CLAIM, SUITABILITY_NOTE, asks_stock, asks_suitability,
+                                                     found_sentence, in_sentence, label, of_the, option_lines,
+                                                     quote_block, quote_offer, short_stock_text, units,
+                                                     whole_units_question)
 from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence, restock_subjects
 from asistendero.agente.respuesta.store_replies import asks_assortment, full_category_listing, store_lines, store_reply_is_consistent
 from asistendero.tienda.catalogo.catalog import Product, tokens
+from asistendero.tienda.vocabulario import normalize_text
+from asistendero.tienda.vocabulario import format_cop
 
 
 # Una afirmación de acción ejecutada, descuento o equivalencia invalida la redacción de Grok, y también

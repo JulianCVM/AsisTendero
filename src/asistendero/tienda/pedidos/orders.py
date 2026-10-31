@@ -24,7 +24,9 @@ import sqlite3
 from uuid import uuid4
 
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID, upgrade_db
+from asistendero.tienda import reloj
 from asistendero.tienda.catalogo.catalog import RESERVED_SQL
+from asistendero.tienda.reloj import BOGOTA, WEEKDAYS
 
 
 HOLD_MINUTES = 5
@@ -36,8 +38,6 @@ MAX_ACTIVE_PER_SESSION = 3
 MAX_NOTE_CHARS = 140
 ORDER_ID = re.compile(r"^P-[0-9A-F]{6}$")
 ACTIVE = ("pendiente", "confirmado")
-WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
-BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
 PAYMENT = "Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
 
 
@@ -50,9 +50,7 @@ class OrderError(Exception):
 
 
 def _store_now() -> datetime:
-    # Importación tardía: las pruebas fijan la hora reemplazando tools.local_now.
-    from asistendero.agente.herramientas import tools
-    return tools.local_now()
+    return reloj.local_now()
 
 
 def utc_text(moment: datetime) -> str:

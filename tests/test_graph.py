@@ -515,8 +515,8 @@ def test_assortment_answer_without_the_category_tool_gets_one_reminder():
 
 @pytest.mark.parametrize("message", ["¿qué tienen de plomería?", "¿tienen cemento?", "¿qué medidas tienen?"])
 def test_a_question_that_names_a_product_or_category_is_not_the_assortment(message):
-    from asistendero.agente.reglas.validation import normalize_text
     from asistendero.agente.respuesta.store_replies import asks_assortment
+    from asistendero.tienda.vocabulario import normalize_text
     assert not asks_assortment(normalize_text(message))
 
 

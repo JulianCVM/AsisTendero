@@ -25,8 +25,8 @@ import re
 
 from asistendero.agente.conversacion.sessions import CLOSED, MANUAL_BAN, MAX_BAN_EXCERPT, SessionError, SessionStore
 from asistendero.agente.entrada.guardrails import redact_personal_data
-from asistendero.agente.reglas.validation import normalize_text
 from asistendero.tienda.pedidos.orders import ACTIVE, OrderBook
+from asistendero.tienda.vocabulario import normalize_text
 
 
 ATTENTION_STATES = ("ia", "requiere_humano", "tendero", CLOSED)

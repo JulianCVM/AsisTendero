@@ -63,7 +63,7 @@ Cuatro módulos. Cada submódulo agrupa procesos que se ven desde afuera; las fu
 Terminal (`asistendero`), visor (`:8765`), panel y página pública (`:8766`), comando único (`python -m asistendero`) y
 tienda de demostración (`--demo`).
 
-## 3. Cómo está hoy
+## 3. Cómo estaba (antes de los pasos 2 y 3 de la migración)
 
 **68 módulos en una sola carpeta** (`src/asistendero/`, unas 12.000 líneas) y **51 archivos de interfaz en `ui/`**
 (visor, panel y página pública mezclados). Los nombres dicen poco de a qué módulo pertenecen (`choices.py`,
@@ -126,20 +126,22 @@ HTTP) está en un lugar.
 ```text
 src/asistendero/
   agente/                 A · el harness: Grok decide y el servidor valida, ejecuta y verifica
-    contrato.py           nombres de herramientas, límites y forma de la respuesta (hoy en grok.py)
     modelo/               cliente de Grok y prompt
     flujo/                grafo de LangGraph, avisos del servidor, mapa del flujo
     entrada/              guardrails, inyección, ortografía
-    reglas/               validación, reglas de pedido, medidas, búsqueda, opciones, lista de compras
+    reglas/               validación, reglas de pedido, opciones, lista de compras
     herramientas/         herramientas de catálogo y de pedido, ejecutor, observaciones
     respuesta/            verificación y textos de la respuesta, reabastecimiento
-    conversacion/         sesiones, turno de chat, paso al tendero
+    conversacion/         sesiones, turno de chat, paso al tendero, avisos de vencimiento, supervisión
   tienda/                 B · lo que administra el tendero (SQLite)
-    catalogo/  inventario/  pedidos/  ventas/  abastecimiento/  bodega/  supervision/
-  datos/                  esquema, semilla ficticia y tienda de demostración
+    vocabulario.py        SKU, texto normalizado y pesos: el idioma del catálogo, común con el agente
+    reloj.py              zona de Bogotá, días y la hora que las pruebas fijan
+    catalogo/             lectura, búsqueda, medidas, parecido de productos, categorías, alertas e imágenes
+    inventario/  pedidos/  ventas/  abastecimiento/  bodega/
+  datos/                  catálogo ficticio, semilla y esquema
   observabilidad/         C · traza, costo, mapa del harness
   evaluacion/             C · evaluador, sesiones y reporte
-  entregas/               D · cli, lanzador, visor/ y panel/ (cada uno con su servidor), estaticos.py
+  entregas/               D · cli, lanzador, visor/ y panel/ (cada uno con su servidor), demo.py, estaticos.py
     web/                  archivos de las pantallas: comun/, visor/, panel/ y pagina/
 ```
 
@@ -165,6 +167,15 @@ Cada paso deja la suite en verde y se puede revisar solo:
    puntos de entrada de `pyproject.toml` y rutas de `ui/` actualizados; `AGENTS.md`, `HARNESS.md` y el README en el
    mismo cambio. Prueba nueva de reglas de dependencia. Los nombres de archivo no cambiaron; los comandos cortos son
    `python -m asistendero.evaluacion`, `asistendero.datos`, `asistendero.entregas.visor` y `asistendero.entregas.panel`.
-3. **Cortar los cruces de capa**: `contrato.py`, formato de moneda y patrón de SKU en `tienda`, esquema en `datos`.
+3. **Cortar los cruces de capa** (hecho el 31-10-2026): de 30 cruces quedan 4, anotados con su motivo.
+   - `tienda/vocabulario.py` (SKU, `normalize_text`, `format_cop`) y `tienda/reloj.py` (zona, días y `local_now`,
+     antes repetidos en tres módulos y fijados por las pruebas a través de `tools`).
+   - `tienda/inventario/surtido.py`: la forma del surtido; `restock.py` conserva lo que el agente puede decir.
+   - `search.py`, `measures.py` y `product_fit.py` (con `is_distinguished`) pasan a `tienda/catalogo`: son la
+     búsqueda del catálogo, que también usa el asistente de bodega.
+   - `order_watch.py` y `supervision.py` pasan a `agente/conversacion`: avisan y leen conversaciones.
+   - `demo.py` pasa a `entregas`: arma la tienda completa con todos los módulos.
+   Quedan para después, porque no cruzan capas: sacar el contrato de herramientas de `grok.py` a un
+   `contrato.py` y reunir en `datos` las tablas que hoy crea cada módulo.
 4. **Rehacer el panel** con la bandeja de Hoy, la tabla de productos (Inventario + Catálogo + asistente de bodega),
    Pedidos y Ventas en filas, y una sola marca.

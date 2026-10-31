@@ -1,24 +1,24 @@
 """Herramientas del servidor que Grok puede solicitar sobre el catálogo ficticio."""
 
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 import sqlite3
 
 from asistendero.agente.herramientas.observations import error_envelope
 from asistendero.agente.modelo.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, ORDER_TOOLS, STORE_TOPICS, TOOL_NAMES
-from asistendero.agente.reglas.search import ProductQuery
-from asistendero.agente.reglas.validation import MAX_QUANTITY, QUERY_FIELDS, SKU_PATTERN
+from asistendero.agente.reglas.validation import MAX_QUANTITY, QUERY_FIELDS
+from asistendero.tienda import reloj
 from asistendero.tienda.catalogo.catalog import MockCatalog, tokens
+from asistendero.tienda.catalogo.search import ProductQuery
+from asistendero.tienda.reloj import WEEKDAYS
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 SOURCE = "mock_sqlite"
 MAX_TEXT_CHARS = 180
 MAX_FIELD_CHARS = 80
 MAX_CATEGORY_CHARS = 60
-# Colombia no cambia de hora en el año: un desfase fijo evita depender de tzdata en Windows.
-BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
-WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
 
 
 class _ToolError(Exception):
@@ -144,11 +144,6 @@ def _calculate_quote(arguments: dict, catalog: MockCatalog) -> dict:
     })
 
 
-def local_now() -> datetime:
-    """Hora local de la tienda; las pruebas la reemplazan para fijar el día y la hora."""
-    return datetime.now(BOGOTA)
-
-
 def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
     topic = arguments.get("tema")
     if set(arguments) != {"tema"} or topic not in STORE_TOPICS:
@@ -159,7 +154,7 @@ def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
     data = {"tema": topic, **content}
     if topic == "horario":
         # Abierto o cerrado lo calcula el servidor con su reloj: Grok no sabe qué hora es.
-        now = local_now()
+        now = reloj.local_now()
         day = WEEKDAYS[now.weekday()]
         hours = content["dias"].get(day)
         data.update(

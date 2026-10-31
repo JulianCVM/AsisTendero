@@ -18,12 +18,13 @@ from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.entrada.guardrails import leaks
 from asistendero.agente.modelo.grok import AGENT_PROMPT, TOOL_NAMES, Decision, ModelError
 from asistendero.agente.reglas.order_rules import CANCEL_INTENT, confirms
-from asistendero.agente.reglas.validation import normalize_text
-from asistendero.agente.respuesta.answers import format_cop
 from asistendero.datos.seed import create_mock_db
 from asistendero.observabilidad.harness_info import describe_harness
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.orders import ACTIVE, BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import ACTIVE, OrderBook
+from asistendero.tienda.reloj import BOGOTA
+from asistendero.tienda.vocabulario import normalize_text
+from asistendero.tienda.vocabulario import format_cop
 
 
 # 30 conversaciones en la suite normal; CHAOS_SESSIONS=500 para una búsqueda más larga antes de una entrega.
@@ -129,7 +130,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setenv("GROK_API_KEY", KEY)
     path = create_mock_db(tmp_path / "catalog.sqlite3")
     clock = Clock()
-    monkeypatch.setattr("asistendero.agente.herramientas.tools.local_now", clock)
+    monkeypatch.setattr("asistendero.tienda.reloj.local_now", clock)
     return OrderBook(path, clock=clock), SessionStore(tmp_path / "sessions.sqlite3"), Inventory(path), clock
 
 

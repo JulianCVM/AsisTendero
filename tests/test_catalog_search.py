@@ -2,9 +2,9 @@ import sqlite3
 
 import pytest
 
-from asistendero.agente.reglas.search import ProductQuery
 from asistendero.datos.seed import create_mock_db
 from asistendero.tienda.catalogo.catalog import MAX_MATCHES, MockCatalog, tokens
+from asistendero.tienda.catalogo.search import ProductQuery
 
 
 @pytest.fixture
@@ -82,7 +82,7 @@ def test_database_facts_and_business_scope_remain_server_controlled(catalog):
 
 
 def test_measures_separate_sizes_from_quantities():
-    from asistendero.agente.reglas.measures import measures
+    from asistendero.tienda.catalogo.measures import measures
 
     assert measures("Necesito tornillo para madera 1/4 x 2 pulgadas") == {"1/4x2", "2in"}
     assert measures("2 tornillos de 1/4 x 1") == {"2", "1/4x1"}
@@ -179,7 +179,7 @@ def test_with_two_items_each_attribute_is_backed_by_its_part_of_the_message(cata
     ("manguera de 15 metros", "manguera de 15 metros"), ("2 galones de pintura vinilo", "galones pintura vinilo"),
 ])
 def test_a_quantity_said_in_the_text_does_not_search_for_a_measure(text, expected):
-    from asistendero.agente.reglas.search import without_quantities
+    from asistendero.tienda.catalogo.search import without_quantities
 
     assert tokens(without_quantities(text)) == tokens(expected)
 

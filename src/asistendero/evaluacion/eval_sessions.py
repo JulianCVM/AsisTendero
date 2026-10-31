@@ -25,16 +25,17 @@ import shutil
 import time
 
 from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.order_watch import last_event, notices, warn_due
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.flujo.graph import Planner
-from asistendero.agente.herramientas import tools
 from asistendero.agente.modelo.grok import MODEL_OVERRIDE, current_model
 from asistendero.agente.respuesta.order_replies import notice_text
 from asistendero.evaluacion.eval_checks import record, sum_known
 from asistendero.observabilidad.pricing import run_cost
+from asistendero.tienda import reloj
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.order_watch import last_event, notices, warn_due
-from asistendero.tienda.pedidos.orders import ACTIVE, BOGOTA, OrderBook, utc_text
+from asistendero.tienda.pedidos.orders import ACTIVE, OrderBook, utc_text
+from asistendero.tienda.reloj import BOGOTA
 
 
 # Un miércoles a las 9:00: con la hora real, «mañana a las 10» fallaría un sábado o de noche.
@@ -54,12 +55,12 @@ class StoreClock:
 @contextmanager
 def store_time(clock) -> Iterator[None]:
     """Fija la hora que ven las herramientas, los pedidos y el contexto de Grok mientras dura la corrida."""
-    previous = tools.local_now
-    tools.local_now = clock
+    previous = reloj.local_now
+    reloj.local_now = clock
     try:
         yield
     finally:
-        tools.local_now = previous
+        reloj.local_now = previous
 
 
 @contextmanager

@@ -4,8 +4,8 @@ Cada paquete importa solo los que están por debajo de él:
 
     entregas → evaluacion → observabilidad → agente → tienda → datos
 
-`entregas` puede usarlo todo y nadie lo importa; la base de `datos` (catálogo ficticio y esquema) no importa nada del
-paquete. Los cruces que todavía existen están en ``KNOWN_CROSSINGS`` con el motivo: la lista solo puede achicarse,
+`entregas` puede usarlo todo (también arma la tienda de demostración) y nadie lo importa; `datos` (catálogo ficticio
+y esquema) no importa nada del paquete. Los cruces que todavía existen están en ``KNOWN_CROSSINGS`` con el motivo: la lista solo puede achicarse,
 porque la prueba falla tanto con un cruce nuevo como con uno anotado que ya desapareció.
 """
 
@@ -17,38 +17,12 @@ ORDER = ("datos", "tienda", "agente", "observabilidad", "evaluacion", "entregas"
 
 # (módulo que importa, módulo importado) → por qué sigue ahí. Se cortan moviendo la pieza a la capa que le toca.
 KNOWN_CROSSINGS = {
-    # El chat del visor y la terminal corre el turno con su traza.
+    # El turno de chat corre el grafo dentro de la traza; separar el turno de su traza duplicaría el recorrido.
     ("chat", "tracing"): "un turno de chat se ejecuta trazado",
-    # La demo arma conversaciones con los módulos reales para que el panel muestre lo mismo que vería en uso.
-    ("demo", "handoff"): "la demo simula atención humana",
-    ("demo", "sessions"): "la demo crea conversaciones",
-    ("demo", "reply_text"): "formato de moneda en el agente",
-    # La tienda usa piezas que hoy viven en el agente: vocabulario del catálogo, formato de moneda y avisos.
-    ("purchasing", "restock"): "estado de surtido en el agente",
-    ("purchasing_rules", "validation"): "patrón de SKU en el agente",
-    ("purchasing_rules", "restock"): "plazo de surtido en el agente",
-    ("stock_apply", "reply_text"): "formato de moneda en el agente",
-    ("stock_operations", "reply_text"): "formato de moneda en el agente",
-    ("stock_matching", "product_fit"): "parecido de nombres en el agente",
-    ("stock_matching", "search"): "búsqueda del catálogo en el agente",
-    ("stock_matching", "validation"): "normalización de texto en el agente",
-    ("stock_assistant", "grok"): "el asistente de bodega usa el cliente de Grok del agente",
-    ("stock_assistant", "validation"): "patrón de SKU en el agente",
+    # El asistente de bodega es un segundo uso de Grok: comparte cliente, errores y costo con el agente.
+    ("stock_assistant", "grok"): "el asistente de bodega llama a Grok con el mismo cliente del agente",
     ("stock_assistant", "pricing"): "costo de la llamada a Grok",
-    ("stock_proposal", "restock"): "días de surtido en el agente",
-    ("catalog", "measures"): "medidas del catálogo en el agente",
-    ("catalog", "search"): "búsqueda del catálogo en el agente",
-    ("catalog_admin", "validation"): "normalización de texto en el agente",
-    ("product_art", "validation"): "normalización de texto en el agente",
-    ("stock_thresholds", "validation"): "patrón de SKU en el agente",
-    ("inventory", "validation"): "patrón de SKU en el agente",
-    ("inventory", "restock"): "plan de surtido en el agente",
-    ("order_watch", "sessions"): "el aviso de vencimiento se deja en la sesión",
-    ("order_watch", "order_replies"): "texto del aviso de vencimiento",
-    ("orders", "tools"): "reloj de la tienda en las herramientas",
-    ("supervision", "handoff"): "estados de atención humana",
-    ("supervision", "sessions"): "conversaciones guardadas",
-    ("supervision", "injection"): "códigos de bloqueo",
+    # Un comprobante de pago se guarda con la misma barrera de datos personales que el chat.
     ("payments", "guardrails"): "borrado de datos personales en el comprobante",
 }
 
@@ -86,8 +60,6 @@ def test_each_layer_imports_only_the_ones_below_it_or_a_known_crossing():
     for layer, module, target_layer, target in _imports():
         if target_layer == layer or ORDER.index(target_layer) < ORDER.index(layer):
             continue
-        if module == "demo" and target_layer == "tienda":
-            continue  # la demo se arma con los módulos reales de la tienda
         crossings.add((module, target))
     new = crossings - KNOWN_CROSSINGS.keys()
     gone = KNOWN_CROSSINGS.keys() - crossings
@@ -98,16 +70,18 @@ def test_each_layer_imports_only_the_ones_below_it_or_a_known_crossing():
 def test_nobody_imports_the_entry_points_and_the_data_base_imports_nothing():
     for layer, module, target_layer, _ in _imports():
         assert target_layer != "entregas" or layer == "entregas", module
-        if module in ("seed", "catalog_data"):
+        if layer == "datos":
             assert target_layer == "datos", module
 
 
 def test_the_tests_find_a_crossing_when_one_appears():
     # Sin esto, un fallo del recorrido (otra raíz, otro patrón de importación) dejaría pasar todo en silencio.
     found = _imports()
-    assert ("tienda", "inventory", "agente", "validation") in found
     assert ("agente", "chat", "observabilidad", "tracing") in found
-    assert ("datos", "demo", "agente", "handoff") in found
+    assert ("tienda", "payments", "agente", "guardrails") in found
+    # Las dos formas de importar: un nombre de un módulo y un módulo de un paquete.
+    assert ("agente", "validation", "tienda", "vocabulario") in found
+    assert ("tienda", "orders", "tienda", "reloj") in found
 
 
 def test_every_screen_file_lives_in_one_folder_and_each_server_finds_what_it_serves():

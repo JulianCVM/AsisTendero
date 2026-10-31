@@ -8,11 +8,11 @@ from urllib.parse import parse_qs, urlsplit
 from dotenv import load_dotenv
 
 from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.order_watch import Watcher
 from asistendero.agente.conversacion.sessions import SESSION_ID, SessionError, SessionStore
 from asistendero.entregas.estaticos import web_file
 from asistendero.observabilidad.harness_info import describe_harness
 from asistendero.observabilidad.tracing import run_traced
-from asistendero.tienda.pedidos.order_watch import Watcher
 from asistendero.tienda.pedidos.orders import OrderBook
 
 

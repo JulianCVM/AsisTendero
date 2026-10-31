@@ -7,11 +7,12 @@ nunca costos de compra. Las conversaciones se leen con ``supervision`` y no expo
 
 from asistendero.agente.conversacion.handoff import ATTENTION_STATES
 from asistendero.agente.conversacion.sessions import SESSION_ID, SessionStore
+from asistendero.agente.conversacion.supervision import conversation, conversations
 from asistendero.tienda.abastecimiento.purchasing import Purchasing
 from asistendero.tienda.catalogo.catalog_admin import CatalogAdmin
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.orders import BOGOTA, ORDER_ID, OrderBook
-from asistendero.tienda.supervision.supervision import conversation, conversations
+from asistendero.tienda.pedidos.orders import ORDER_ID, OrderBook
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.payments import METHODS, PAYMENT_STATUSES, Payments
 from asistendero.tienda.ventas.sales import STATUSES, day_summary, order_board
 from asistendero.tienda.ventas.sales_history import sales_history, sales_summary

@@ -8,7 +8,8 @@ import pytest
 
 from asistendero.datos.seed import create_mock_db
 from asistendero.tienda.catalogo.catalog import MockCatalog
-from asistendero.tienda.pedidos.orders import BOGOTA, HOLD_MINUTES, OrderBook, OrderError
+from asistendero.tienda.pedidos.orders import HOLD_MINUTES, OrderBook, OrderError
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.sales import order_board
 
 
@@ -144,11 +145,11 @@ def test_two_customers_cannot_hold_the_last_units_at_the_same_time(store):
 # --- El flujo de pedidos dentro de una conversación, con un Grok falso -------------------------------------
 
 from asistendero.agente.conversacion.chat import run_turn  # noqa: E402
+from asistendero.agente.conversacion.order_watch import WARN_BEFORE, Watcher, sweep
 from asistendero.agente.conversacion.sessions import SessionStore  # noqa: E402
 from asistendero.agente.flujo.graph import build_graph  # noqa: E402
 from asistendero.agente.herramientas.executor import catalog_executor  # noqa: E402
 from asistendero.agente.modelo.grok import Decision  # noqa: E402
-from asistendero.tienda.pedidos.order_watch import WARN_BEFORE, Watcher, sweep  # noqa: E402
 
 
 PVC_HALF = {"text": "tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}

@@ -249,22 +249,21 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `agente/modelo/` | `grok.py` (cliente de Grok, decisión y contrato de herramientas) y `prompt.py` (instrucciones del agente). |
 | `agente/flujo/` | `graph.py` (flujo LangGraph: Grok decide, el servidor valida, ejecuta y responde) y `reminders.py` (avisos cuando Grok responde sin un paso que el mensaje exige). |
 | `agente/entrada/` | Lo que se revisa antes de pensar: `injection.py` (inyecciones, con baneo), `guardrails.py` (temas delicados, datos personales, fugas del prompt) y `spelling.py` (mensajes mal escritos). |
-| `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `search.py`, `product_fit.py`, `measures.py`, `choices.py` (opciones mostradas) y `shopping_list.py` (lo cotizado en la conversación). |
+| `agente/reglas/` | Reglas antes de ejecutar: `validation.py`, `order_rules.py`, `choices.py` (opciones mostradas) y `shopping_list.py` (lo cotizado en la conversación). |
 | `agente/herramientas/` | `tools.py` y `order_tools.py` (herramientas del servidor, `execute_tool`), `executor.py` (ejecutor real) y `observations.py` (lectura de sus respuestas). |
 | `agente/respuesta/` | `answers.py` (respuesta verificada contra las observaciones), `reply_text.py`, `store_replies.py`, `order_replies.py` y `restock.py` (qué puede afirmar Grok del surtido). |
-| `agente/conversacion/` | `sessions.py` (memoria acotada en SQLite), `chat.py` (un turno) y `handoff.py` (paso al tendero). |
-| `src/asistendero/tienda/` | Lo que administra el tendero sobre la misma base. |
-| `tienda/catalogo/` | `catalog.py` (lectura en solo lectura), `catalog_admin.py` y `stock_thresholds.py` (categorías y alertas) y `product_art*.py` (pictogramas de producto). |
-| `tienda/inventario/` | `inventory.py`: precio y existencias con historial. |
-| `tienda/pedidos/` | `orders.py` (pedidos para recoger) y `order_watch.py` (vencimiento a los 5 minutos). |
+| `agente/conversacion/` | `sessions.py` (memoria acotada en SQLite), `chat.py` (un turno), `handoff.py` (paso al tendero), `order_watch.py` (vence pedidos y deja el aviso en la conversación) y `supervision.py` (bandeja de conversaciones del panel). |
+| `src/asistendero/tienda/` | Lo que administra el tendero sobre la misma base; `vocabulario.py` (SKU, texto normalizado y pesos) y `reloj.py` (hora de la tienda) son comunes a la tienda y al agente. |
+| `tienda/catalogo/` | `catalog.py` (lectura en solo lectura), `search.py` (contrato de búsqueda), `measures.py` (medidas como átomos), `product_fit.py` (qué producto describe el texto), `catalog_admin.py` y `stock_thresholds.py` (categorías y alertas) y `product_art*.py` (pictogramas de producto). |
+| `tienda/inventario/` | `inventory.py` (precio y existencias con historial) y `surtido.py` (cuándo vuelve a llegar un producto). |
+| `tienda/pedidos/` | `orders.py`: pedidos para recoger, apartado y vencimiento a los 5 minutos. |
 | `tienda/ventas/` | `payments.py` (registro manual del cobro, ver [PAGOS.md](docs/PAGOS.md)), `sales.py` y `sales_history.py`. |
 | `tienda/abastecimiento/` | `purchasing*.py` (proveedores y pedidos al proveedor) y `stock_*.py` (llegadas y cambios de bodega). |
 | `tienda/bodega/` | `stock_assistant.py` y `stock_proposal.py`: Grok interpreta lo que cuenta el tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
-| `tienda/supervision/` | `supervision.py`: bandeja de conversaciones del panel. |
-| `src/asistendero/datos/` | `catalog_data.py` y `seed.py` (catálogo ficticio y base) y `demo.py` (tienda de demostración, `--demo`). |
+| `src/asistendero/datos/` | `catalog_data.py` y `seed.py`: catálogo ficticio y base. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py` y `harness_flow.py` (mapa del harness atado al grafo real). |
 | `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
-| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766) y `estaticos.py`. |
+| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
 | `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
 | `tools/mostrador/` | Generador de la tienda isométrica de «Cómo funciona» en `/inicio` (`node tools/mostrador/build.mjs`); usa el mismo kit de anatomy. |

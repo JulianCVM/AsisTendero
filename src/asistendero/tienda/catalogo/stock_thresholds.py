@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 
-from asistendero.agente.reglas.validation import SKU_PATTERN
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID, upgrade_db
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 # Igual a inventory.LOW_STOCK, pero sin importarlo: inventory.py es quien pinta las existencias y es natural que

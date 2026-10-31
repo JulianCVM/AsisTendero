@@ -13,10 +13,10 @@ sirve para elegir la forma y el tono; nunca se copia al SVG, así que no hay nad
 import hashlib
 import re
 
-from asistendero.agente.reglas.validation import normalize_text
 from asistendero.tienda.catalogo.product_art_shapes import (AMBER, GLASS, INK, KRAFT, PAPER, SHAPES as MATERIAL_SHAPES, STEEL,
                                             STEEL_DARK, WATER, WOOD)
 from asistendero.tienda.catalogo.product_art_tools import BRASS, COPPER, SHAPES as TOOL_SHAPES
+from asistendero.tienda.vocabulario import normalize_text
 
 
 SHAPES = {**MATERIAL_SHAPES, **TOOL_SHAPES}

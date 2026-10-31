@@ -8,11 +8,11 @@ escribe precio ni stock por su cuenta: las existencias suben solo con ``Purchasi
 
 from datetime import date
 
-from asistendero.agente.respuesta.reply_text import format_cop
 from asistendero.tienda.abastecimiento.purchasing import Purchasing, PurchasingError
 from asistendero.tienda.abastecimiento.purchasing_rules import OPEN, expected_date
 from asistendero.tienda.abastecimiento.stock_arrivals import reception_lines
 from asistendero.tienda.abastecimiento.stock_operations import stock_row
+from asistendero.tienda.vocabulario import format_cop
 
 APPLICABLE = ("recepcion", "pedido_proveedor", "programar_entrega", "cambio_precio", "correccion_stock")
 

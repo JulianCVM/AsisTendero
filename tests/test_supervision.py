@@ -11,12 +11,13 @@ from asistendero.agente.conversacion.handoff import (
     request_human, staff_reply, take_over,
 )
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
+from asistendero.agente.conversacion.supervision import LIVE_WINDOW, conversation, conversations
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.modelo.grok import Decision, ModelError
 from asistendero.datos.seed import create_mock_db
 from asistendero.tienda.catalogo.catalog import MockCatalog
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
-from asistendero.tienda.supervision.supervision import LIVE_WINDOW, conversation, conversations
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 
 
 def never(*_args, **_kwargs):

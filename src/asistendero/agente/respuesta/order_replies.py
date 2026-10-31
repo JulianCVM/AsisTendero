@@ -9,9 +9,9 @@ import re
 
 from asistendero.agente.herramientas.observations import ToolCall, order_results
 from asistendero.agente.modelo.grok import ORDER_TOOLS
-from asistendero.agente.reglas.validation import normalize_text
 from asistendero.agente.respuesta.reply_text import order_lines
 from asistendero.tienda.pedidos.orders import CONFIRMED_HOLD, HOLD_MINUTES, PAYMENT
+from asistendero.tienda.vocabulario import normalize_text
 
 
 DAY_NAMES = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")

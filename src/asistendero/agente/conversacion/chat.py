@@ -23,7 +23,8 @@ from asistendero.agente.reglas.choices import shown_options
 from asistendero.agente.reglas.shopping_list import updated_list
 from asistendero.observabilidad.tracing import run_traced
 from asistendero.tienda.catalogo.catalog import MockCatalog
-from asistendero.tienda.pedidos.orders import WEEKDAYS, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import WEEKDAYS
 
 
 def order_context(orders: list[dict]) -> list[dict]:

@@ -19,7 +19,6 @@ import re
 import secrets
 import sqlite3
 
-from asistendero.agente.respuesta.restock import SHOWN_WEEKDAYS
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
 from asistendero.tienda.abastecimiento.purchasing import Purchasing, PurchasingError
 from asistendero.tienda.abastecimiento.purchasing_rules import MAX_LINES, OPEN
@@ -29,7 +28,9 @@ from asistendero.tienda.bodega.stock_assistant import (StockAssistantError, clea
                                          validate_interpretation)
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.inventario.inventory import InventoryError
-from asistendero.tienda.pedidos.orders import BOGOTA, _store_now, local_text, utc_text
+from asistendero.tienda.inventario.surtido import SHOWN_WEEKDAYS
+from asistendero.tienda.pedidos.orders import _store_now, local_text, utc_text
+from asistendero.tienda.reloj import BOGOTA
 
 VALID_MINUTES = 15
 # Un reintento de «aplicar» espera a que termine el anterior; pasado este plazo se asume que el anterior murió.

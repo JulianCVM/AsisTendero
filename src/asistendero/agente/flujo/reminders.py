@@ -11,11 +11,12 @@ from asistendero.agente.modelo.grok import Decision
 from asistendero.agente.modelo.grok import ORDER_TOOLS
 from asistendero.agente.reglas.order_rules import mentioned_hours, order_action_pending
 from asistendero.agente.reglas.shopping_list import missing_from_quote
-from asistendero.agente.reglas.validation import (foreign_unit, grounded_products, naming_numbers, normalize_text, quantities_in_message,
-                                    sale_units)
+from asistendero.agente.reglas.validation import (foreign_unit, grounded_products, naming_numbers,
+                                                  quantities_in_message, sale_units)
 from asistendero.agente.respuesta.restock import asks_restock
 from asistendero.agente.respuesta.store_replies import asks_assortment, full_category_listing
 from asistendero.tienda.catalogo.catalog import tokens
+from asistendero.tienda.vocabulario import normalize_text
 
 # Con cualquiera de estas el turno ya trató de productos; consultar la tienda no cuenta.
 PRODUCT_TOOLS = {"buscar_productos", "consultar_disponibilidad", "calcular_cotizacion_informativa", "explorar_categoria",

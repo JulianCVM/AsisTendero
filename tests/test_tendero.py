@@ -16,7 +16,8 @@ from asistendero.entregas.panel import tendero
 from asistendero.entregas.panel.tendero_actions import ROUTES
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.inventario.inventory import Inventory, InventoryError
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.sales import day_summary, order_board
 
 
@@ -505,8 +506,8 @@ def test_the_demo_quotes_the_real_replies_prices_and_categories():
     from asistendero.agente.conversacion.handoff import HANDOFF_REPLY
     from asistendero.agente.entrada.injection import blocked_reply
     from asistendero.agente.modelo.grok import TOOL_NAMES
-    from asistendero.agente.respuesta.reply_text import format_cop
     from asistendero.datos.seed import CATEGORIES, PRODUCTS
+    from asistendero.tienda.vocabulario import format_cop
 
     scenes = (web("inicio-escenas.js")).read_text(encoding="utf-8")
     assert blocked_reply({"pedidos": []}) in scenes and HANDOFF_REPLY in scenes
@@ -528,9 +529,9 @@ def _landing_section(page, section_id):
 
 
 def test_the_landing_first_view_speaks_to_any_business_and_its_example_uses_real_catalog_data():
-    from asistendero.agente.respuesta.reply_text import format_cop
     from asistendero.datos.seed import PRODUCTS
     from asistendero.tienda.pedidos.orders import PAYMENT
+    from asistendero.tienda.vocabulario import format_cop
     page = (web("inicio.html")).read_text(encoding="utf-8")
     hero = _landing_section(page, "inicio")
     text = re.sub(r"<[^>]+>", " ", hero)
@@ -552,9 +553,9 @@ def test_the_landing_first_view_speaks_to_any_business_and_its_example_uses_real
 
 
 def test_the_landing_benefits_are_three_and_promise_only_what_the_product_does():
-    from asistendero.agente.respuesta.reply_text import format_cop
     from asistendero.datos.seed import PRODUCTS
     from asistendero.tienda.pedidos.orders import HOLD_MINUTES
+    from asistendero.tienda.vocabulario import format_cop
     page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "beneficios")
     benefits = re.findall(r'<li class="benefit[\w -]* reveal">(.*?)\n        </li>', section, re.S)
@@ -616,8 +617,8 @@ def test_the_landing_demo_starts_with_a_sale_says_it_is_simulated_and_shows_ther
 
 
 def test_the_landing_how_it_works_uses_a_generic_scene_and_real_catalog_data():
-    from asistendero.agente.respuesta.reply_text import format_cop
     from asistendero.datos.seed import PRODUCTS
+    from asistendero.tienda.vocabulario import format_cop
     page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "como-funciona")
     # La escena es un SVG decorativo generado (tools/mostrador/build.mjs), liviano, sin estilos en línea y sin rubro.
@@ -649,8 +650,8 @@ def test_the_landing_how_it_works_uses_a_generic_scene_and_real_catalog_data():
 
 
 def test_the_landing_sector_examples_tell_what_works_today_from_what_could_be_adapted():
-    from asistendero.agente.respuesta.reply_text import format_cop
     from asistendero.datos.seed import PRODUCTS
+    from asistendero.tienda.vocabulario import format_cop
     page = (web("inicio.html")).read_text(encoding="utf-8")
     section = _landing_section(page, "adaptable")
     assert '<h2 id="adapt-title">Cómo podría adaptarse a tu negocio</h2>' in section
@@ -726,11 +727,12 @@ def _landing_sections(page):
 
 def test_the_landing_closing_sections_speak_business_and_their_claims_match_the_code():
     from asistendero.agente.modelo.grok import TOOL_NAMES
-    from asistendero.agente.respuesta.reply_text import format_cop, found_sentence
+    from asistendero.agente.respuesta.reply_text import found_sentence
     from asistendero.datos.seed import PRODUCTS
     from asistendero.tienda.catalogo.catalog import Product
     from asistendero.tienda.pedidos.orders import HOLD_MINUTES
     from asistendero.tienda.ventas.payments import METHODS
+    from asistendero.tienda.vocabulario import format_cop
 
     page = (web("inicio.html")).read_text(encoding="utf-8")
     sections = _landing_sections(page)
@@ -931,8 +933,8 @@ def test_extra_keys_never_slip_through_a_panel_action(server):
 
 
 def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path):
-    from asistendero.datos.demo import build_demo
     from asistendero.datos.seed import DEFAULT_DB_PATH
+    from asistendero.entregas.demo import build_demo
 
     database, sessions_path = build_demo(tmp_path / "demo")
     assert database.parent == tmp_path / "demo" and database.resolve() != DEFAULT_DB_PATH.resolve()

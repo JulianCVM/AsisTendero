@@ -19,9 +19,11 @@ from asistendero.agente.entrada.guardrails import redact_personal_data
 from asistendero.agente.herramientas.observations import ToolCall, latest_quote, order_results
 from asistendero.agente.modelo.grok import MAX_ARGUMENT_CHARS, ORDER_TOOLS
 from asistendero.agente.reglas.shopping_list import WHOLE_LIST, list_lines, removed_now
-from asistendero.agente.reglas.validation import (MAX_ITEMS, MAX_QUANTITY, MONEY, SKU_PATTERN, Rejected, foreign_unit, grounded_products,
-                                    normalize_text, quantities_in_message)
-from asistendero.tienda.pedidos.orders import MAX_NOTE_CHARS, ORDER_ID, WEEKDAYS
+from asistendero.agente.reglas.validation import (MAX_ITEMS, MAX_QUANTITY, MONEY, Rejected, foreign_unit,
+                                                  grounded_products, quantities_in_message)
+from asistendero.tienda.pedidos.orders import MAX_NOTE_CHARS, ORDER_ID
+from asistendero.tienda.reloj import WEEKDAYS
+from asistendero.tienda.vocabulario import SKU_PATTERN, normalize_text
 
 
 PURCHASE_INTENT = re.compile(

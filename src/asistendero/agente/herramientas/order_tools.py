@@ -10,8 +10,10 @@ import sqlite3
 
 from asistendero.agente.herramientas.observations import error_envelope
 from asistendero.agente.herramientas.tools import SOURCE, _ok
-from asistendero.agente.reglas.validation import MAX_ITEMS, MAX_QUANTITY, SKU_PATTERN
-from asistendero.tienda.pedidos.orders import BOGOTA, MAX_NOTE_CHARS, ORDER_ID, OrderBook, OrderError
+from asistendero.agente.reglas.validation import MAX_ITEMS, MAX_QUANTITY
+from asistendero.tienda.pedidos.orders import MAX_NOTE_CHARS, ORDER_ID, OrderBook, OrderError
+from asistendero.tienda.reloj import BOGOTA
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 def _order_id(arguments: dict) -> str:

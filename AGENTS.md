@@ -78,10 +78,12 @@ propio.
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
    - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
-   - `normalize_text`, `is_distinguished`, `grounded_products`, `quantities_in_message` y `foreign_unit`
-     (`validation.py`); `closest_named` (`product_fit.py`).
+   - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
+     (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
+   - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
+     `is_distinguished` (`product_fit.py`).
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
-   - `reply_is_grounded` (`answers.py`); `format_cop`, `found_sentence`, `item_line`, `quote_block` y
+   - `reply_is_grounded` (`answers.py`); `found_sentence`, `item_line`, `quote_block` y
      `short_stock_text` (`reply_text.py`); `next_node` (`graph.py`).
    - `list_lines`, `usable_lines`, `updated_list`, `removed_now` y `missing_from_quote` (`shopping_list.py`);
      `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount` y `without_negated`
@@ -89,8 +91,8 @@ propio.
    - `shown_options`, `chosen_options`, `ambiguous_reference` y `check_reference` (`choices.py`); `asks_stock`,
      `stock_note`, `gender_of`, `of_the`, `asks_suitability` y `whole_units_question` (`reply_text.py`);
      `rushes_the_customer` (`order_replies.py`).
-   - `valid_plan`, `plan_of`, `asks_restock`, `restock_sentence`, `restock_subjects` y `restock_reply_ok`
-     (`restock.py`).
+   - `valid_plan` y `plan_of` (`surtido.py`); `asks_restock`, `restock_sentence`, `restock_subjects` y
+     `restock_reply_ok` (`restock.py`).
    - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
    - `OrderBook` (`orders.py`), `validate_order_request`, `order_action_pending`, `added_quantities`, `cancels` y
      `changes_order` (`order_rules.py`), `order_reply`
@@ -139,8 +141,9 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 ## Dónde va cada cosa
 
 El paquete se divide por función (`docs/ARQUITECTURA.md`): `agente/` (AsisTendero y su harness), `tienda/` (lo que
-administra el tendero), `datos/` (catálogo ficticio, esquema y demo), `observabilidad/`, `evaluacion/` y `entregas/`
-(terminal, comando único, visor, panel y los archivos de las pantallas en `entregas/web/`). Cada nombre de módulo es
+administra el tendero), `datos/` (catálogo ficticio y esquema), `observabilidad/`, `evaluacion/` y `entregas/`
+(terminal, comando único, visor, panel, tienda de demostración y los archivos de las pantallas en
+`entregas/web/`). Cada nombre de módulo es
 único, por eso la tabla los nombra sin ruta; el subpaquete de cada uno está en el README. Un módulo nuevo va en el
 paquete de su función y solo importa los de abajo (`entregas → evaluacion → observabilidad → agente → tienda →
 datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda evitar se anota ahí con su motivo.

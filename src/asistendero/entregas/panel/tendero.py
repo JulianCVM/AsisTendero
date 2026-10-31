@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.entrada.injection import INJECTION_CODES
 from asistendero.agente.modelo.grok import ModelError
-from asistendero.datos.demo import build_demo
+from asistendero.entregas.demo import build_demo
 from asistendero.entregas.estaticos import web_file
 from asistendero.entregas.panel.tendero_actions import PanelActions
 from asistendero.entregas.panel.tendero_views import PanelViews

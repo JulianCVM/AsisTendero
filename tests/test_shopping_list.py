@@ -9,7 +9,8 @@ from asistendero.agente.conversacion.sessions import SessionStore
 from asistendero.agente.modelo.grok import Decision
 from asistendero.agente.reglas.shopping_list import MAX_LIST_LINES, asks_whole_list, missing_from_quote, updated_list
 from asistendero.datos.seed import create_mock_db
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 
 
 CONDUIT = {"text": "tubo conduit eléctrico de media pulgada", "product": "tubo", "use": "eléctrico", "measure": "1/2 pulgada"}
@@ -428,8 +429,8 @@ def test_stock_is_said_only_when_asked_low_short_or_out(stock, asked, needed, ex
     ("¿cuánto vale el tubo de 1/2?", False), ("necesito 3 metros de tubo", False),
 ])
 def test_what_asks_how_many_are_left(message, expected):
-    from asistendero.agente.reglas.validation import normalize_text
     from asistendero.agente.respuesta.reply_text import asks_stock
+    from asistendero.tienda.vocabulario import normalize_text
 
     assert asks_stock(normalize_text(message)) is expected
 

@@ -11,7 +11,8 @@ Las fechas se filtran como AAAA-MM-DD en hora de Bogotá. Cada transacción llev
 from datetime import datetime
 import re
 
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 from asistendero.tienda.ventas.payments import METHODS, PAYMENT_STATUSES, Payments
 from asistendero.tienda.ventas.sales import STATUSES, order_board
 

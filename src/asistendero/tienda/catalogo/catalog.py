@@ -6,9 +6,9 @@ from pathlib import Path
 import re
 import sqlite3
 
-from asistendero.agente.reglas.measures import canonical_text, measures
-from asistendero.agente.reglas.search import ProductQuery, without_quantities
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
+from asistendero.tienda.catalogo.measures import canonical_text, measures
+from asistendero.tienda.catalogo.search import ProductQuery, without_quantities
 
 
 # Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).

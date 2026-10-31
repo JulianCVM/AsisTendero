@@ -11,6 +11,7 @@ import sys
 from dotenv import load_dotenv
 
 from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.order_watch import last_event, sweep
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.flujo.graph import build_graph
 from asistendero.agente.herramientas.executor import catalog_executor
@@ -18,7 +19,6 @@ from asistendero.agente.modelo.grok import decide_with_grok
 from asistendero.datos.seed import DEFAULT_DB_PATH, upgrade_db
 from asistendero.entregas import launcher
 from asistendero.tienda.catalogo.catalog import MockCatalog
-from asistendero.tienda.pedidos.order_watch import last_event, sweep
 from asistendero.tienda.pedidos.orders import OrderBook
 
 

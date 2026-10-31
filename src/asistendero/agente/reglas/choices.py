@@ -11,10 +11,11 @@ una sola opción («el de 12», «la talla L», «la de galón»), como se elige
 import re
 
 from asistendero.agente.herramientas.observations import ToolCall, latest_quote, search_findings
-from asistendero.agente.reglas.search import CLAUSE_BREAK
-from asistendero.agente.reglas.validation import Rejected, grounded_products, grounded_selection, normalize_text, without_negated
+from asistendero.agente.reglas.validation import Rejected, grounded_products, grounded_selection, without_negated
 from asistendero.agente.respuesta.reply_text import MAX_NEARBY, MAX_OPTIONS, gender_of, in_sentence, label
 from asistendero.tienda.catalogo.catalog import tokens
+from asistendero.tienda.catalogo.search import CLAUSE_BREAK
+from asistendero.tienda.vocabulario import normalize_text
 
 
 POSITIONS = {"primer": 1, "segund": 2, "tercer": 3, "cuart": 4, "quint": 5}

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 import re
-from asistendero.agente.reglas.measures import measures
+from asistendero.tienda.catalogo.measures import measures
 
 SALE_UNIT_NAME = r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?)"
 NUMBER_WORDS = {

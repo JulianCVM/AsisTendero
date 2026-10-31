@@ -16,7 +16,8 @@ from asistendero.tienda.bodega.stock_assistant import (MAX_OPERATIONS, MAX_TEXT_
                                          StockAssistantError, interpret_text)
 from asistendero.tienda.bodega.stock_proposal import VALID_MINUTES, StockAssistant
 from asistendero.tienda.inventario.inventory import Inventory
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
 
 EXAMPLE = ("ya llegaron los 20 bultos de cemento, de los 15 galones de pintura blanca solo llegaron 10 y el "
            "proveedor mandó 6 brochas de 2 pulgadas de más")

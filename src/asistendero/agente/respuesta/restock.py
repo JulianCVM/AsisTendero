@@ -1,8 +1,8 @@
-"""Surtido: cuándo vuelve a llegar un producto o si ya no se trae, según lo que anotó el tendero.
+"""Lo que el agente puede decir del surtido: cuándo vuelve a llegar un producto o si ya no se trae.
 
 Un cliente de barrio pregunta «veci, ¿cuándo le llegan más?» o «¿ya no van a traer de ese?». El dato lo pone el
-tendero en su panel (``inventory.Inventory.update`` con ``surtido``) y vive en la tabla ``restocks``; el catálogo lo
-entrega como ``Product.restock``, un texto con una de tres formas:
+tendero en su panel y su forma está en ``tienda/inventario/surtido.py``; el catálogo lo entrega como
+``Product.restock``, un texto con una de tres formas:
 
 - un día de la semana («martes»): el proveedor surte ese día;
 - una fecha ISO («2026-10-27»): el tendero sabe cuándo llega; una fecha pasada ya no dice nada;
@@ -13,19 +13,15 @@ sin preguntar); con existencias y sin pregunta, no se menciona. Grok nunca prome
 dejó de traer sin ese dato (``restock_reply_ok``).
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 import re
 
-from asistendero.agente.reglas.search import CLAUSE_BREAK
 from asistendero.agente.respuesta.reply_text import gender_of
 from asistendero.tienda.catalogo.catalog import tokens
+from asistendero.tienda.catalogo.search import CLAUSE_BREAK
+from asistendero.tienda.inventario.surtido import DISCONTINUED, SHOWN_WEEKDAYS, plan_of
+from asistendero.tienda.reloj import WEEKDAYS
 
-DISCONTINUED = "descontinuado"
-WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
-SHOWN_WEEKDAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
-BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
-# El tendero anota surtidos cercanos; una fecha más lejana es casi siempre un error de digitación.
-MAX_DAYS_AHEAD = 180
 # Sobre texto normalizado (sin tildes ni mayúsculas).
 ASKS_RESTOCK = re.compile(
     r"\bcuando\b[^?.!]{0,40}\b(?:llega|llegan|llegara|llegaran|vuelve|vuelven|traen|trae|surten|surte|tendra|tendran"
@@ -38,40 +34,6 @@ DISCONTINUED_CLAIM = re.compile(r"\bdescontinu|\bya no (?:\w+ ){0,3}(?:traer|tra
                                 r"|\bno (?:\w+ ){0,2}(?:volvemos|vamos) a (?:volver a )?traer\b")
 NO_KNOWLEDGE = re.compile(r"\bno (?:tengo|tenemos|se|sabemos|sabria|te puedo (?:asegurar|confirmar))\b|\bsin (?:fecha|dato)\b")
 DAY_MONTH = re.compile(r"\b(\d{1,2})/(\d{1,2})\b")
-
-
-def valid_plan(value: object) -> str:
-    """El surtido limpio para guardar: día, fecha ISO, «descontinuado» o "" para borrarlo; ValueError si no."""
-    if not isinstance(value, str):
-        raise ValueError("El surtido es un día de la semana, una fecha AAAA-MM-DD, «descontinuado» o vacío.")
-    text = value.strip().casefold()
-    plain = text.translate(str.maketrans("áé", "ae"))
-    if not text:
-        return ""
-    if plain == DISCONTINUED or plain in WEEKDAYS:
-        return WEEKDAYS[WEEKDAYS.index(plain)] if plain in WEEKDAYS else DISCONTINUED
-    try:
-        day = date.fromisoformat(text)
-    except ValueError:
-        raise ValueError("El surtido es un día de la semana, una fecha AAAA-MM-DD, «descontinuado» o vacío.") from None
-    today = datetime.now(BOGOTA).date()
-    if not today <= day <= today + timedelta(days=MAX_DAYS_AHEAD):
-        raise ValueError(f"La fecha de surtido va de hoy a {MAX_DAYS_AHEAD} días adelante.")
-    return day.isoformat()
-
-
-def plan_of(restock: str, today: date | None = None) -> tuple[str, str]:
-    """(«dia» | «fecha» | «descontinuado» | «», valor) de un surtido; una fecha pasada cuenta como sin dato."""
-    text = (restock or "").strip()
-    if text == DISCONTINUED:
-        return DISCONTINUED, text
-    if text in WEEKDAYS:
-        return "dia", text
-    try:
-        day = date.fromisoformat(text)
-    except ValueError:
-        return "", ""
-    return ("fecha", text) if day >= (today or datetime.now(BOGOTA).date()) else ("", "")
 
 
 def asks_restock(normalized_message: str) -> bool:

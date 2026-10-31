@@ -11,11 +11,11 @@ from dataclasses import dataclass
 import re
 import sqlite3
 
-from asistendero.agente.reglas.product_fit import closest_named, said_about
-from asistendero.agente.reglas.search import ProductQuery, without_quantities
-from asistendero.agente.reglas.validation import is_distinguished, normalize_text
 from asistendero.tienda.abastecimiento.purchasing_rules import SUPPLIER_ID
 from asistendero.tienda.catalogo.catalog import MockCatalog, Product, covers, tokens
+from asistendero.tienda.catalogo.product_fit import closest_named, is_distinguished, said_about
+from asistendero.tienda.catalogo.search import ProductQuery, without_quantities
+from asistendero.tienda.vocabulario import normalize_text
 
 
 MAX_OPTIONS = 3

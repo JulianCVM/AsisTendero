@@ -10,12 +10,14 @@ from asistendero.agente.conversacion.sessions import SessionStore
 from asistendero.agente.flujo.graph import build_graph
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.modelo.grok import Decision
-from asistendero.agente.reglas.validation import normalize_text
-from asistendero.agente.respuesta.restock import asks_restock, plan_of, restock_reply_ok, restock_sentence, valid_plan
+from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence
 from asistendero.datos.seed import create_mock_db, upgrade_db
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.inventario.inventory import Inventory, InventoryError
-from asistendero.tienda.pedidos.orders import BOGOTA, OrderBook
+from asistendero.tienda.inventario.surtido import plan_of, valid_plan
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
+from asistendero.tienda.vocabulario import normalize_text
 
 
 HAMMER = {"text": "martillo de uña de 16 oz", "product": "martillo", "measure": "16 oz"}

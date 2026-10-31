@@ -8,8 +8,8 @@ propias; las herramientas del agente leen solo ``products`` y nunca los ven.
 from datetime import date, timedelta
 import re
 
-from asistendero.agente.reglas.validation import SKU_PATTERN
-from asistendero.agente.respuesta.restock import MAX_DAYS_AHEAD
+from asistendero.tienda.inventario.surtido import MAX_DAYS_AHEAD
+from asistendero.tienda.vocabulario import SKU_PATTERN
 
 
 MAX_QUANTITY = 100_000
