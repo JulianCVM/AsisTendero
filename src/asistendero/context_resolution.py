@@ -42,7 +42,9 @@ _MODIFIER_START = re.compile(
     r"(?:de|del|para|en|con|tipo|color|calibre|talla|grano)\b"
 )
 _ASKS_WHAT_HAS = re.compile(r"\bque\s+(?:tiene|tienen|hay|vende|venden|maneja|manejan)\b")
-_NEW_PRODUCT_OPENING = re.compile(r"\b(?:tienen?|tiene|hay|venden?|vende|manejan?|busco|cotiz\w*)\b")
+_NEW_PRODUCT_OPENING = re.compile(
+    r"\b(?:tienen?|tiene|hay|venden?|vende|manejan?|busco|cotiz\w*|agreg\w*|anad\w*|sum\w*|pon\w*|quiero|necesito|deme|dame)\b"
+)
 ASKS_ALL_MEASURES = re.compile(
     r"\b(?:que|cuales|otras|todas\s+las)\s+(?:medidas|tamanos|calibres|presentaciones)\b"
 )
@@ -159,7 +161,8 @@ def is_elliptical_turn(message: str, context: dict | None) -> tuple[str, str] | 
         return None
     starts_modifier = bool(_MODIFIER_START.match(clean)) and not _ASKS_WHAT_HAS.search(clean)
     matches_family = bool(words & (family_words | option_words | MATERIAL_WORDS))
-    has_measure = bool(msg_atoms) and not _NEW_PRODUCT_OPENING.search(clean)
+    substantive_unknown = {w for w in (words - known_modifiers - SALE_UNIT_TOKENS) if not w.isdigit() and len(w) > 2}
+    has_measure = bool(msg_atoms) and not _NEW_PRODUCT_OPENING.search(clean) and not substantive_unknown
     return (subject, head) if (starts_modifier or matches_family or has_measure) else None
 
 
