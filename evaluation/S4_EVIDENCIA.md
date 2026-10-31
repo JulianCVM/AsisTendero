@@ -27,6 +27,68 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Línea base, catálogo ampliado, tienda de mercado y paráfrasis (corridas 38 y 39, 31-10-2026)
+
+Pedido de Julian: correr el set completo, ampliar el catálogo y agregar una tienda de barrio de mercado diario para
+evaluar situaciones domésticas. Prompt `s4-conversacion-v12` (ferretería) y `mercado-v1` (tienda de mercado),
+modelo `grok-4.20-0309-non-reasoning`, `--concurrency 3`, `GROK_CONV_ID` apagada. Cada corrida se lanzó desde un
+árbol de trabajo limpio en el commit indicado (`src_dirty=false`).
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 38 | `4c9b784` | los 257 casos y 3 fallos controlados | **252/257** y 3/3 | 808 | 0.898194 | `eval-20261031T222520788586Z` |
+| 39 | `3cd54c8` | los 334 casos y 3 fallos controlados | **315/334** y 3/3 | 1003 | 1.147633 | `eval-20261031T230413912972Z` |
+
+- **Corrida 38 (línea base).** Por suite: `fallas` 35/38, `flujos` 14/15, `ruido` 11/12 y el resto completo.
+  0.003495 USD por tarea y 3,14 llamadas a Grok por tarea. El **96,9 %** de las 808 llamadas reutilizó el prompt fijo
+  desde la caché (86,3 % en la corrida v10 del 24-10), el 87,2 % de los tokens de entrada salió de la caché y la
+  llamada costó 0,001112 USD (0,001385 en v10). Fallaron:
+  - R-12 «quiero comprar algo pero no se que»: respondió «quiero comprar algo no lo manejo».
+  - Q-10 «agrégale 2 brochas de 3 pulgadas» tras un pedido: volvió a preguntar cuántas.
+  - Z-14 «¿cuál sale más barato, el codo de 90 o el de 45?»: mostró las opciones sin precio.
+  - Z-30: respondió bien («agotada») con un estado (`insufficient_stock`) que el caso no acepta; es el caso el que
+    está estrecho, y no se cambió.
+  - Z-35 «deme 5» tras preguntar por el martillo: rechazó el registro (`PURCHASE_NOT_STATED`) y preguntó si lo
+    registraba. Es la misma fricción que A-20 (ver abajo).
+- **Oráculo sobre las respuestas reales de la corrida 38** (`eval_oracle.py`, sin llamar a Grok): de 397 turnos, 233
+  respuestas traían cifras en pesos y **ninguna** sin respaldo en las herramientas del turno. **Cuatro respuestas de
+  casos aprobados mostraban un SKU** (K-01, K-03, K-05 y Z-37: «Para CEM-050 hay 3 bulto disponibles; pediste 6»);
+  se corrigió en `8594748`. En 308 turnos que terminaron en una redacción de Grok, el servidor usó su texto en 60 y la
+  salida determinista en 248.
+- **Corrida 39 (regresión y suites nuevas).** La sesión que la lanzó se cerró por falta de memoria del equipo, pero
+  el proceso del evaluador terminó y dejó su reporte completo. 0.003436 USD por tarea; el 95,3 % de las llamadas
+  reutilizó el prompt fijo desde la caché y el 85,8 % de los tokens de entrada salió de ella (0,001144 USD por
+  llamada). Por suite: `ampliacion` 17/20, `mercado` 25/33, `parafrasis` 21/24, `extremos` 22/24, `fallas` 36/38,
+  `flujos` 14/15 y el resto completo. Ningún precio sin respaldo ni SKU visible.
+  - **Los 257 de antes siguen en 252/257.** R-12 y Z-14 pasan ahora. X-06 dijo «un rollo de cable 12 AWG negro te sale
+    a $2.700 el metro» (el caso prohíbe «te sale» porque no cotiza el rollo) y X-22 mostró la brocha sin el total de
+    las dos. Son redacciones de Grok que el guion no reproduce; no se tocaron.
+  - **Grok prometió fiar (M-33).** Ante «anótemelo en el cuaderno que el viernes le pago», respondió sin
+    herramientas «Listo, te lo anoto en el cuaderno… El viernes me pagas», y el servidor lo dejó pasar. Arreglado:
+    una redacción que promete fiar nunca se acepta (`promises_credit` de `store_replies.py`).
+  - **La tienda de mercado se presentaba como ferretería** al listar sus categorías (M-20, M-35): «Manejamos
+    artículos de ferretería en 10 categorías». Arreglado: la lista nombra lo que vende el negocio activo.
+  - **La cantidad como presentación (M-06, M-08, M-09, M-29, M-36 y P-docena).** Grok buscó «docena de huevos» con
+    presentation="docena", «12 huevos» con "12", «2 libras de papa criolla» con "2 libras" y «3 libras de tomate»
+    con measure="3 libras". Ningún producto tiene esa presentación y la respuesta ofreció opciones cercanas. Sus
+    borradores traían precios inventados (papa criolla a $9.800 las 2 libras, tomate a $2.500); el servidor los
+    descartó todos. Arreglado en el catálogo: si no hay ningún exacto, la búsqueda suelta esa cantidad y deja los
+    productos que se venden por esa unidad. «media libra de queso» sigue eligiendo la pieza de media libra, «2 libras
+    de queso» pregunta (el queso se vende por pieza) y «arroz de 10 libras» (dicho tras «de») sigue como opción
+    cercana.
+  - **Sin cambio, para decidir:**
+    - A-04 («chapa para el cajón del escritorio») ofreció la chapa para mueble como opción cercana. Es una respuesta
+      prudente; el caso esperaba que la eligiera.
+    - A-10 («un tanque de 1000 litros y un flotador de 1/2») dio los dos precios sin el total.
+    - A-20 y Z-35 son la fricción entre el prompt («me llevo» registra) y `pending_quantity_quote` (tras «¿cuántas
+      unidades?» la cantidad se cotiza primero). A-20 terminó con dos preguntas seguidas («¿Quieres que te lo
+      aparte…?» y «¿Quieres que registre el pedido?»).
+    - Z-30: el caso está estrecho.
+  - **Paráfrasis: 5 de 8 grupos respondieron igual.** `docena` («una docena», «12 huevos», «docena de huevos»)
+    difería por el defecto de la presentación. `tanque` («necesito un tanque plástico de 1.000 litros» quedó en
+    `found` y preguntó cuántas aunque dijo «un tanque»; los otros dos cotizaron). `fiado` respondió `answered` en una y `informed` en otra,
+    las dos sin prometer fiar.
+
 ## Suite `fallas`: buscar dónde se equivoca el agente (corridas 33 a 37, 24-10-2026)
 
 Pedido de Julian: una tanda de pruebas pensada para que el agente falle, no para confirmar que acierta. Se escribieron

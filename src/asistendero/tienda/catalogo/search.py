@@ -3,6 +3,7 @@
 from dataclasses import dataclass, replace
 import re
 from asistendero.tienda.catalogo.measures import NUMBER_WORDS, measures
+from asistendero.tienda.vocabulario import normalize_text
 
 # Las seis últimas son de la tienda de mercado: «2 paquetes de pan» o «una cubeta de huevos».
 SALE_UNIT_NAME = (r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?|"
@@ -13,6 +14,31 @@ SALE_UNIT_NAME = (r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|
 SAID_QUANTITY = re.compile(r"(?<!\bde )(?<!\bx )\b(?:\d+|" + "|".join(NUMBER_WORDS) + r")\s+" + SALE_UNIT_NAME + r"\b",
                            re.IGNORECASE)
 PRESENTATION_UNIT = re.compile(r"(?:galon(?:es)?|galón|cajas?|bolsas?|pliegos?|rollos?)$", re.IGNORECASE)
+# Corrida 39 (31-10): Grok buscó «2 libras de papa criolla» con presentation="2 libras", «12 huevos» con
+# presentation="12" y «una docena» con presentation="docena"; ningún producto tiene esa presentación y todo quedó en
+# opciones cercanas. Un número con libra, metro, unidad o par, «y media» o «docena» puede ser cuánto lleva el
+# cliente; también puede ser la presentación («media libra» de queso), por eso la búsqueda solo lo suelta si no hay
+# ningún producto exacto con él.
+_COUNT = r"(?:\d+(?:[.,]\d+)?|" + "|".join(NUMBER_WORDS) + r"|media|medio)"
+ONLY_QUANTITY = re.compile(r"^(?:" + _COUNT + r"\s+)*(?:" + _COUNT + r"|docenas?|libras?|metros?|unidad(?:es)?|pares|par)"
+                           r"(?:\s+(?:de\s+)?(?:docenas?|libras?|metros?|unidad(?:es)?))?(?:\s+y\s+medi[oa])?$")
+
+
+def only_quantity(value: str, text: str) -> bool:
+    """¿La medida o presentación que puso Grok puede ser solo la cantidad pedida («2 libras», «docena», «12»)?
+
+    Dicha tras «de» en el texto del artículo describe el producto y no se suelta: «manguera de 15 metros» sin una de
+    15 metros sigue siendo una opción cercana, nunca otra manguera como si fuera la pedida.
+    """
+    value = re.sub(r"\s+", " ", normalize_text(value)).strip()
+    return bool(ONLY_QUANTITY.match(value)) and not re.search(r"\bde\s+" + re.escape(value) + r"\b",
+                                                              normalize_text(text))
+
+
+def quantity_unit(value: str) -> str:
+    """La unidad de venta de una cantidad dicha: «2 libras» → libra; «docena», «12» o «media docena» → unidad."""
+    unit = re.search(r"\b(libra|metro|unidad|par)", normalize_text(value))
+    return unit.group(1) if unit else "unidad"
 
 
 def without_quantities(text: str) -> str:

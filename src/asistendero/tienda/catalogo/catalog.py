@@ -1,6 +1,6 @@
 """Lectura acotada del catálogo mock; el modelo no construye SQL."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import re
@@ -8,7 +8,8 @@ import sqlite3
 
 from asistendero.datos.seed import DEFAULT_DB_PATH, DEMO_BUSINESS_ID, DEMO_STORE_ID
 from asistendero.tienda.catalogo.measures import canonical_text, measures
-from asistendero.tienda.catalogo.search import ProductQuery, without_quantities
+from asistendero.tienda.catalogo.search import ProductQuery, only_quantity, quantity_unit, without_quantities
+from asistendero.tienda.vocabulario import normalize_text
 
 
 # Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
@@ -195,6 +196,15 @@ class MockCatalog:
             else:
                 exact.append(entry)
 
+        # Ningún exacto con «2 libras» o «docena» como presentación: era la cantidad (ver ONLY_QUANTITY), y valen los
+        # productos que se venden por esa unidad. «2 libras de queso» (por pieza) sigue sin elegir la media libra.
+        loose = {field: getattr(request, field) for field in ("measure", "presentation")
+                 if getattr(request, field) and only_quantity(getattr(request, field), request.text)}
+        if not exact and loose:
+            sold_by = {quantity_unit(value) for value in loose.values()}
+            retry = self.search(replace(request, **dict.fromkeys(loose)), limit).matches
+            if kept := tuple(product for product in retry if normalize_text(product.unit) in sold_by):
+                return SearchResult(kept, ())
         sort_key = lambda item: (-item[0], item[1].stock == 0, item[1].sku)
         exact.sort(key=sort_key)
         nearby.sort(key=sort_key)

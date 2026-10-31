@@ -20,6 +20,7 @@ from asistendero.agente.modelo.prompt import (
 from asistendero.agente.reglas import context_resolution
 from asistendero.agente.reglas.validation import foreign_unit, grounded_products, validate_request
 from asistendero.agente.respuesta.reply_text import units
+from asistendero.agente.respuesta.store_replies import promises_credit, store_lines, store_reply_is_consistent
 from asistendero.datos.catalog_ampliacion import EXTRA_FAMILIES
 from asistendero.datos.catalog_data import FAMILIES, LEGACY
 from asistendero.datos.catalog_mercado import MARKET_BUSINESS_ID, MARKET_FAMILIES
@@ -29,6 +30,7 @@ from asistendero.datos.seed import (
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.catalogo.search import ProductQuery
 from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.vocabulario import normalize_text
 
 
 @pytest.fixture
@@ -171,3 +173,58 @@ def test_the_hardware_store_still_asks_between_two_products_that_share_their_nou
     call = {"requested_tool": "buscar_productos", "arguments": arguments, "response": response, "executed": True}
     assert grounded_products(message, [call]) == {}
     assert MockCatalog(path).business_id == DEMO_BUSINESS_ID and DEMO_STORE_ID == "sede-unica"
+
+
+@pytest.mark.parametrize("message, item, expected", [
+    # Corrida 39: Grok puso la cantidad como presentación o medida y todo quedó en opciones cercanas.
+    ("2 libras de papa criolla", {"text": "papa criolla", "product": "papa", "color": "criolla", "presentation": "2 libras"},
+     ["MPCR-LB"]),
+    ("3 libras de tomate", {"text": "tomate", "product": "tomate", "measure": "3 libras"}, ["MTOM-LB"]),
+    ("deme una docena de huevos", {"text": "huevos", "product": "huevos", "presentation": "docena"}, ["MHUE-UNI"]),
+    ("media docena de huevos", {"text": "media docena de huevos", "product": "huevos", "presentation": "media docena"},
+     ["MHUE-UNI"]),
+    ("12 huevos", {"text": "huevos", "product": "huevos", "presentation": "12"}, ["MHUE-UNI"]),
+    # Si un producto sí tiene esa presentación, es la presentación: el queso se vende en piezas de media libra y 1 libra.
+    ("media libra de queso campesino", {"text": "queso campesino", "product": "queso", "presentation": "media libra"},
+     ["MQUE-MLB"]),
+    ("una libra de queso", {"text": "queso", "product": "queso", "presentation": "1 libra"}, ["MQUE-1LB"]),
+    ("2 bolsas de arroz de 1 libra", {"text": "arroz", "product": "arroz", "presentation": "1 libra"}, ["MARR-1LB"]),
+    # Lo que no se vende por esa unidad no se elige al soltarla: dos libras de queso no son la pieza de media libra.
+    ("2 libras de queso campesino", {"text": "queso campesino", "product": "queso", "presentation": "2 libras"}, []),
+])
+def test_a_quantity_written_as_the_presentation_finds_what_is_sold_by_that_unit(path, message, item, expected):
+    assert _grounded(path, message, item) == expected
+
+
+def test_a_size_said_after_de_is_never_dropped_to_find_something(path):
+    # «arroz de 10 libras» describe una bolsa que no hay: queda como opción cercana, no como la de 1 o 5 libras.
+    result = MockCatalog(path, MARKET_BUSINESS_ID).search(
+        ProductQuery("arroz de 10 libras", product="arroz", presentation="10 libras"))
+    assert not result.matches and "MARR-1LB" in {product.sku for product in result.nearby}
+    assert _grounded(path, "una bolsa de arroz de 10 libras", {"text": "arroz de 10 libras", "product": "arroz",
+                                                                "presentation": "10 libras"}) == []
+
+
+def test_the_market_never_lists_its_categories_as_a_hardware_store(path):
+    call = {"requested_tool": "explorar_categoria", "arguments": {}, "executed": True,
+            "response": execute_tool("explorar_categoria", {}, catalog=MockCatalog(path, MARKET_BUSINESS_ID))}
+    with serving("mercado"):
+        market = "\n".join(store_lines([call]))
+    assert "Manejamos productos de mercado y del hogar en" in market and "ferretería" not in market
+    hardware_call = {**call, "response": execute_tool("explorar_categoria", {}, catalog=MockCatalog(path))}
+    assert "Manejamos artículos de ferretería en 12 categorías" in "\n".join(store_lines([hardware_call]))
+
+
+@pytest.mark.parametrize("reply, promises", [
+    # M-33 (corrida 39): «anótemelo en el cuaderno que el viernes le pago» y Grok aceptó fiar sin herramientas.
+    ("Listo, te lo anoto en el cuaderno. El viernes cuando pases a recogerlo me pagas.", True),
+    ("Queda anotado, lo pagas el viernes.", True),
+    ("Tranquilo, me pagas después.", True),
+    ("No te lo anoto: aquí no fiamos, el pago es en el mostrador al recoger.", False),
+    ("Aquí no fiamos ni te lo anoto, vecino.", False),
+])
+def test_a_reply_that_promises_credit_is_never_grounded(reply, promises):
+    normalized = normalize_text(reply)
+    assert promises_credit(normalized) is promises
+    if promises:
+        assert store_reply_is_consistent(normalized, []) == (False, set())

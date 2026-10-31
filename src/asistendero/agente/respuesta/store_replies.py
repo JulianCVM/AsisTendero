@@ -3,12 +3,16 @@
 import re
 
 from asistendero.agente.herramientas.observations import ToolCall, category_listings, store_info_by_topic
+from asistendero.agente.modelo.prompt import BUSINESS_KIND
 from asistendero.tienda.catalogo.catalog import tokens
 
 
 DAY_NAMES = {"lunes": "lunes", "martes": "martes", "miercoles": "miércoles", "jueves": "jueves",
              "viernes": "viernes", "sabado": "sábado", "domingo": "domingo"}
 MAX_LISTED_PRODUCTS = 15
+# Lo que vende cada negocio, para la lista de categorías: en la corrida 39 la tienda de mercado decía «Manejamos
+# artículos de ferretería en 10 categorías» (M-20 y M-35).
+ASSORTMENT_NAME = {"ferreteria": "artículos de ferretería", "mercado": "productos de mercado y del hogar"}
 # «Estamos abiertos» cuando el servidor dice que está cerrada (o al revés) invalida la redacción de Grok.
 SAYS_OPEN = re.compile(r"\b(?:estamos|esta|seguimos|ya)\s+abiert|\babiert[oa]s?\s+(?:ahora|en\s+este\s+momento)")
 SAYS_CLOSED = re.compile(r"\b(?:estamos|esta|ya)\s+cerrad|\bcerrad[oa]s?\s+(?:ahora|en\s+este\s+momento)")
@@ -23,6 +27,21 @@ POLICY_CLAIMS = {
     "ubicacion": re.compile(r"\b(?:calle|carrera|direccion)\b"),
     "facturacion": re.compile(r"\b(?:iva|impuestos?|factura\s+electronica|facturamos|facturar\w*|emit\w+\s+factura)\b"),
 }
+
+# Fiar nunca se puede prometer: no hay tema de la tienda que lo permita y el pago es en el mostrador. En la corrida
+# 39 (M-33), ante «anótemelo en el cuaderno que el viernes le pago», Grok respondió «Listo, te lo anoto en el
+# cuaderno… El viernes me pagas» sin herramientas y el servidor lo dejó pasar.
+CREDIT_PROMISE = re.compile(
+    r"\b(?:te\s+(?:lo|la|los|las)\s+(?:anoto|apunto|fio)|(?:queda|quedan|qued[oa])\s+(?:anotad|apuntad)\w*"
+    r"|te\s+fio|(?:me|nos)\s+(?:lo\s+|la\s+)?pagas\s+(?:el|despues|luego|cuando|la\s+otra|otro|mas\s+tarde)"
+    r"|pagas\s+(?:despues|luego|cuando\s+puedas|mas\s+tarde|el\s+(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)))\b")
+
+
+def promises_credit(normalized_reply: str) -> bool:
+    """¿La redacción promete fiar? «No te lo anoto» no lo promete."""
+    return any(not re.search(r"\b(?:no|ni|nunca)\s+(?:\w+\s+)?$", normalized_reply[:match.start()])
+               for match in CREDIT_PROMISE.finditer(normalized_reply))
+
 
 # Si un precio lleva IVA no lo dice ningún tema de la tienda: ni consultando «facturacion» se puede afirmar.
 IVA_CLAIM = re.compile(r"\b(?:incluy\w*|incluid\w*|traen|trae|llevan|lleva|tienen|sin|mas|con)\s+(?:el\s+)?iva\b"
@@ -95,7 +114,8 @@ def store_lines(calls: list[ToolCall]) -> list[str]:
         if "categorias" in listing:
             # Una línea por categoría, tal como está en el catálogo: nada de «y más» ni familias que no existen.
             names = "\n".join(f"• {item['categoria']}" for item in listing["categorias"])
-            lines.append(f"Manejamos artículos de ferretería en {len(listing['categorias'])} categorías:\n{names}\n"
+            lines.append(f"Manejamos {ASSORTMENT_NAME[BUSINESS_KIND.get()]} en {len(listing['categorias'])} "
+                         f"categorías:\n{names}\n"
                          "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad.")
         else:
             products = listing["productos"]
@@ -129,7 +149,7 @@ def store_reply_is_consistent(
     consulted = set(store_info_by_topic(calls)) | ({"medios_pago"} if paid_at_pickup else set())
     if any(topic not in consulted and pattern.search(normalized_reply) for topic, pattern in POLICY_CLAIMS.items()):
         return False, amounts
-    if IVA_CLAIM.search(normalized_reply):
+    if IVA_CLAIM.search(normalized_reply) or promises_credit(normalized_reply):
         return False, amounts
     said_hours = {_hour(value) for value in re.findall(r"\b\d{1,2}:\d{2}\b", normalized_reply)}
     if not said_hours <= hours:
