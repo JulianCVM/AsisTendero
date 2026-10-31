@@ -144,8 +144,9 @@ class OrderBook:
                 self._active(connection, replaces, session_id)
                 freed = {line["sku"]: line["quantity"] for line in connection.execute(
                     "SELECT sku, quantity FROM order_lines WHERE order_id = ?", (replaces,)).fetchall()}
-            active = connection.execute("SELECT COUNT(*) FROM orders WHERE session_id = ? AND status IN (?, ?)",
-                                        (session_id, *ACTIVE)).fetchone()[0] - (replaces is not None)
+            active = connection.execute("SELECT COUNT(*) FROM orders WHERE session_id = ? AND business_id = ? AND "
+                                        "store_id = ? AND status IN (?, ?)",
+                                        (session_id, self.business_id, self.store_id, *ACTIVE)).fetchone()[0] - (replaces is not None)
             if active >= MAX_ACTIVE_PER_SESSION:
                 raise OrderError("TOO_MANY_ORDERS", f"Ya hay {active} pedidos activos en esta conversación.")
             order_id = f"P-{uuid4().hex[:6].upper()}"
@@ -164,8 +165,11 @@ class OrderBook:
                                                            f"{max(available, 0)} contando lo de tu pedido {replaces}, y "
                                                            f"pediste {quantity}. Tu pedido {replaces} sigue igual.")
                 if quantity > available:
-                    raise OrderError("INSUFFICIENT_STOCK", f"Para {sku} hay {max(available, 0)} "
-                                                           f"{product['unit']} disponibles; pediste {quantity}.")
+                    # El mensaje llega tal cual al cliente (order_replies): sin SKU y sin unidad mal concordada
+                    # («Para CEM-050 hay 3 bulto disponibles» salió en K-01 de la línea base del 31-10).
+                    left = (f"solo puedo apartarte {available}" if available > 0 else "no me queda nada para apartar")
+                    raise OrderError("INSUFFICIENT_STOCK", f"De {product['name']} {product['variant']} {left}; "
+                                                           f"pediste {quantity}.")
                 stored.append((order_id, sku, product["name"], product["variant"], product["unit"], quantity,
                                product["price_cop"], product["price_cop"] * quantity))
             connection.execute(
@@ -269,6 +273,8 @@ class OrderBook:
     def session_orders(self, session_id: str, limit: int = 5) -> list[dict]:
         with self.transaction() as connection:
             self._expire(connection)
-            rows = connection.execute("SELECT * FROM orders WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
-                                      (session_id, limit)).fetchall()
+            # Por negocio y sede, como el resto del libro: la tienda de mercado comparte la base con la ferretería.
+            rows = connection.execute("SELECT * FROM orders WHERE session_id = ? AND business_id = ? AND store_id = ? "
+                                      "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                                      (session_id, self.business_id, self.store_id, limit)).fetchall()
             return [self.view(connection, row) for row in rows]

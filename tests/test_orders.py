@@ -556,6 +556,18 @@ def test_a_quote_beyond_what_is_left_without_a_search_says_so(chat):
     assert "No pude consultar" not in more["respuesta"] and "$" not in more["respuesta"]
 
 
+def test_an_order_beyond_the_stock_never_shows_the_sku_to_the_customer(chat):
+    # K-01, K-03 y K-05 (línea base del 31-10): la respuesta decía «Para CEM-050 hay 3 bulto disponibles; pediste 6».
+    turn, sessions, _, _, _ = chat
+    session = sessions.create()
+    result = turn(session, "me llevo 13 metros de tubo PVC de 1/2 para agua", tool("buscar_productos", items=[PVC_HALF]),
+                  tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 13}]), say())
+    assert result["tool_calls"][1]["response"]["error"]["code"] == "INSUFFICIENT_STOCK"
+    assert "solo puedo apartarte 12; pediste 13" in result["respuesta"]
+    assert "PVC-050" not in result["respuesta"] and "metro disponibles" not in result["respuesta"]
+    assert "P-" not in result["respuesta"]
+
+
 def test_a_change_phrase_without_an_active_order_cancels_nothing(chat):
     turn, sessions, book, _, _ = chat
     session = sessions.create()
