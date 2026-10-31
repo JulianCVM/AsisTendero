@@ -1,4 +1,8 @@
-"""Interfaz local del flujo de AsisTendero: un mensaje suelto o una conversación con sesión."""
+"""Comando único de AsisTendero.
+
+Sin argumentos arranca todo (chat con su visor y plataforma del tendero, ver launcher.py); con un mensaje responde
+ese mensaje en la terminal, y con --chat abre una conversación de varios turnos en la terminal.
+"""
 
 import argparse
 import os
@@ -6,6 +10,7 @@ import sys
 
 from dotenv import load_dotenv
 
+from asistendero import launcher
 from asistendero.catalog import MockCatalog
 from asistendero.chat import run_turn
 from asistendero.executor import catalog_executor
@@ -56,22 +61,24 @@ def _chat() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="AsisTendero: Grok decide → herramientas del servidor → respuesta")
-    parser.add_argument("mensaje", nargs="*", help="Mensaje de un cliente de ferretería")
-    parser.add_argument("--chat", action="store_true", help="Conversación de varios turnos con memoria de sesión")
+    parser = argparse.ArgumentParser(description="AsisTendero: sin argumentos arranca el chat y el panel del tendero")
+    parser.add_argument("mensaje", nargs="*", help="Mensaje de un cliente de ferretería, respondido en la terminal")
+    parser.add_argument("--chat", action="store_true", help="Conversación de varios turnos en la terminal")
+    parser.add_argument("--demo", action="store_true",
+                        help="arranca todo sobre la tienda de demostración (.local/demo), con datos simulados")
     parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
     args = parser.parse_args()
+    consulta = " ".join(args.mensaje).strip()
+    if args.demo and (args.chat or consulta):
+        parser.error("--demo solo sirve para arrancar todo: úsalo sin mensaje y sin --chat.")
 
     load_dotenv()
     if args.model:
         os.environ["GROK_MODEL"] = args.model
     if args.chat:
         return _chat()
-    consulta = " ".join(args.mensaje).strip()
     if not consulta:
-        if not sys.stdin.isatty():
-            parser.error("Escribe una consulta como argumento.")
-        consulta = input("Consulta del cliente: ")
+        return launcher.run(demo=args.demo)
 
     try:
         # Una base creada antes del surtido no tiene la tabla: sin actualizarla, todo salía «sin fecha».
