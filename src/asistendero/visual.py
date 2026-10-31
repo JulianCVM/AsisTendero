@@ -17,6 +17,8 @@ from asistendero.tracing import run_traced
 
 
 class TraceHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     _assets = {
         "/assets/cercania-mark.png": ("cercania-mark.png", "image/png"),
         "/assets/NunitoSans.ttf": ("NunitoSans.ttf", "font/ttf"),
@@ -54,46 +56,61 @@ class TraceHandler(BaseHTTPRequestHandler):
             body = files("asistendero").joinpath("ui", filename).read_bytes()
             self._headers(200, content_type, len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         if self.path == "/api/harness":
             if not self._is_local_host():
                 self._json_error(403, "Origen local no permitido.")
+                self.close_connection = False
                 return
             body = json.dumps(describe_harness(), ensure_ascii=False).encode("utf-8")
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         url = urlsplit(self.path)
         if url.path == "/api/avisos":
             # Avisos del servidor para una conversación (pedido por vencer o vencido); se entregan una vez.
             if not self._is_local_host():
                 self._json_error(403, "Origen local no permitido.")
+                self.close_connection = False
                 return
             session_id = (parse_qs(url.query).get("sesion") or [""])[0]
             if not SESSION_ID.match(session_id):
                 self._json_error(400, "Sesión inválida.")
+                self.close_connection = False
                 return
             body = json.dumps({"avisos": self.server.sessions.take_notices(session_id)}, ensure_ascii=False).encode("utf-8")
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
+            self.close_connection = False
             return
         if self.path != "/":
             self._json_error(404, "Ruta no encontrada.")
+            self.close_connection = False
             return
         body = files("asistendero").joinpath("ui/index.html").read_bytes()
         self._headers(200, "text/html; charset=utf-8", len(body))
-        self.wfile.write(body)
+        for offset in range(0, len(body), 32768):
+            self.wfile.write(body[offset:offset + 32768])
+        self.close_connection = False
 
     def do_POST(self) -> None:
         if self.path != "/api/trace":
             self._json_error(404, "Ruta no encontrada.")
+            self.close_connection = False
             return
         expected_origin = f"http://127.0.0.1:{self.server.server_port}"
         if not self._is_local_host() or self.headers.get("Origin") not in (None, expected_origin):
+            length = int(self.headers.get("Content-Length", "0"))
+            if 0 < length <= 65536:
+                self.rfile.read(length)
             self._json_error(403, "Origen local no permitido.")
+            self.close_connection = False
             return
         if self.headers.get_content_type() != "application/json":
             self._json_error(415, "Se requiere application/json.")
+            self.close_connection = False
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -109,6 +126,7 @@ class TraceHandler(BaseHTTPRequestHandler):
                 raise ValueError
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres.")
+            self.close_connection = False
             return
 
         self._headers(200, "application/x-ndjson; charset=utf-8")
@@ -133,6 +151,8 @@ class TraceHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             # El SDK podría incluir datos de la solicitud en su excepción.
             emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}). Revisa red, clave, modelo y créditos."})
+        finally:
+            self.close_connection = True
 
     def log_message(self, format: str, *args: object) -> None:
         # No registrar texto de consultas ni detalles de las llamadas en consola.

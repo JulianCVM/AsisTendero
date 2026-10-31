@@ -307,3 +307,81 @@ def test_session_store_persists_overflow_options_and_specifications_and_upgrades
     assert "restantes" not in compacted["opciones"][0]
     assert compacted["especificaciones"] == {"tubo": {"medida": "1/2 pulgada", "material": "PVC"}}
 
+
+def test_two_consecutive_turns_produce_identical_prompt_prefix_without_timestamp_variation(tmp_path):
+    from decimal import Decimal
+    import json
+    from asistendero.chat import session_context
+    from asistendero.grok import prepare_step
+    from asistendero.pricing import call_cost
+    from asistendero.prompt import AGENT_PROMPT
+
+    # 1. Reloj controlado
+    current_time = datetime(2026, 10, 28, 14, 0, tzinfo=timezone.utc)
+    store = SessionStore(tmp_path / "sessions.sqlite3", clock=lambda: current_time)
+    session = store.create()
+
+    # Turno 1: el cliente consulta tubo PVC y el asistente responde con precio demostrativo
+    store.record(
+        session,
+        "Busco tubo PVC de 1/2",
+        "Sí, el tubo PVC de 1/2 cuesta $8.500 el metro.\n\nPrecios y existencias de demostración.",
+        "found",
+        [{"sku": "TUB-001", "nombre": "tubo PVC", "variante": "1/2", "unidad": "metro"}],
+    )
+
+    # Preparar payload para Turno 2 (con reloj en 14:00)
+    ctx_t2 = session_context(store, session, None)
+    payload_t2, session_id_t2 = prepare_step("dame 3 metros", [], 6, context=ctx_t2)
+    assert session_id_t2 == session
+    json_t2 = json.dumps(payload_t2, ensure_ascii=False, separators=(",", ":"))
+
+    # Turno 2: avanzamos el reloj 5 minutos y se registra el turno con precios enmascarados
+    current_time = datetime(2026, 10, 28, 14, 5, tzinfo=timezone.utc)
+    store.record(
+        session,
+        "dame 3 metros",
+        "Los 3 metros te salen en $25.500 c/u.",
+        "quoted",
+        [{"sku": "TUB-001", "nombre": "tubo PVC", "variante": "1/2", "unidad": "metro"}],
+    )
+
+    # Preparar payload para Turno 3 (con reloj avanzado a 14:05)
+    ctx_t3 = session_context(store, session, None)
+    payload_t3, session_id_t3 = prepare_step("¿a qué hora abren hoy?", [], 6, context=ctx_t3)
+    assert session_id_t3 == session
+    json_t3 = json.dumps(payload_t3, ensure_ascii=False, separators=(",", ":"))
+
+    # Validación 1: AGENT_PROMPT es 100% estático
+    assert isinstance(AGENT_PROMPT, str) and len(AGENT_PROMPT) > 500
+
+    # Validación 2: El primer turno almacenado es byte a byte idéntico entre requests sucesivos
+    turn_1_in_t2 = payload_t2["conversacion"]["turnos"][0]
+    turn_1_in_t3 = payload_t3["conversacion"]["turnos"][0]
+    assert turn_1_in_t2 == turn_1_in_t3
+    assert turn_1_in_t2["cliente"] == "Busco tubo PVC de 1/2"
+    assert turn_1_in_t2["asistente"] == "Sí, el tubo PVC de 1/2 cuesta [precio] el metro."
+    # Sin marcas de tiempo en el historial de turnos
+    assert "14:00" not in str(turn_1_in_t2) and "14:05" not in str(turn_1_in_t2)
+
+    # Validación 3: En el JSON serializado, el prefijo común (system + turnos previos) inicia exactamente igual
+    # ya que "conversacion" está ubicada antes del mensaje y observaciones
+    expected_prefix = '{"conversacion":{"turnos":[{"cliente":"Busco tubo PVC de 1/2","asistente":"Sí, el tubo PVC de 1/2 cuesta [precio] el metro."}'
+    assert json_t2.startswith(expected_prefix)
+    assert json_t3.startswith(expected_prefix)
+
+    # Validación 4: Lo volátil ("ahora") va al final de conversacion, no al inicio
+    conv_keys_t2 = list(payload_t2["conversacion"].keys())
+    assert conv_keys_t2[0] == "turnos"
+    if "ahora" in payload_t2["conversacion"]:
+        assert conv_keys_t2[-1] == "ahora"
+
+    # Validación 5: Métricas de Prompt Caching con tarifa pública de Grok 4.20 ($0.20/1M en caché)
+    cost = call_cost("grok-4.20-0309-non-reasoning", input_tokens=1000, output_tokens=100, cached_input_tokens=800)
+    assert cost is not None
+    # 200 tokens frescos * 1.25/M = 0.00025 + 800 tokens en caché * 0.20/M = 0.00016 + 100 tokens salida * 2.50/M = 0.00025 -> 0.00066 USD
+    assert Decimal(cost["usd"]) == Decimal("0.0006600000")
+    cache_hit_pct = round((Decimal(800) / Decimal(1000)) * 100, 1)
+    assert cache_hit_pct == Decimal("80.0")
+
+

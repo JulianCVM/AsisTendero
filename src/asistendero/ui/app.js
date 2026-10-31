@@ -40,6 +40,8 @@
   let events = [];
   let activeFilter = 'all';
   let tokenTotal = 0;
+  let promptTotal = 0;
+  let cachedTotal = 0;
   let tokenKnown = false;
   let currentAnswer = '';
   let runningNode = null;
@@ -76,7 +78,10 @@
     const line = document.createElement('div');
     line.className = 'cost-line';
     const phase = document.createElement('span');
-    phase.textContent = details.phase === 'resolve' ? 'Resolver productos' : 'Interpretar mensaje';
+    const phaseName = details.phase === 'resolve' ? 'Resolver productos' : 'Interpretar mensaje';
+    const cacheNote = (details.cached_input_tokens && details.input_tokens) ?
+      ' · ' + ((details.cached_input_tokens / details.input_tokens) * 100).toFixed(0) + '% caché' : '';
+    phase.textContent = phaseName + cacheNote;
     const amount = document.createElement('span');
     amount.textContent = details.cost ? formatUsd(details.cost.usd) : 'No disponible';
     line.append(phase, amount);
@@ -156,6 +161,8 @@
     customerMessage.hidden = false;
     events = [];
     tokenTotal = 0;
+    promptTotal = 0;
+    cachedTotal = 0;
     tokenKnown = false;
     currentAnswer = '';
     runningNode = null;
@@ -173,6 +180,8 @@
     document.querySelector('#metric-route').textContent = '—';
     document.querySelector('#metric-calls').textContent = '—';
     document.querySelector('#metric-tokens').textContent = '—';
+    const cacheResetEl = document.querySelector('#metric-cache');
+    if (cacheResetEl) cacheResetEl.textContent = '—';
     document.querySelector('#metric-duration').textContent = '—';
     download.disabled = true;
     copy.disabled = true;
@@ -261,7 +270,15 @@
       for (const value of [event.details?.input_tokens, event.details?.output_tokens]) {
         if (typeof value === 'number') { tokenTotal += value; tokenKnown = true; }
       }
+      if (typeof event.details?.input_tokens === 'number') {
+        promptTotal += event.details.input_tokens;
+        cachedTotal += (event.details?.cached_input_tokens || 0);
+      }
       document.querySelector('#metric-tokens').textContent = tokenKnown ? tokenTotal.toLocaleString('es-CO') : 's/d';
+      const cacheEl = document.querySelector('#metric-cache');
+      if (cacheEl && promptTotal > 0) {
+        cacheEl.textContent = ((cachedTotal / promptTotal) * 100).toFixed(1) + '%';
+      }
       if (event.details?.phase === 'interpret') {
         const plan = event.details;
         const route = plan.action === 'call_tool' ? 'Herramientas' : 'Directa';
@@ -275,6 +292,18 @@
       responseBox.classList.remove('is-typing');
       document.querySelector('#metric-calls').textContent = String(result.model_calls ?? '—');
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
+      const cacheFinalEl = document.querySelector('#metric-cache');
+      if (cacheFinalEl) {
+        const inTok = result.input_tokens;
+        const cTok = result.cached_input_tokens;
+        if (typeof inTok === 'number' && inTok > 0 && typeof cTok === 'number') {
+          cacheFinalEl.textContent = ((cTok / inTok) * 100).toFixed(1) + '%';
+        } else if (typeof result.cache_hit_percent === 'number') {
+          cacheFinalEl.textContent = result.cache_hit_percent.toFixed(1) + '%';
+        } else if (promptTotal > 0) {
+          cacheFinalEl.textContent = ((cachedTotal / promptTotal) * 100).toFixed(1) + '%';
+        }
+      }
       renderCost(result.cost, true);
       setStatus(stateLabels[result.estado] || result.estado || 'Finalizado',
         ['found', 'answered', 'quoted', 'informed', 'refused', 'order_pending', 'order_confirmed', 'pickup_scheduled',

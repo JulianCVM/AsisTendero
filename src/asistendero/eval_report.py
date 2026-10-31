@@ -34,6 +34,13 @@ def summarize(report: dict) -> dict:
     costs = [record_cost(record) for record in records]
     known = sum((cost for cost in costs if cost is not None), Decimal(0))
     tokens = sum(record.get("total_tokens") or 0 for record in records)
+    input_tokens = sum(record.get("input_tokens") or 0 for record in records)
+    cached_tokens = sum(record.get("cached_input_tokens") or 0 for record in records)
+    cache_hit_percent = (
+        round((Decimal(cached_tokens) / Decimal(input_tokens)) * 100, 1)
+        if input_tokens
+        else Decimal(0)
+    )
     by_suite: dict[str, dict] = {}
     for record, cost in zip(records, costs):
         suite = by_suite.setdefault(record.get("suite", "s2"), {
@@ -56,6 +63,9 @@ def summarize(report: dict) -> dict:
         "model_calls_per_task": _per_task(report["model_calls"], tasks, ".2f"),
         "elapsed_ms_per_task": _per_task(report["elapsed_ms"], tasks, ".0f"),
         "reminders": sum(_reminders(record) for record in records),
+        "input_tokens": input_tokens,
+        "cached_tokens": cached_tokens,
+        "cache_hit_percent": float(cache_hit_percent),
         # Los fallos controlados también consumen (F-01 llama a Grok): cuentan en el consumo, no por tarea.
         "failures_cost_usd": format(sum((cost for cost in failure_costs if cost is not None), Decimal(0)), ".6f"),
         "failed_ids": [record["id"] for record in records if not record["passed"]],
@@ -85,18 +95,19 @@ def comparison_markdown(reports: list[dict]) -> str:
     """Tabla para la evidencia: un renglón por reporte y, debajo, qué casos falló cada uno."""
     suites = sorted({name for report in reports for name in report["summary"]["by_suite"]})
     header = ["Modelo", "Prompt", "Commit", "Aprobados", *suites, "Costo USD", "USD/tarea", "Tokens/tarea",
-              "Grok/tarea", "ms/tarea", "Avisos"]
+              "Grok/tarea", "ms/tarea", "% Caché", "Avisos"]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for report in reports:
         summary = report["summary"]
         by_suite = summary["by_suite"]
+        cache_str = f"{summary.get('cache_hit_percent', 0.0):.1f}%"
         cells = [
             report["model"], report["prompt_version"], report.get("commit") or "—",
             f"{report['passed']}/{report['total']}",
             *[f"{by_suite[name]['passed']}/{by_suite[name]['total']}" if name in by_suite else "—" for name in suites],
             summary["cost_usd"] + ("" if summary["cost_complete"] else " (parcial)"),
             summary["cost_per_task_usd"], summary["tokens_per_task"], summary["model_calls_per_task"],
-            summary["elapsed_ms_per_task"], str(summary["reminders"]),
+            summary["elapsed_ms_per_task"], cache_str, str(summary["reminders"]),
         ]
         lines.append("| " + " | ".join(cells) + " |")
     lines.append("")

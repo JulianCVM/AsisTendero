@@ -92,6 +92,7 @@ class TenderoHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'")
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
     def _json(self, status: int, data: dict) -> None:
         self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
@@ -133,9 +134,15 @@ class TenderoHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         origin = f"http://127.0.0.1:{self.server.server_port}"
         if not self._local() or self.headers.get("Origin") not in (None, origin):
+            length = int(self.headers.get("Content-Length", "0"))
+            if 0 < length <= MAX_BODY:
+                self.rfile.read(length)
             self._error(403, "Origen local no permitido.")
             return
         if self.headers.get_content_type() != "application/json":
+            length = int(self.headers.get("Content-Length", "0"))
+            if 0 < length <= MAX_BODY:
+                self.rfile.read(length)
             self._error(415, "Se requiere application/json.")
             return
         try:

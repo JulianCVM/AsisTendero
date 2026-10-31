@@ -28,8 +28,14 @@ from asistendero.validation import normalize_text, quantities_in_message
 MAX_LIST_LINES = MAX_ITEMS
 # Pedir el total de lo que lleva: siempre se cotiza la lista entera.
 WHOLE_LIST = re.compile(
-    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total|junto\s+con|lo\s+(?:demas|anterior|otro)"
-    r"|con\s+(?:el|la|los|las)\s+(?:otr[oa]s?|anterior\w*|\w+\s+que\s+te\s+dije|que\s+te\s+dije)|cuanto\s+(?:me\s+)?(?:sale|queda|seria|es)\s+todo)\b"
+    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total|total\s+acumulado|junto\s+con|lo\s+(?:demas|anterior|otro)"
+    r"|con\s+(?:el|la|los|las)\s+(?:otr[oa]s?|anterior\w*|\w+\s+que\s+te\s+dije|que\s+te\s+dije)"
+    r"|(?:con\s+)?lo\s+que\s+llevamos(?:\s+hasta\s+el\s+momento)?|que\s+llevamos|llevamos\s+hasta\s+el\s+momento"
+    r"|cuanto\s+(?:me\s+)?(?:sale|queda|seria|es)(?:\s+(?:de\s+)?todo|\s+en\s+total)?"
+    r"|cuanto\s+va(?:\s+en\s+total)?"
+    r"|dame\s+la\s+cotizacion(?:\s+con\s+lo\s+que\s+llevamos)?(?:\s+hasta\s+el\s+momento)?"
+    r"|cotizacion\s+con\s+lo\s+que\s+llevamos"
+    r")\b"
 )
 # Sumar algo con su cantidad («agrega una manguera», «y también 2 brochas»): la lista más lo nuevo.
 ADDS = re.compile(r"\b(?:agreg\w*|anad\w*|suma(?:le|me)?|ponle|ponme|tambien|ademas)\b")

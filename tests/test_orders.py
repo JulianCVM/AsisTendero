@@ -836,3 +836,41 @@ def test_a_hypothetical_purchase_is_quoted_never_registered(chat):
     assert book.session_orders(session) == [] and "$85.000" in result["respuesta"]
     from asistendero.order_rules import wants_to_buy
     assert wants_to_buy("si me llevo 2", None) and wants_to_buy("sí, me lo llevo, ¿a qué hora abren?", None)
+
+
+def test_negotiated_quantity_adds_to_shopping_list_and_accumulated_quote_never_creates_order(chat):
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    # 1. Cotización inicial: 3 metros de tubo PVC de 1/2
+    _quote_turn(turn, session)
+    assert book.session_orders(session) == []
+
+    # 2. Consulta de tornillos donde el asistente ofrece o informa disponibilidad de 17 unidades
+    screw_query = {"text": "tornillo para madera 1/4 x 1", "product": "tornillo", "use": "madera", "measure": "1/4 x 1 pulgada"}
+    turn(session, "¿tienen tornillo para madera de 1/4 x 1?",
+         tool("buscar_productos", items=[screw_query]),
+         say("Del tornillo para madera 1/4 x 1 pulgada tenemos 17 unidades disponibles a $350 c/u. ¿Te cotizo las 17?"))
+
+    # 3. El cliente negocia/acepta la cantidad: «dame las 17» (Grok intenta buscar «17»)
+    negotiated = turn(session, "dame las 17",
+                      tool("buscar_productos", items=[{"text": "17"}]))
+    assert negotiated["estado"] == "quoted"
+    assert any(c["requested_tool"] == "calcular_cotizacion_informativa" and c["executed"] for c in negotiated["tool_calls"])
+    assert book.session_orders(session) == []
+    assert "$5.950" in negotiated["respuesta"] or "17" in negotiated["respuesta"]
+
+    # 4. El cliente pide el total acumulado: «dame la cotizacion con lo que llevamos hasta el momento»
+    accumulated = turn(
+        session, "dame la cotizacion con lo que llevamos hasta el momento",
+        tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}, {"sku": "TOR-025-1", "quantity": 17}]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 3}, {"sku": "TOR-025-1", "quantity": 17}]),
+        say(),
+    )
+    assert accumulated["tool_calls"][0]["response"]["error"]["code"] == "PURCHASE_NOT_STATED"
+    assert accumulated["tool_calls"][1]["executed"]
+    assert accumulated["estado"] == "quoted"
+    # El pedido en base de datos NUNCA debe haberse creado (book.session_orders vacío)
+    assert book.session_orders(session) == []
+    assert "$31.450" in accumulated["respuesta"]
+    assert "Con lo que llevas" in accumulated["respuesta"] or "tubo PVC" in accumulated["respuesta"]
+

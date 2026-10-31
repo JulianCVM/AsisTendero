@@ -49,6 +49,7 @@ def order_context(orders: list[dict]) -> list[dict]:
 def session_context(store: SessionStore, session_id: str, orders: OrderBook | None) -> dict:
     """Lo que Grok sabe de la conversación: turnos, productos, hora de la tienda y pedidos del cliente."""
     context = store.context(session_id)
+    context["session_id"] = session_id
     if orders is not None:
         now = orders.clock()
         # Sin la hora, «mañana a las 4» no se puede convertir en una fecha de recogida.
@@ -80,8 +81,8 @@ def _without_grok(store: SessionStore, session_id: str, message: str, status: st
     push("final", {"run_id": run_id, "prompt_version": PROMPT_VERSION, "estado": status, "respuesta": reply,
                    "error": None, "model_called": False, "model_calls": 0, "barreras": [], "inyeccion": None,
                    "tool_calls": 0, "tools_requested": [], "tools_executed": [], "input_tokens": None,
-                   "output_tokens": None, "cached_input_tokens": None, "total_tokens": None, "duration_ms": elapsed,
-                   "cost": None})
+                   "output_tokens": None, "cached_input_tokens": None, "cache_hit_percent": 0.0, "total_tokens": None,
+                   "duration_ms": elapsed, "cost": None})
     emit({"type": "session", "run_id": run_id, "session_id": session_id, "turno": turn, "productos_recordados": [],
           "lista": [], "bloqueada": False, "atencion": attention(store, session_id)})
     return {"run_id": run_id, "consulta": customer, "respuesta": reply, "estado": status, "error": None,

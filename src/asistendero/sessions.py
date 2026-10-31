@@ -80,10 +80,13 @@ def _clean_assistant(text: str) -> str:
 
 
 def compact_context(context: dict) -> dict:
-    """Poda colecciones vacías, pedidos cerrados obsoletos y metadatos internos para el payload de Grok."""
+    """Poda colecciones vacías, pedidos cerrados obsoletos y metadatos internos para el payload de Grok.
+
+    Coloca las colecciones estáticas primero (turnos, productos, lista, opciones, especificaciones, pedidos)
+    y los datos volátiles de entorno («ahora», «abierto_ahora») estrictamente al final, preservando la inmutabilidad
+    del prefijo para aciertos de Prompt Caching.
+    """
     clean: dict = {}
-    if isinstance(context.get("ahora"), str) and context["ahora"]:
-        clean["ahora"] = context["ahora"]
     turns = [
         {"cliente": _clip(str(turn["cliente"])), "asistente": _clean_assistant(str(turn.get("asistente", "")))}
         for turn in (context.get("turnos") or [])[-MAX_CONTEXT_TURNS:]
@@ -141,6 +144,11 @@ def compact_context(context: dict) -> dict:
             pruned_orders.append(entry)
         if pruned_orders:
             clean["pedidos"] = pruned_orders
+    # Lo volátil (reloj del servidor, cálculo de abierto_ahora) va estrictamente al final:
+    if isinstance(context.get("ahora"), str) and context["ahora"]:
+        clean["ahora"] = context["ahora"]
+    if context.get("abierto_ahora") is not None:
+        clean["abierto_ahora"] = context["abierto_ahora"]
     return clean
 
 
@@ -362,8 +370,10 @@ class SessionStore:
         now = self.clock().isoformat()
         with self._connect() as connection:
             number = self._check(connection, session_id) + 1
+            clean_customer = _clip(customer)
+            clean_assistant = _clean_assistant(assistant)
             connection.execute("INSERT INTO turns VALUES (?, ?, ?, ?, ?, ?)",
-                               (session_id, number, customer, assistant, status, now))
+                               (session_id, number, clean_customer, clean_assistant, status, now))
             connection.executemany(
                 "INSERT INTO session_products VALUES (?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(session_id, sku) DO UPDATE SET last_turn = excluded.last_turn",

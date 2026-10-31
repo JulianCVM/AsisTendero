@@ -267,6 +267,9 @@ _ALLOWED_QTY_WORDS = (
         "dame", "deme", "quiero", "necesito", "seria", "serian", "cotizame", "cotiza",
         "por", "favor", "porfa", "gracias", "solo", "solamente", "unos", "unas",
         "entonces", "pues", "bueno", "listo", "dale", "si", "claro",
+        "las", "los", "el", "la", "me", "nos", "llevo", "llevamos", "llevar",
+        "ponle", "ponme", "pon", "dejame", "deje", "dejamelos", "dejamelas",
+        "esos", "esas", "este", "esta", "estos", "estas", "con", "de",
     }
 )
 

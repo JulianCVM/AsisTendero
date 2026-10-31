@@ -410,10 +410,14 @@ def offered_short_quantity(message: str, context: dict | None) -> int | None:
 
 
 _QUANTITY_QUESTION = re.compile(
-    r"(?:\bcuant[oa]s\b"
+    r"(?:\bcuant[oa]s?\b"
     r"|\bcuant[oa]\b[^?¿]*\b(?:necesit\w*|quier\w*|llev\w*|cotiz\w*|seri\w*|cantidad|metraje)\b"
     r"|\bque\s+(?:cantidad|metraje)\b"
-    r"|\bcotizo\s+(?:(?:el|los)\s+\d+|una\s+cantidad\s+menor)\b)"
+    r"|\b(?:cotizo|cotizar|llevas?|quieres?|deseas?)\s+(?:(?:el|la|los|las)\s+)?\d+\b"
+    r"|\bcotizo\s+una\s+cantidad\s+menor\b)"
+)
+_STOCK_MENTION = re.compile(
+    r"\b(?:solo\s+(?:nos\s+)?quedan?|solo\s+tenemos|tenemos\s+\d+|quedan\s+\d+|\d+\s+disponibles?|\d+\s+en\s+(?:bodega|existencias?)|disponible\w*|existencias?)\b"
 )
 _MEASURE_QUESTION = re.compile(
     r"\bde\s+cuant[oa]s?\s+(?:pulgadas?|pulg|amperios?|amp|watts?|vatios?|voltios?|milimetros?|mm"
@@ -462,20 +466,22 @@ def _item_fits_assistant(name: str, variant: str, assistant_norm: str) -> bool:
 
 
 def pending_quantity_target(context: dict | None) -> dict | None:
-    """SKU activo por cuya cantidad o metraje preguntó directamente el asistente en el turno inmediato anterior."""
+    """SKU activo por cuya cantidad o metraje preguntó directamente el asistente o cuyo stock se informó."""
     if not context:
         return None
     turns = context.get("turnos") or []
     if not turns:
         return None
     raw_assistant = str(turns[-1].get("asistente") or "")
-    if "?" not in raw_assistant or "•" in raw_assistant:
+    if "•" in raw_assistant:
         return None
     questions = re.findall(r"¿[^?¿]+\?|[^.!?\n]+\?", raw_assistant)
-    if not any(
+    has_quantity_question = any(
         _QUANTITY_QUESTION.search(q_norm := canonical_text(question)) and not _MEASURE_QUESTION.search(q_norm)
         for question in questions
-    ):
+    )
+    has_stock_mention = bool(_STOCK_MENTION.search(canonical_text(raw_assistant)))
+    if not (has_quantity_question or has_stock_mention):
         return None
 
     assistant_norm = canonical_text(raw_assistant)

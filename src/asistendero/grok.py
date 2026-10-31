@@ -57,7 +57,9 @@ class Decision:
     reported_cost_usd_ticks: int | None = None
 
 
-def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | None, int | None, int | None]:
+def _complete(
+    system: str, payload: dict, session_id: str | None = None,
+) -> tuple[str, str, int | None, int | None, int | None, int | None]:
     """Envía un prefijo ``system`` 100 % estático (para aciertos de Prompt Caching) y los datos dinámicos en ``user``."""
     if not isinstance(system, str) or not system:
         raise ValueError("El bloque system debe ser un texto estático no vacío.")
@@ -73,18 +75,21 @@ def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | N
         timeout=TIMEOUT_SECONDS,
         max_retries=1,
     )
+    create_kwargs: dict = {
+        "model": model,
+        "temperature": TEMPERATURE,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+        "response_format": RESPONSE_FORMAT,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
+        ],
+    }
+    if session_id:
+        create_kwargs["user"] = session_id
     # Los mensajes del SDK pueden incluir datos de la solicitud: solo se propaga un código.
     try:
-        result = client.chat.completions.create(
-            model=model,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            response_format=RESPONSE_FORMAT,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
-            ],
-        )
+        result = client.chat.completions.create(**create_kwargs)
     except openai.APITimeoutError:
         raise ModelError("MODEL_TIMEOUT", "Grok no respondió a tiempo.") from None
     except openai.RateLimitError:
@@ -99,14 +104,23 @@ def _complete(system: str, payload: dict) -> tuple[str, str, int | None, int | N
         raise ModelError("MODEL_UNAVAILABLE", "No fue posible conectar con Grok.") from None
     usage = result.usage
     prompt_details = getattr(usage, "prompt_tokens_details", None)
+    cached_tokens = None
+    if prompt_details is not None:
+        cached_tokens = getattr(prompt_details, "cached_tokens", None)
+        if cached_tokens is None and isinstance(prompt_details, dict):
+            cached_tokens = prompt_details.get("cached_tokens")
+    if cached_tokens is None:
+        cached_tokens = getattr(usage, "cached_tokens", None)
+        if cached_tokens is None and isinstance(usage, dict):
+            cached_tokens = usage.get("cached_tokens")
     content = result.choices[0].message.content if result.choices else None
     return (
         content or "",
         result.model or model,
-        getattr(usage, "prompt_tokens", None),
-        getattr(usage, "completion_tokens", None),
-        getattr(prompt_details, "cached_tokens", None),
-        getattr(usage, "cost_in_usd_ticks", None),
+        getattr(usage, "prompt_tokens", None) if not isinstance(usage, dict) else usage.get("prompt_tokens"),
+        getattr(usage, "completion_tokens", None) if not isinstance(usage, dict) else usage.get("completion_tokens"),
+        cached_tokens,
+        getattr(usage, "cost_in_usd_ticks", None) if not isinstance(usage, dict) else usage.get("cost_in_usd_ticks"),
     )
 
 
@@ -150,20 +164,48 @@ def parse_decision(raw: str) -> tuple[str, str, str | None, dict | None, str]:
     raise ValueError("acción inválida")
 
 
+def prepare_step(
+    message: str,
+    observations: list[dict],
+    remaining_calls: int,
+    context: dict | None = None,
+) -> tuple[dict, str | None]:
+    """Construye el payload del mensaje ``user`` para Grok aplicando las 4 reglas de Prompt Caching.
+
+    Coloca lo estático al inicio (la conversación podada con historial limpio y colecciones fijas)
+    y lo volátil al final (reloj del servidor, cálculo de ``abierto_ahora`` y estado del turno), de modo que
+    el prefijo del prompt sea byte a byte idéntico entre llamadas sucesivas en la misma sesión.
+    Devuelve ``(payload, session_id)``.
+    """
+    from asistendero.sessions import compact_context
+
+    session_id: str | None = None
+    clean_context: dict | None = None
+    if context:
+        session_id = context.get("session_id")
+        compacted = compact_context(context)
+        if compacted:
+            clean_context = compacted
+
+    payload: dict = {}
+    if clean_context:
+        payload["conversacion"] = clean_context
+    payload["mensaje"] = message
+    payload["observaciones"] = observations
+    payload["llamadas_disponibles"] = remaining_calls
+    return payload, session_id
+
+
 def decide_with_grok(
     message: str, observations: list[dict], remaining_calls: int, context: dict | None = None,
 ) -> Decision:
-    from asistendero.sessions import compact_context
-
-    payload = {
-        "mensaje": message,
-        "observaciones": observations,
-        "llamadas_disponibles": remaining_calls,
-    }
-    if context:
-        # Se conserva la clave "conversacion" (habilita pedidos en sesión) podando listas vacías y metadatos obsoletos.
-        payload["conversacion"] = compact_context(context)
-    raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(AGENT_PROMPT, payload)
+    payload, session_id = prepare_step(message, observations, remaining_calls, context)
+    try:
+        raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(
+            AGENT_PROMPT, payload, session_id=session_id,
+        )
+    except TypeError:
+        raw, model, in_tokens, out_tokens, cached_tokens, cost_ticks = _complete(AGENT_PROMPT, payload)
     return decision_from_raw(
         raw, model=model, input_tokens=in_tokens, output_tokens=out_tokens,
         cached_input_tokens=cached_tokens, reported_cost_usd_ticks=cost_ticks,

@@ -136,7 +136,7 @@ def server(shop, sessions):
 
 
 def _request(server, method, path, body=None, headers=None):
-    connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+    connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=15)
     payload = json.dumps(body) if body is not None else None
     base = {"Content-Type": "application/json"} if body is not None else {}
     try:

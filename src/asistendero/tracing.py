@@ -199,6 +199,11 @@ def run_traced(
     input_tokens = _sum_tokens(decisions, "input_tokens")
     output_tokens = _sum_tokens(decisions, "output_tokens")
     cached_tokens = _sum_tokens(decisions, "cached_input_tokens")
+    cache_hit_percent = (
+        round((cached_tokens / input_tokens) * 100, 1)
+        if input_tokens and cached_tokens is not None
+        else 0.0
+    )
     total_tokens = (
         input_tokens + output_tokens
         if input_tokens is not None and output_tokens is not None
@@ -223,6 +228,7 @@ def run_traced(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "cached_input_tokens": cached_tokens,
+        "cache_hit_percent": cache_hit_percent,
         "total_tokens": total_tokens,
         "duration_ms": duration_ms,
         "cost": total_cost,

@@ -19,16 +19,34 @@ from asistendero.grok import MAX_ARGUMENT_CHARS, ORDER_TOOLS
 from asistendero.guardrails import redact_personal_data
 from asistendero.observations import ToolCall, latest_quote, order_results
 from asistendero.orders import MAX_NOTE_CHARS, ORDER_ID, WEEKDAYS
-from asistendero.shopping_list import WHOLE_LIST, list_lines, removed_now
+from asistendero.shopping_list import WHOLE_LIST, asks_whole_list, list_lines, removed_now
 from asistendero.validation import (MAX_ITEMS, MAX_QUANTITY, MONEY, SKU_PATTERN, Rejected, foreign_unit, grounded_products,
                                     normalize_text, quantities_in_message)
 
 
 PURCHASE_INTENT = re.compile(
-    r"\b(?:(?:me\s+)?(?:lo|la|los|las)\s+(?:llevo|compro|pido|aparta\w*|separa\w*)|(?:me\s+)?llev(?:o|amos|aria|ariamos)\b"
+    r"\b(?:(?:me\s+)?(?:lo|la|los|las)\s+(?:llevo|compro|pido|aparta\w*|separa\w*)|(?:me\s+llevo|nos\s+llevamos|(?:me\s+)?llevar(?:ia|iamos)|llevo)\b"
     r"|quiero\s+(?:comprar|pedir|llevar|encargar)|vo(?:y|i)\s+a\s+(?:llevar|comprar)|compr(?:o|amos|aria)\b"
     r"|(?:haga|hagame|hazme|has|haz|hagan|montame|registr\w*)\s+(?:el\s+|un\s+)?pedido|apart\w*|separ(?:a|e|ar|ame|amelo|en)\b"
     r"|reserv\w*|encarg\w*|alist\w*|vend(?:a|e)me\w*|me\s+(?:lo|la|los|las)\s+(?:guarda|guarde|deja|dejan))"
+)
+# Solicitudes informativas de cotización o total acumulado que no deben confundirse con compra:
+ASKS_QUOTE_OR_TOTAL = re.compile(
+    r"\b(?:cotiz\w*|cuanto\s+(?:seria|es|va|sale|queda|cuesta)|cuanto\s+seria\s+todo|cuanto\s+va(?:\s+en\s+total)?"
+    r"|dame\s+la\s+cotizacion|la\s+cotizacion"
+    r"|(?:con\s+)?lo\s+que\s+llevamos|que\s+llevamos|llevamos\s+(?:hasta\s+el\s+momento|cotizado|en\s+total)"
+    r"|total\s+acumulado|(?:el\s+)?total)\b"
+)
+EXPLICIT_PURCHASE = re.compile(
+    r"\b(?:(?:me\s+)?(?:lo|la|los|las)\s+(?:llevo|compro|pido|aparta\w*|separa\w*)"
+    r"|me\s+llevo|nos\s+llevamos"
+    r"|quiero\s+(?:comprar|pedir|llevar|encargar)|vo(?:y|i)\s+a\s+(?:llevar|comprar)"
+    r"|compr(?:o|amos|aria)\b"
+    r"|(?:haga|hagame|hazme|has|haz|hagan|montame|registr\w*)\s+(?:el\s+|un\s+)?pedido"
+    r"|apart\w*|separ(?:a|e|ar|ame|amelo|en)\b"
+    r"|reserv\w*|encarg\w*|alist\w*|vend(?:a|e)me\w*|me\s+(?:lo|la|los|las)\s+(?:guarda|guarde|deja|dejan)"
+    r"|crea(?:me)?\s+(?:el\s+|un\s+)?pedido"
+    r")"
 )
 # Un supuesto en pregunta («¿y si llevo 10…?», «¿si compro 3 me rebaja?»): sin coma tras el «si», no es el «sí».
 HYPOTHETICAL = re.compile(r"\bsi\s+(?:me\s+)?(?:llev|compr|pid)\w*\b[^.!]*\?")
@@ -140,6 +158,13 @@ def wants_to_buy(message: str, context: dict | None) -> bool:
     text = normalize_text(message)
     # Z-38 (corrida 34): «¿y si llevo 10 me hace precio?» pregunta un supuesto y registró un pedido de 10 metros.
     if HYPOTHETICAL.search(text):
+        return False
+    from asistendero.choices import pending_quantity_quote
+    if pending_quantity_quote(message, context) is not None:
+        return False
+    # Peticiones informativas de cotización o total acumulado («dame la cotización», «cuánto sería todo», «cuánto va»,
+    # «con lo que llevamos hasta el momento») no expresan intención de compra a menos que haya manifestación explícita.
+    if ASKS_QUOTE_OR_TOTAL.search(text) and not EXPLICIT_PURCHASE.search(text):
         return False
     if PURCHASE_INTENT.search(text) and not re.search(r"\bno\s+(?:lo|la|los|las)?\s*(?:llevo|compro)\b", text):
         return True
@@ -350,6 +375,8 @@ def order_action_pending(current: str, reference: str, calls: list[ToolCall], co
     new_products = set(grounded_products(reference, calls)) - held
     # Un pedido vencido no se confirma: si el cliente aún lo quiere, se registra de nuevo (P-02, primera corrida S4).
     said = order_quantities(reference) or (listed and WHOLE_LIST.search(text))
+    if (asks_whole_list(current) or ASKS_QUOTE_OR_TOTAL.search(text)) and not EXPLICIT_PURCHASE.search(text):
+        return None
     if (wants_to_buy(current, context) and said and (known or listed)
             and "registrar_pedido" not in executed and (not pending or new_products)):
         return "registrar_pedido"
