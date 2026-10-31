@@ -21,18 +21,21 @@ from asistendero.catalog import tokens
 from asistendero.choices import chosen_options
 from asistendero.context_resolution import RESTART
 from asistendero.grok import MAX_ITEMS
-from asistendero.observations import ToolCall, latest_quote, order_results
+from asistendero.observations import ToolCall, latest_quote, order_results, search_findings
 from asistendero.validation import normalize_text, quantities_in_message
 
 
 MAX_LIST_LINES = MAX_ITEMS
 # Pedir el total de lo que lleva: siempre se cotiza la lista entera.
 WHOLE_LIST = re.compile(
-    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total|total\s+acumulado|junto\s+con|lo\s+(?:demas|anterior|otro)"
+    r"\b(?:todo|toda\s+la\s+lista|(?:en\s+)?total(?:\s+acumulado)?|junto\s+con|lo\s+(?:demas|anterior|otro)"
     r"|con\s+(?:el|la|los|las)\s+(?:otr[oa]s?|anterior\w*|\w+\s+que\s+te\s+dije|que\s+te\s+dije)"
     r"|(?:con\s+)?lo\s+que\s+llevamos(?:\s+hasta\s+el\s+momento)?|que\s+llevamos|llevamos\s+hasta\s+el\s+momento"
-    r"|cuanto\s+(?:me\s+)?(?:sale|queda|seria|es)(?:\s+(?:de\s+)?todo|\s+en\s+total)?"
-    r"|cuanto\s+va(?:\s+en\s+total)?"
+    r"|(?:en\s+cuanto|cuanto)\s+(?:me\s+)?(?:sale|queda|quedo|seria|es|va|esta|da|suma)(?:\s+(?:la\s+)?cotizacion(?:\s+final)?|\s+la\s+cuenta|\s+el\s+total|\s+(?:de\s+)?todo|\s+en\s+total)?"
+    r"|cotizacion\s+final|la\s+cuenta(?:\s+final)?"
+    r"|(?:que|cuanto)\s+(?:productos?\s+)?(?:tengo|llevo|tenemos|hay)(?:\s+(?:anotad[oa]s?|cotizad[oa]s?|en\s+la\s+lista))?"
+    r"|como\s+va\s+(?:la\s+cuenta|la\s+cotizacion|todo)"
+    r"|resumen\s+de\s+(?:la\s+)?(?:cuenta|cotizacion|compra|pedido)"
     r"|dame\s+la\s+cotizacion(?:\s+con\s+lo\s+que\s+llevamos)?(?:\s+hasta\s+el\s+momento)?"
     r"|cotizacion\s+con\s+lo\s+que\s+llevamos"
     r")\b"
@@ -123,6 +126,9 @@ def missing_from_quote(message: str, calls: list[ToolCall], context: dict | None
     listed = [] if not whole or REMOVES.search(text) or RESTART.search(text) else list(list_lines(context))
     chosen = [item["sku"] for item in chosen_options(message, context)] if whole or quantities_in_message(message) else []
     if not listed + chosen or order_results(calls):
+        return []
+    findings = search_findings(calls)
+    if findings and all(not f["matches"] for f in findings):
         return []
     quote, quote_call = latest_quote(calls)
     if quote_call is not None and quote is None:
