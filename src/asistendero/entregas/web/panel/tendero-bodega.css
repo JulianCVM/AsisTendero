@@ -24,6 +24,7 @@
 .row-open strong { font-size: .88rem; font-weight: 800; overflow-wrap: anywhere; }
 .row-open small { font: 600 .72rem var(--font-num); color: var(--muted); overflow-wrap: anywhere; }
 .row-open:hover strong { text-decoration: underline; }
+a.row-open { text-decoration: none; }
 .row-open .thumb { width: 36px; height: 36px; border-radius: 9px; }
 /* Celular: cada producto es un bloque de dos renglones (nombre arriba; precio y estado, o lo que dice AsisTendero, abajo).
    Como tabla, el precio y la etiqueta sin cortes dejaban el nombre en una columna de pocas letras. */
@@ -37,6 +38,10 @@
   .stock-table td.name, .stock-table td.says { grid-column: 1 / -1; }
   .stock-table td.num { text-align: left; }
   .stock-table td.state { justify-self: end; }
+  .stock-table .tx-total { justify-items: start; }
+  /* Una venta puede llevar tres etiquetas: van en su propio renglón para no taparle el total. */
+  .tx-table td.state { grid-column: 1 / -1; justify-self: start; }
+  .tx-table .tx-tags { justify-content: flex-start; }
   .stock-table .says { min-width: 0; font-size: .82rem; }
   .assist-row { flex-wrap: wrap; }
   .assist-row textarea { flex-basis: 100%; }
@@ -140,6 +145,7 @@
 /* ---------- Tableta y escritorio ---------- */
 @media (min-width: 640px) {
   .stock-table .opt { display: table-cell; }
+  .tx-table td.name { min-width: 260px; }
   .stock-facts { grid-template-columns: repeat(4, 1fr); }
   .line-row { grid-template-columns: minmax(0, 1fr) 100px 140px 44px; }
   .line-row .cost { grid-column: auto; }

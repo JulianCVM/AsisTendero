@@ -134,15 +134,10 @@
 .field.compact { flex: 1 1 140px; }
 .field.compact input, .field.compact select { min-height: 44px; }
 .sales-grid { display: grid; gap: 16px; align-items: start; }
-.tx-list { display: grid; gap: 8px; margin-top: 8px; }
-.tx { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px; border: 1px solid var(--line);
-  border-radius: 12px; background: var(--surface-2); }
-.tx-main { display: grid; gap: 2px; min-width: 0; }
-.tx-main strong { font: 800 .95rem var(--font-num); }
-.tx-main span { font-size: .82rem; color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
-.tx-amount { display: grid; justify-items: end; gap: 4px; text-align: right; }
-.tx-amount strong { font: 800 1rem var(--font-num); font-variant-numeric: tabular-nums; }
-.tx-tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+/* Las transacciones usan la tabla del inventario (.stock-table, en tendero-bodega.css); aquí, solo sus celdas propias. */
+.tx-total { display: grid; justify-items: end; gap: 2px; }
+.tx-total small { font: 600 .72rem var(--font); color: var(--muted); }
+.tx-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 
 /* ---------- Conversaciones ---------- */
 .chat-layout { display: grid; gap: 16px; align-items: start; min-width: 0; }

@@ -213,12 +213,8 @@
             </form>
           </details>
           <div class="kpis" id="sales-kpis"></div>
-          <div class="callout is-soft">
-            <svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>
-            <p><strong>Vendido no es lo mismo que cobrado.</strong> Una venta queda registrada al entregar el pedido; el pago
-              solo cuenta como cobrado cuando tú lo confirmas (en el mostrador o revisando tu app o extracto). Un pantallazo
-              del cliente es solo un comprobante por verificar.</p>
-          </div>
+          <p class="card-help"><strong>Vendido no es cobrado:</strong> la venta cuenta al entregar el pedido y el pago, cuando tú
+            lo confirmas en el mostrador o en tu app o extracto. Un pantallazo del cliente es un comprobante por verificar.</p>
           <div class="sales-grid">
             <section class="card" aria-labelledby="methods-title">
               <div class="card-head"><h2 id="methods-title">Por método de pago</h2></div>
@@ -227,7 +223,17 @@
             </section>
             <section class="card" aria-labelledby="tx-title">
               <div class="card-head"><h2 id="tx-title">Transacciones</h2><span class="result-line" id="tx-count"></span></div>
-              <div id="tx-list" class="tx-list"></div>
+              <div class="stock-table-wrap">
+                <table class="stock-table tx-table" id="tx-table" role="table">
+                  <caption class="visually-hidden">Transacciones del periodo</caption>
+                  <thead role="rowgroup"><tr role="row">
+                    <th scope="col" role="columnheader" class="name">Pedido</th>
+                    <th scope="col" role="columnheader" class="num">Total</th>
+                    <th scope="col" role="columnheader" class="state">Estado</th>
+                  </tr></thead>
+                  <tbody id="tx-list" role="rowgroup"></tbody>
+                </table>
+              </div>
               <div id="tx-empty" class="empty" hidden>
                 <svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>
                 <strong>Sin transacciones</strong>

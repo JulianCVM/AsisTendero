@@ -177,9 +177,9 @@ Cada paso deja la suite en verde y se puede revisar solo:
    - `demo.py` pasa a `entregas`: arma la tienda completa con todos los módulos.
    Quedan para después, porque no cruzan capas: sacar el contrato de herramientas de `grok.py` a un
    `contrato.py` y reunir en `datos` las tablas que hoy crea cada módulo.
-4. **Rehacer el panel** (hecho el 31-10-2026, salvo Ventas): bandeja «Por hacer» en Hoy (`bandeja.py`), una sola
+4. **Rehacer el panel** (hecho el 31-10-2026): bandeja «Por hacer» en Hoy (`bandeja.py`), una sola
    tabla de productos (Inventario + Catálogo + asistente de bodega, con alias para `#catalogo` y `#asistente`),
    Pedidos en filas con tres filtros y la marca PulsoTienda/AsisTendero. Medido en la tienda de demostración, sin
    acciones: Hoy pasa a 1.424 px en escritorio y 3.007 a 390 px (seis pendientes a la vista); Pedidos, a 1.118 y
-   1.724; Inventario, a 3.745 y 5.407 con 50 filas, y Catálogo y Asistente dejan de ser vistas. Ventas sigue en
-   tarjetas: queda pasarla a filas.
+   1.724; Inventario, a 3.745 y 5.407 con 50 filas, y Catálogo y Asistente dejan de ser vistas. Ventas usa la
+   misma tabla (1.655 y 2.888 px con 15 transacciones; antes, 2.330 y 3.047).
