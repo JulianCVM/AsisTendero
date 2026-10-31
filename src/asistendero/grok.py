@@ -5,6 +5,12 @@ from dataclasses import dataclass
 import json
 import os
 
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 import openai
 from openai import OpenAI
 
