@@ -27,17 +27,19 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
-## Línea base, catálogo ampliado, tienda de mercado y paráfrasis (corridas 38 y 39, 31-10-2026)
+## Línea base, catálogo ampliado, tienda de mercado y paráfrasis (corridas 38 a 41, 31-10-2026)
 
 Pedido de Julian: correr el set completo, ampliar el catálogo y agregar una tienda de barrio de mercado diario para
 evaluar situaciones domésticas. Prompt `s4-conversacion-v12` (ferretería) y `mercado-v1` (tienda de mercado),
-modelo `grok-4.20-0309-non-reasoning`, `--concurrency 3`, `GROK_CONV_ID` apagada. Cada corrida se lanzó desde un
+modelo `grok-4.20-0309-non-reasoning`, `--concurrency 3`, `GROK_CONV_ID` apagada salvo en la 41. Cada corrida se lanzó desde un
 árbol de trabajo limpio en el commit indicado (`src_dirty=false`).
 
 | Corrida | Commit | Casos | Resultado | Llamadas | USD | Reporte |
 |---|---|---|---|---|---|---|
 | 38 | `4c9b784` | los 257 casos y 3 fallos controlados | **252/257** y 3/3 | 808 | 0.898194 | `eval-20261031T222520788586Z` |
 | 39 | `3cd54c8` | los 334 casos y 3 fallos controlados | **315/334** y 3/3 | 1003 | 1.147633 | `eval-20261031T230413912972Z` |
+| 40 | `58be938` | `ampliacion`, `mercado` y `parafrasis` (77) | 69/77 | 193 | 0.178020 | `eval-20261031T232209473053Z` |
+| 41 | `a64826c`, `GROK_CONV_ID=1` | las mismas 77 | **71/77** | 192 | 0.161171 | `eval-20261031T232729595787Z` |
 
 - **Corrida 38 (línea base).** Por suite: `fallas` 35/38, `flujos` 14/15, `ruido` 11/12 y el resto completo.
   0.003495 USD por tarea y 3,14 llamadas a Grok por tarea. El **96,9 %** de las 808 llamadas reutilizó el prompt fijo
@@ -88,6 +90,29 @@ modelo `grok-4.20-0309-non-reasoning`, `--concurrency 3`, `GROK_CONV_ID` apagada
     difería por el defecto de la presentación. `tanque` («necesito un tanque plástico de 1.000 litros» quedó en
     `found` y preguntó cuántas aunque dijo «un tanque»; los otros dos cotizaron). `fiado` respondió `answered` en una y `informed` en otra,
     las dos sin prometer fiar.
+
+- **Corrida 40 (tras `58be938`).** Las tres suites nuevas pasan de 63/77 en la corrida 39 a 69/77. `mercado` sube
+  de 25/33 a 31/33: M-06, M-08, M-09, M-29 y M-36 encuentran el producto por su unidad de venta, y M-20 lista las
+  categorías del negocio. M-33 volvió a fallar («Listo, te lo anoto en el cuaderno… Pasa el viernes a recogerlo y
+  pagar»): la respuesta iba sin herramientas, por `direct_response`, que no miraba el fiado. Se arregló en `a64826c`.
+  A-18 («masilla para tapar huecos en madera de cedro») quedó en opciones cercanas y pasó en la 39 y la 41.
+- **Corrida 41 (`a64826c`, A/B de `GROK_CONV_ID`).** 71/77; M-33 responde «Aquí no fiamos: todo se paga en el
+  mostrador cuando recoges». Frente a la corrida 40, con los mismos 77 casos y casi las mismas llamadas (192 frente a
+  193):
+
+  | | Corrida 40 (sin la cabecera) | Corrida 41 (`GROK_CONV_ID=1`) |
+  |---|---|---|
+  | Llamadas con el prompt fijo en caché | 96,9 % | 99,0 % |
+  | Tokens de entrada desde la caché | 91,9 % | 94,8 % |
+  | USD por llamada | 0,000922 | 0,000839 (−9 %) |
+  | USD por tarea | 0,002312 | 0,002093 |
+
+  Es un solo par de corridas; la diferencia va en la dirección esperada (la pasarela sí aprovecha la cabecera), pero
+  no se ha repetido. Los 6 que fallan: A-04, A-10, A-20, P-tanque-2 y M-35 (ver la corrida 39), y M-20 («¿venden
+  cerveza o cigarrillos?»), que esta vez respondió con la lista de categorías (estado `informed`, que el caso no
+  acepta) sin afirmar que se vendan. Paráfrasis: 6 de 8 grupos responden igual; siguen distintos `tanque` y `fiado`
+  (en `fiado`, una respuesta consulta la tienda y otra responde directo; las tres dicen que no se fía).
+- **Gasto de las corridas 38 a 41:** 2.385018 USD (presupuesto aprobado por Julian: 5 USD).
 
 ## Suite `fallas`: buscar dónde se equivoca el agente (corridas 33 a 37, 24-10-2026)
 
