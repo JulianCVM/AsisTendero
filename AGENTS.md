@@ -11,9 +11,11 @@ El prototipo de AsisTendero para el Agent Challenge de Platica: un agente para f
 mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor necesita y responde con precio y
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
 reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
-por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero`), visor local
-(`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`); el panel del tendero (`asistendero-tendero`)
-administra inventario y pedidos sobre la misma base. Código, comentarios, documentación, commits y PR en **español**.
+por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero` con un mensaje o `--chat`),
+visor local (`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`); el panel del tendero
+(`asistendero-tendero`) administra inventario y pedidos sobre la misma base. `python -m asistendero` sin mensaje
+arranca el visor y el panel juntos sobre la misma tienda (`launcher.py`). Código, comentarios, documentación, commits
+y PR en **español**.
 
 Desde el 22-10-2026 el plan S4 incluye **pedidos para recoger** dentro de una conversación (registrar, confirmar,
 agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. El 26-10-2026 Julian pidió
@@ -109,7 +111,8 @@ propio.
    - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
      (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
    - `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
-     (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`).
+     (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
+     (`launcher.py`).
 
    Duplicar es un error aunque funcione.
 3. **Haz solo lo que pide la tarea.** Nada de refactors, renombres ni reformateos fuera del alcance. Si ves algo mal,
@@ -159,6 +162,11 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Qué entiende el asistente de bodega o cómo arma su propuesta | `stock_assistant.py` (prompt y versión) y `stock_proposal.py`, con su prueba en `tests/test_stock_assistant.py` |
 | Cuándo pasa una conversación al tendero o qué puede hacer él | `handoff.py` y `supervision.py`, con su prueba en `tests/test_supervision.py` |
 | La imagen de un producto | `product_art.py` (reglas) y `product_art_shapes.py`/`product_art_tools.py` (dibujos), con su prueba en `tests/test_product_art.py` |
+| Qué arranca el comando único y con qué tienda | `launcher.py` (lo llama `cli.py` sin mensaje), con su prueba en `tests/test_launcher.py` |
+| La página pública `/inicio` o los casos de su demo | `ui/inicio.html`, `inicio*.css` e `inicio*.js` (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
+| Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `ui/harness-map.js` y `harness-map.css` |
+| Cómo se lee un evento de la traza o el resultado de una prueba en el visor | `ui/traza.js` y `traza-lectura.js`, `ui/resultado.js` (piezas comunes en `visor-comun.js`); cada archivo se registra en `TraceHandler._assets` de `visual.py` |
+| La apariencia (claro, oscuro o la del sistema) de la página pública, el panel y el visor | `ui/tendero-theme.js` (se carga en `<head>`; guarda la elección en una cookie común a los dos puertos) y `ui/tendero-theme.css`, con su prueba en `tests/test_tendero.py` |
 | Datos de la tienda de demostración | `demo.py` (siempre ficticios y con los módulos reales), con su prueba en `tests/test_tendero.py` |
 | Entender mejor un mensaje mal escrito | `spelling.py` (`heard_as`), con su prueba en `tests/test_spelling.py` |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
@@ -199,7 +207,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 - Los dos escuchan solo en `127.0.0.1` y rechazan otro `Host` u `Origin`. No se exponen a la red.
 - Los datos se pintan con `textContent`, nunca con `innerHTML`. Nada de `alert()`, `confirm()`, `prompt()` ni
-  JavaScript inline: listeners en `ui/app.js`.
+  JavaScript inline: listeners en los módulos de `ui/`.
 - Celular primero: se revisa a 390 px de ancho, sin desplazamiento horizontal. Cada botón de solo ícono lleva
   `aria-label` y un estado nunca se indica solo con color. El estilo sigue `DESIGN.md`.
 

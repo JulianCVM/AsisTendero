@@ -50,6 +50,10 @@ export async function loadSales() {
   const summary = data.resumen;
   const range = summary.desde === summary.hasta ? (summary.desde === todayKey() ? 'hoy' : summary.desde)
     : summary.desde + ' a ' + summary.hasta;
+  const narrowed = ['#sales-method', '#sales-pay', '#sales-order'].filter(selector => $(selector).value).length;
+  // El resumen del pliegue dice qué se está viendo sin abrirlo: el rango y cuántos filtros hay puestos.
+  $('#sales-filter-note').textContent = (range === 'hoy' ? 'Hoy' : range) +
+    (narrowed ? ' · ' + plural(narrowed, 'filtro', 'filtros') : ' · todo');
   $('#sales-kpis').replaceChildren(
     kpi('Vendido ' + range, cop(summary.ventas_registradas.total_cop),
       plural(summary.ventas_registradas.pedidos, 'pedido entregado', 'pedidos entregados'), 'brand'),
@@ -74,6 +78,8 @@ export async function loadSales() {
 }
 
 export function bindSales() {
+  // En pantallas anchas hay espacio: los filtros empiezan abiertos; en el celular, plegados.
+  $('#sales-filter-fold').open = matchMedia('(min-width: 1024px)').matches;
   $('#sales-filter').addEventListener('change', () => loadSales().catch(error => $('#tx-count').textContent = error.message));
   $('#sales-filter').addEventListener('submit', event => event.preventDefault());
 }

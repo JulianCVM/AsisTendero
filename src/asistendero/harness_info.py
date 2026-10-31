@@ -1,10 +1,11 @@
 """Descripción del harness para el mapa del visor, armada con las constantes que usa el flujo.
 
-El texto explicativo de cada etapa vive en ``ui/index.html``; aquí solo están los datos que cambian con el
-código (prompt, versión, herramientas, límites, códigos y estados) para que el mapa no se desactualice.
+Aquí están los datos que cambian con el código (prompt, versión, herramientas, límites, códigos y estados) y, en
+``harness_flow``, los nodos y conexiones del mapa de decisión, para que el mapa no se desactualice.
 """
 
 from asistendero.graph import MAX_MESSAGE_CHARS, MAX_TOOL_CALLS
+from asistendero.harness_flow import describe_flow
 from asistendero.grok import AGENT_PROMPT, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES, current_model
 from asistendero.orders import HOLD_MINUTES
 from asistendero.guardrails import SENSITIVE_TOPICS
@@ -166,4 +167,5 @@ def describe_harness() -> dict:
         "guardrails": GUARDRAILS,
         "injections": INJECTION_CODES,
         "outcomes": OUTCOMES,
+        "flow": describe_flow(),
     }

@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#173B4A">
+  <meta name="theme-color" content="#173B4A" data-dark="#0A1519">
   <title>Panel del tendero · PulsoTienda</title>
   <link rel="icon" href="/assets/cercania-mark.png" type="image/png">
   <script src="/assets/tendero-theme.js"></script>
+  <link rel="stylesheet" href="/assets/tendero-theme.css">
   <link rel="stylesheet" href="/assets/tendero.css">
   <link rel="stylesheet" href="/assets/tendero-views.css">
+  <link rel="stylesheet" href="/assets/tendero-bodega.css">
   <script type="module" src="/assets/tendero.js"></script>
 </head>
 <body>
@@ -77,7 +79,8 @@
         <li><a href="#conversaciones" data-view="conversaciones"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Chats</span>
           <b class="nav-badge is-danger" id="badge-chats" hidden></b></a></li>
         <li data-mobile><button type="button" class="nav-more" id="more-toggle" aria-expanded="false" aria-controls="more-menu">
-          <svg class="icon" aria-hidden="true"><use href="#i-more"/></svg><span>Más</span></button></li>
+          <svg class="icon" aria-hidden="true"><use href="#i-more"/></svg><span>Más</span>
+          <b class="nav-badge is-warning" id="badge-more" hidden></b></button></li>
       </ul>
       <div class="nav-foot">
         <span class="env-tag">Datos simulados</span>
@@ -85,10 +88,22 @@
         <a href="/inicio">Ver la presentación del producto</a>
       </div>
     </nav>
-    <div class="more-menu" id="more-menu" hidden>
+    <!-- Menú «Más» del celular: lo que no cabe en la barra inferior, agrupado como la columna del escritorio. -->
+    <div class="more-menu" id="more-menu" role="region" aria-labelledby="more-title" hidden>
+      <p class="more-head"><strong id="more-title">Más secciones</strong><span class="env-tag">Datos simulados</span></p>
+      <p class="more-group">El día</p>
       <a href="#ventas" data-view="ventas"><svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>Ventas y pagos<small id="more-ventas"></small></a>
-      <a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Catálogo</a>
-      <a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Asistente de bodega</a>
+      <p class="more-group">La bodega</p>
+      <a href="#catalogo" data-view="catalogo"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Catálogo<small>lo que ve el asistente</small></a>
+      <a href="#asistente" data-view="asistente"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Asistente de bodega<small>actualiza conversando</small></a>
+      <p class="more-group">Ajustes</p>
+      <div class="theme-row more-theme"><span class="theme-row-label">Apariencia</span>
+        <div class="theme-switch" data-theme-switch role="group" aria-label="Apariencia">
+          <button type="button" data-theme-choice="claro" aria-pressed="false" aria-label="Claro" title="Claro"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+          <button type="button" data-theme-choice="oscuro" aria-pressed="false" aria-label="Oscuro" title="Oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+          <button type="button" data-theme-choice="sistema" aria-pressed="false" title="Igual que el sistema">Igual que el sistema</button>
+        </div>
+      </div>
       <a href="/inicio"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>Presentación del producto</a>
     </div>
 
@@ -101,9 +116,11 @@
         </div>
         <span class="env-tag topbar-env">Datos simulados</span>
         <p class="sync" id="sync-status" aria-live="off">Cargando…</p>
-        <button type="button" class="icon-button" id="theme-toggle" aria-label="Tema: igual al del equipo. Cambiar a claro">
-          <svg class="icon" aria-hidden="true"><use href="#i-auto"/></svg>
-        </button>
+        <div class="theme-switch topbar-theme" data-theme-switch role="group" aria-label="Apariencia">
+          <button type="button" data-theme-choice="claro" aria-pressed="false" aria-label="Claro" title="Claro"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+          <button type="button" data-theme-choice="oscuro" aria-pressed="false" aria-label="Oscuro" title="Oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+          <button type="button" data-theme-choice="sistema" aria-pressed="false" title="Igual que el sistema">Sistema</button>
+        </div>
         <button type="button" class="icon-button" id="refresh" aria-label="Actualizar ahora">
           <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
         </button>
@@ -140,6 +157,7 @@
           <section class="card attention" aria-labelledby="attention-title" id="attention-card" hidden>
             <div class="card-head"><h2 id="attention-title"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Necesita tu revisión</h2></div>
             <ul class="attention-list" id="attention-list"></ul>
+            <button type="button" class="fold-toggle" id="attention-more" aria-expanded="false" aria-controls="attention-list" hidden></button>
           </section>
 
           <div class="today-grid">
@@ -172,6 +190,7 @@
                 </div>
                 <dl class="money" id="agent-facts"></dl>
                 <ol class="timeline compact activity" id="activity-list"></ol>
+                <button type="button" class="fold-toggle" id="activity-more" aria-expanded="false" aria-controls="activity-list" hidden></button>
                 <p id="activity-empty" class="empty-line" hidden>Sin actividad del chat todavía.</p>
               </section>
               <section class="card" aria-labelledby="top-title">
@@ -220,20 +239,25 @@
 
         <!-- ================= VENTAS ================= -->
         <section id="view-ventas" class="view" aria-labelledby="view-title" hidden>
+          <!-- En el celular los filtros se pliegan para que lo vendido y lo cobrado se vean primero. -->
+          <details class="filter-fold" id="sales-filter-fold">
+            <summary><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span>Filtros</span>
+              <small id="sales-filter-note"></small></summary>
+            <form class="filters" id="sales-filter">
+              <label class="field compact"><span>Desde</span><input type="date" id="sales-from"></label>
+              <label class="field compact"><span>Hasta</span><input type="date" id="sales-to"></label>
+              <label class="field compact"><span>Método</span><select id="sales-method"><option value="">Todos</option></select></label>
+              <label class="field compact"><span>Pago</span><select id="sales-pay"><option value="">Todos</option></select></label>
+              <label class="field compact"><span>Pedido</span><select id="sales-order"><option value="">Todos</option></select></label>
+            </form>
+          </details>
+          <div class="kpis" id="sales-kpis"></div>
           <div class="callout is-soft">
             <svg class="icon" aria-hidden="true"><use href="#i-cash"/></svg>
             <p><strong>Vendido no es lo mismo que cobrado.</strong> Una venta queda registrada al entregar el pedido; el pago
               solo cuenta como cobrado cuando tú lo confirmas (en el mostrador o revisando tu app o extracto). Un pantallazo
               del cliente es solo un comprobante por verificar.</p>
           </div>
-          <form class="filters" id="sales-filter">
-            <label class="field compact"><span>Desde</span><input type="date" id="sales-from"></label>
-            <label class="field compact"><span>Hasta</span><input type="date" id="sales-to"></label>
-            <label class="field compact"><span>Método</span><select id="sales-method"><option value="">Todos</option></select></label>
-            <label class="field compact"><span>Pago</span><select id="sales-pay"><option value="">Todos</option></select></label>
-            <label class="field compact"><span>Pedido</span><select id="sales-order"><option value="">Todos</option></select></label>
-          </form>
-          <div class="kpis" id="sales-kpis"></div>
           <div class="sales-grid">
             <section class="card" aria-labelledby="methods-title">
               <div class="card-head"><h2 id="methods-title">Por método de pago</h2></div>
@@ -261,7 +285,7 @@
               <a href="#inventario/movimientos" data-inv-tab="movimientos">Movimientos</a>
               <a href="#inventario/categorias" data-inv-tab="categorias">Categorías y alertas</a>
             </nav>
-            <div class="button-row">
+            <div class="button-row" id="inv-actions">
               <button type="button" class="secondary" id="open-receipt"><svg class="icon" aria-hidden="true"><use href="#i-truck"/></svg>Llegó mercancía</button>
               <button type="button" class="primary" id="new-product"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Nuevo producto</button>
             </div>
@@ -370,6 +394,7 @@
           <div class="chips" id="cat-chips" role="group" aria-label="Categorías"></div>
           <p class="result-line" id="cat-count" aria-live="polite"></p>
           <div id="catalog-grid" class="catalog-grid"></div>
+          <button type="button" class="secondary more" id="cat-more" hidden></button>
           <div id="catalog-empty" class="empty" hidden>
             <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
             <strong>Sin resultados</strong>

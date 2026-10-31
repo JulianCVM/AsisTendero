@@ -1,174 +1,162 @@
-(() => {
-  const statusPill = document.querySelector('#harness-status');
-  const verdict = document.querySelector('#harness-verdict');
-  const path = document.querySelector('#harness-path');
-  const instructions = document.querySelector('#harness-instructions');
-  const stageNames = ['validate', 'interpret', 'route', 'retrieve', 'respond', 'outcome'];
-  const stageLabels = {running:'En curso', complete:'Completada', skipped:'Omitida', error:'Error'};
-  const routeTexts = {
-    retrieve:'Ruta: ejecutar la herramienta que pidió Grok',
-    respond:'Ruta: pasar a verificar y responder',
-    interpret:'Ruta: volver a Grok con un aviso del servidor (SEARCH_REQUIRED o QUOTE_REQUIRED)',
-  };
-  const groupTones = {verified:'success', clarify:'warning', human:'warning', safe_failure:'error'};
-  let outcomes = {};
-  let visits = {};
-  let lastDecision = null;
-  let routePending = false;
-  let runningStage = null;
+// Mapa del harness: datos de /api/harness, el grafo de decisión (harness-map.js) y el recorrido de la última
+// ejecución, armado solo con los eventos de la traza: qué nodos visitó, cuántas veces y por qué conexión.
+import {authorOf, el, harnessInfo, onRun, outcomeOf, plural} from './visor-comun.js';
+import {createMap} from './harness-map.js';
 
-  function element(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function setPill(label, tone) {
-    statusPill.textContent = label;
-    if (tone) statusPill.dataset.tone = tone;
-    else statusPill.removeAttribute('data-tone');
-  }
-  function setStage(name, state) {
-    const stage = document.querySelector('#hstage-' + name);
-    if (!stage) return;
-    if (state) stage.dataset.state = state;
-    else stage.removeAttribute('data-state');
-    const count = (visits[name] || 0) > 1 ? ' · ' + visits[name] + ' veces' : '';
-    stage.querySelector('.hstage-state').textContent = (stageLabels[state] || 'Pendiente') + count;
-    if (state === 'running') runningStage = name;
-  }
-  function addStep(stage, text, tone) {
-    const item = element('li', 'path-step');
-    item.dataset.tone = tone || 'neutral';
-    item.append(element('span', 'path-stage', 'Etapa ' + stage), element('span', 'path-text', text));
-    path.append(item);
-  }
-  function codeItem(code, text, extra) {
-    const item = element('li');
-    item.append(element('code', '', code), element('span', '', text));
-    if (extra) item.append(element('code', 'code-example', extra));
-    return item;
-  }
+const statusPill = document.querySelector('#harness-status');
+const verdict = document.querySelector('#harness-verdict');
+const path = document.querySelector('#harness-path');
+let info = null;
+let map = null;
+let run = null;
 
-  function fill(info) {
-    document.querySelectorAll('[data-harness]').forEach(node => {
-      const key = node.dataset.harness;
-      const value = key in info ? info[key] : info.limits?.[key];
-      if (value === undefined) return;
-      node.textContent = typeof value === 'number' ? value.toLocaleString('es-CO') : String(value);
-    });
-    instructions.textContent = info.instructions;
-    document.querySelector('#harness-tools').replaceChildren(
-      ...info.tools.map(tool => codeItem(tool.name, tool.returns, tool.arguments)));
-    document.querySelector('#harness-rejections').replaceChildren(
-      ...Object.entries(info.rejections).map(([code, text]) => codeItem(code, text)));
-    const groups = document.querySelector('#harness-outcomes');
-    groups.replaceChildren();
-    outcomes = {};
-    for (const [group, data] of Object.entries(info.outcomes)) {
-      const box = element('div', 'outcome-group');
-      box.dataset.group = group;
-      const list = element('ul', 'code-list');
-      for (const [state, label] of Object.entries(data.states)) {
-        const item = codeItem(state, label);
-        item.dataset.state = state;
-        list.append(item);
-        outcomes[state] = {group, groupLabel:data.label, label};
-      }
-      box.append(element('h4', '', data.label), list);
-      groups.append(box);
+function setPill(label, tone) {
+  statusPill.textContent = label;
+  if (tone) statusPill.dataset.tone = tone;
+  else statusPill.removeAttribute('data-tone');
+}
+function station(id) {
+  return info?.flow.nodes.find(node => node.id === id)?.station || id;
+}
+function fresh() {
+  return {visits: {}, walked: {}, notes: {}, final: null, tone: '', at: null, routeTo: null, lastDecision: null};
+}
+function visit(id) {
+  run.visits[id] = (run.visits[id] || 0) + 1;
+  run.at = id;
+}
+function walk(from, to) {
+  if (from) run.walked[from + '>' + to] = (run.walked[from + '>' + to] || 0) + 1;
+  visit(to);
+}
+function note(id, text, tone) {
+  (run.notes[id] ||= []).push(text);
+  const item = el('li', 'path-step');
+  item.dataset.tone = tone || 'neutral';
+  item.append(el('span', 'path-stage', station(id)), el('span', 'path-text', text));
+  path.append(item);
+}
+function argumentsText(value) {
+  const text = JSON.stringify(value ?? {});
+  return text.length > 120 ? text.slice(0, 117) + '…' : text;
+}
+function refresh() {
+  map?.update(run);
+}
+
+function reset() {
+  run = fresh();
+  path.replaceChildren();
+  verdict.textContent = 'Ejecutando la prueba…';
+  setPill('En curso', 'warning');
+  refresh();
+}
+
+function onRunning(node) {
+  if (node === 'validate') walk('cliente', 'validate');
+  else if (node === 'interpret') {
+    const from = run.at === 'route' ? 'route' : run.at;
+    if (from === 'route') note('route', 'Grok respondió sin un paso que el mensaje exige: vuelve a la torre con un aviso.', 'warning');
+    walk(from, 'interpret');
+  } else if (node === 'retrieve') {
+    note('route', 'call_tool con llamadas disponibles: pasa a la aduana.');
+    walk('route', 'aduana');
+  } else if (node === 'respond') {
+    if (run.at === 'route') note('route', 'Pasa a verificar y responder.');
+    walk(run.at, 'respond');
+  }
+}
+
+function onComplete(node, details) {
+  if (node === 'validate') {
+    if (details.inyeccion) {
+      note('validate', 'Inyección ' + details.inyeccion.code + ' (' + details.inyeccion.technique + '): no llega a Grok.', 'error');
+    } else {
+      const guards = details.barreras?.length ? ' Quitó: ' + details.barreras.join(', ') + '.' : '';
+      note('validate', 'Mensaje válido de ' + (details.longitud ?? '—') + ' caracteres.' + guards +
+        (details.datos_personales_omitidos ? ' Omitió datos personales.' : ''));
     }
-  }
-
-  function reset() {
-    visits = {};
-    lastDecision = null;
-    routePending = false;
-    runningStage = null;
-    path.replaceChildren();
-    verdict.textContent = 'Ejecutando la prueba…';
-    stageNames.forEach(name => setStage(name, ''));
-    document.querySelectorAll('.outcome-group li').forEach(item => {
-      item.removeAttribute('aria-current');
-      item.querySelector('.current-mark')?.remove();
-    });
-    setPill('En curso', 'warning');
-  }
-
-  function onNodeRunning(node) {
-    if (routePending) {
-      routePending = false;
-      visits.route = (visits.route || 0) + 1;
-      setStage('route', 'complete');
-      addStep(3, routeTexts[node] || 'Ruta: ' + node, node === 'interpret' ? 'warning' : 'neutral');
+  } else if (node === 'interpret') {
+    const decision = details.decision;
+    if (details.error) note('interpret', 'Grok falló: ' + details.error.code + '.', 'error');
+    else if (decision && !decision.valid_json) note('interpret', 'Grok devolvió una decisión con formato inválido.', 'error');
+    else if (decision?.action === 'call_tool') note('interpret', 'Grok pide ' + decision.tool + ' ' + argumentsText(decision.arguments) + '.');
+    else note('interpret', 'Grok decide responder' + (decision?.reply ? ': «' + decision.reply.slice(0, 90) + '»' : '') + '.');
+    run.lastDecision = decision || run.lastDecision;
+    walk('interpret', 'route');
+  } else if (node === 'retrieve') {
+    const call = details.tool_call || {};
+    const code = call.response?.error?.code;
+    if (!call.executed) {
+      note('aduana', 'Rechaza ' + call.requested_tool + ' (' + code + '): la herramienta no corre.', 'warning');
+      return;
     }
-    visits[node] = (visits[node] || 0) + 1;
-    setStage(node, 'running');
+    note('aduana', 'Aprueba ' + call.requested_tool + ' ' + argumentsText(call.arguments) + '.', 'success');
+    walk('aduana', 'bodega');
+    note('bodega', call.requested_tool + ' · ' + (call.response?.status === 'ok' ? 'ok' : 'error ' + code) + ' · ' +
+      (call.duration_ms ?? 0) + ' ms.', call.response?.status === 'ok' ? 'success' : 'warning');
   }
+}
 
-  function onNodeComplete(node, details) {
-    setStage(node, 'complete');
-    if (node === 'validate') {
-      if (details.inyeccion) {
-        addStep(1, 'Inyección detectada: ' + details.inyeccion.code + ' (' + details.inyeccion.technique +
-          '); no llega a Grok', 'error');
-      } else addStep(1, 'Mensaje válido: ' + (details.longitud ?? '—') + ' caracteres');
-    } else if (node === 'interpret') {
-      const decision = details.decision;
-      if (details.error) addStep(2, 'Grok falló: ' + details.error.code, 'error');
-      else if (decision && !decision.valid_json) addStep(2, 'Grok devolvió una decisión con formato inválido', 'error');
-      else if (decision?.action === 'call_tool') addStep(2, 'Grok pide la herramienta ' + decision.tool);
-      else addStep(2, 'Grok decide responder al cliente');
-      lastDecision = decision || null;
-      routePending = true;
-    } else if (node === 'retrieve') {
-      const call = details.tool_call || {};
-      const code = call.response?.error?.code;
-      if (!call.executed) addStep(4, 'El servidor rechaza ' + call.requested_tool + ' (' + code + '); no se ejecuta', 'warning');
-      else if (call.response?.status === 'ok') addStep(4, 'El servidor ejecuta ' + call.requested_tool + ' · ok', 'success');
-      else addStep(4, 'El servidor ejecuta ' + call.requested_tool + ' · error ' + code, 'warning');
-    }
-  }
-
-  function onFinal(details) {
-    const outcome = outcomes[details.estado] || {group:'', groupLabel:'Estado sin clasificar', label:details.estado};
-    const tone = groupTones[outcome.group] || 'warning';
-    const grokText = lastDecision?.reply?.trim();
-    const usedGrok = Boolean(grokText) && details.respuesta === grokText;
-    addStep(5, usedGrok ? 'Se entrega la redacción de Grok: pasó la verificación'
-      : 'Se entrega la respuesta armada por el servidor con los datos de las herramientas');
-    addStep(6, 'Estado ' + details.estado + ' · ' + outcome.groupLabel +
-      (details.error ? ' · ' + details.error.code : ''), tone);
-    if (!visits.retrieve) setStage('retrieve', 'skipped');
-    setStage('outcome', 'complete');
-    const current = document.querySelector('.outcome-group li[data-state="' + details.estado + '"]');
-    if (current) {
-      current.setAttribute('aria-current', 'true');
-      current.append(element('span', 'current-mark', 'esta corrida'));
-    }
-    const executed = details.tools_executed?.length ?? 0;
-    const rejected = (details.tools_requested?.length ?? 0) - executed;
-    verdict.textContent = outcome.groupLabel + ': ' + outcome.label + '. ' + details.model_calls +
-      (details.model_calls === 1 ? ' llamada' : ' llamadas') + ' a Grok, ' + executed +
-      (executed === 1 ? ' herramienta ejecutada' : ' herramientas ejecutadas') + ' y ' + rejected +
-      (rejected === 1 ? ' rechazada.' : ' rechazadas.');
-    setPill(outcome.groupLabel, tone);
-  }
-
-  document.addEventListener('asistendero:reset', reset);
-  document.addEventListener('asistendero:event', ({detail:event}) => {
-    if (event.type === 'node' && event.status === 'running') onNodeRunning(event.node);
-    else if (event.type === 'node') onNodeComplete(event.node, event.details || {});
-    else if (event.type === 'final') onFinal(event.details || {});
-    else if (event.type === 'error') {
-      if (runningStage) setStage(runningStage, 'error');
-      verdict.textContent = 'La prueba se detuvo: ' + (event.message || 'error de ejecución') + '.';
-      setPill('Error de ejecución', 'error');
-    }
+function onModelRequest(details) {
+  // El código del aviso viaja en las observaciones de la siguiente llamada a Grok.
+  const codes = new Set((info?.reminders || []).map(item => item.code));
+  const sent = (details.observaciones || []).map(item => item?.error?.code).filter(code => codes.has(code));
+  const known = run.notes.route || [];
+  sent.forEach(code => {
+    const text = 'Aviso del servidor: ' + code + '.';
+    if (!known.includes(text)) note('route', text, 'warning');
   });
+}
 
-  fetch('/api/harness')
-    .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)))
-    .then(fill)
-    .catch(() => { instructions.textContent = 'No se pudo cargar la descripción del harness desde el visor local.'; });
-})();
+function onFinal(details) {
+  const outcome = outcomeOf(details.estado, info);
+  const who = authorOf(details, run.lastDecision).text;
+  note('respond', 'Responde ' + who.charAt(0).toLowerCase() + who.slice(1) + '.');
+  walk('respond', 'outcome');
+  run.final = 'outcome';
+  run.tone = outcome.tone;
+  note('outcome', details.estado + ' · ' + outcome.label + ' (' + outcome.groupLabel + ')' +
+    (details.error ? ' · ' + details.error.code : '') + '.', outcome.tone);
+  const executed = details.tools_executed?.length ?? 0;
+  const rejected = (details.tools_requested?.length ?? 0) - executed;
+  verdict.textContent = outcome.groupLabel + ': ' + outcome.label + '. ' + plural(details.model_calls ?? 0, 'llamada', 'llamadas') +
+    ' a Grok, ' + executed + (executed === 1 ? ' herramienta ejecutada' : ' herramientas ejecutadas') + ' y ' + rejected +
+    (rejected === 1 ? ' rechazada.' : ' rechazadas.');
+  setPill(outcome.groupLabel, outcome.tone);
+}
+
+function onEvent(event) {
+  if (!run) reset();
+  const details = event.details || {};
+  if (event.type === 'input') visit('cliente');
+  else if (event.type === 'node' && event.status === 'running') onRunning(event.node);
+  else if (event.type === 'node') onComplete(event.node, details);
+  else if (event.type === 'model_request') onModelRequest(details);
+  else if (event.type === 'final') onFinal(details);
+  else if (event.type === 'error') {
+    if (run.at) note(run.at, 'La prueba se detuvo aquí: ' + (event.message || 'error de ejecución') + '.', 'error');
+    run.final = run.at;
+    run.tone = 'error';
+    verdict.textContent = 'La prueba se detuvo: ' + (event.message || 'error de ejecución') + '.';
+    setPill('Error de ejecución', 'error');
+  }
+  refresh();
+}
+
+function fill(data) {
+  info = data;
+  document.querySelectorAll('[data-harness]').forEach(node => {
+    const key = node.dataset.harness;
+    const value = key in data ? data[key] : data.limits?.[key];
+    if (value !== undefined) node.textContent = typeof value === 'number' ? value.toLocaleString('es-CO') : String(value);
+  });
+  map = createMap(data);
+  if (run) refresh();
+}
+
+harnessInfo.then(fill).catch(() => {
+  document.querySelector('#flow-nodes').replaceChildren(
+    el('li', 'flow-error', 'No se pudo cargar la descripción del harness desde el visor local.'));
+});
+onRun({reset, event: onEvent});

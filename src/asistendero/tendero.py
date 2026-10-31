@@ -42,11 +42,18 @@ CSS = "text/css; charset=utf-8"
 MODULES = ("tendero", "tendero-core", "tendero-theme", "tendero-today", "tendero-orders", "tendero-payments",
            "tendero-sales", "tendero-inventory", "tendero-product-editor", "tendero-supply", "tendero-categories",
            "tendero-catalog", "tendero-assistant", "tendero-chats")
+LANDING_MODULES = ("inicio", "inicio-mostrador", "inicio-demo", "inicio-escenas", "inicio-cierre", "inicio-sectores")
 ASSETS = {
-    **{f"/assets/{name}.js": (f"{name}.js", JS) for name in MODULES},
+    **{f"/assets/{name}.js": (f"{name}.js", JS) for name in MODULES + LANDING_MODULES},
     "/assets/tendero.css": ("tendero.css", CSS),
+    "/assets/tendero-theme.css": ("tendero-theme.css", CSS),
     "/assets/tendero-views.css": ("tendero-views.css", CSS),
+    "/assets/tendero-bodega.css": ("tendero-bodega.css", CSS),
     "/assets/inicio.css": ("inicio.css", CSS),
+    "/assets/inicio-mostrador.css": ("inicio-mostrador.css", CSS),
+    "/assets/inicio-demo.css": ("inicio-demo.css", CSS),
+    "/assets/inicio-secciones.css": ("inicio-secciones.css", CSS),
+    "/assets/inicio-cierre.css": ("inicio-cierre.css", CSS),
     "/assets/cercania-mark.png": ("cercania-mark.png", "image/png"),
     "/assets/NunitoSans.ttf": ("NunitoSans.ttf", "font/ttf"),
     "/assets/Inter.ttf": ("Inter.ttf", "font/ttf"),

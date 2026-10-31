@@ -78,6 +78,14 @@ export function loadInventory(sub, filter, refresh) {
     else link.removeAttribute('aria-current');
   });
   TABS.forEach(tab => { $('#inv-' + tab).hidden = tab !== state.tab; });
+  // Las acciones de producto solo van con la lista de productos; Abastecimiento tiene su propio «Registrar llegada».
+  $('#inv-actions').hidden = state.tab !== 'productos';
+  // En el celular las pestañas se desplazan de lado: la elegida se trae a la vista, solo en horizontal para no mover la
+  // página (scrollIntoView también la desplazaría hacia arriba al refrescar después de guardar).
+  const tab = document.querySelector('[data-inv-tab][aria-current]');
+  const bar = tab.parentElement.getBoundingClientRect();
+  const box = tab.getBoundingClientRect();
+  if (box.left < bar.left || box.right > bar.right) tab.parentElement.scrollLeft += box.left - bar.left - 8;
   if (state.tab === 'abastecimiento') return loadSupply(refresh);
   if (state.tab === 'movimientos') return loadHistory();
   if (state.tab === 'categorias') return loadCategories(refresh);

@@ -169,3 +169,73 @@ def test_the_chat_script_finds_every_element_it_uses():
     missing = [name for name in sorted(used) if f'id="{name}"' not in page]
     assert missing == [], f"app.js busca ids que index.html no tiene: {missing}"
     assert "innerHTML" not in script and not re.search(r"\b(?:alert|confirm|prompt)\(", script)
+
+
+def test_the_decision_map_is_the_real_graph():
+    # El mapa separa la ruta (arista condicional de interpret) y la aduana y la bodega (dentro de retrieve); sin las
+    # conexiones internas, cada conexión del mapa debe ser una arista del grafo compilado, y ninguna puede faltar.
+    from asistendero.graph import build_graph
+
+    flow = describe_harness()["flow"]
+    graph = build_graph(lambda name, arguments: {}, lambda *args, **kwargs: None).get_graph()
+    real = {(edge.source, edge.target) for edge in graph.edges}
+    owner = {node["id"]: node["graph"] for node in flow["nodes"]}
+    assert set(owner.values()) == set(graph.nodes)
+    mapped = {(owner[edge["from"]], owner[edge["to"]]) for edge in flow["edges"] if not edge.get("internal")}
+    assert mapped == real
+    ids = [node["id"] for node in flow["nodes"]]
+    assert len(ids) == len(set(ids))
+    for node in flow["nodes"]:
+        exits = [edge for edge in flow["edges"] if edge["from"] == node["id"]]
+        # Cada nodo dice a dónde sigue; solo el estado final cierra la corrida.
+        assert bool(exits) == (node["graph"] != "__end__"), node["id"]
+        assert node["does"] and node["receives"] and node["decides"] and set(node["layers"]) <= {"prompt", "model", "rule", "data"}
+    assert all(edge["from"] in owner and edge["to"] in owner and edge["label"] and edge["when"] for edge in flow["edges"])
+
+
+def _visor_files() -> dict[str, str]:
+    served = {name for name, _ in visual.TraceHandler._assets.values()}
+    return {name: (SRC / "ui" / name).read_text(encoding="utf-8") for name in sorted(served)
+            if name.endswith((".js", ".css"))}
+
+
+def test_the_visor_page_loads_only_served_files_and_its_scripts_find_their_elements():
+    page = (SRC / "ui" / "index.html").read_text(encoding="utf-8")
+    files = _visor_files()
+    served = set(visual.TraceHandler._assets)
+    assert set(re.findall(r'(?:href|src)="(/assets/[\w.-]+)"', page)) <= served
+    ids = set(re.findall(r'\bid="([\w-]+)"', page))
+    scripts = {name: text for name, text in files.items() if name.endswith(".js")}
+    for name, script in scripts.items():
+        used = set(re.findall(r"querySelector\('#([\w-]+)'\)", script)) | set(re.findall(r"getElementById\('([\w-]+)'\)", script))
+        # Los ids que el mapa crea al vuelo (el título del detalle) no están en la página.
+        assert used - {"flow-detail-title"} <= ids, (name, used - ids)
+        for module in re.findall(r"from '\./([\w.-]+\.js)'", script):
+            assert module in scripts, (name, module)
+        assert "innerHTML" not in script and "insertAdjacentHTML" not in script, name
+        assert not re.search(r"\b(?:alert|confirm|prompt)\(", script), name
+
+
+def test_the_inspection_keeps_the_original_json_and_the_download():
+    script = (SRC / "ui" / "traza.js").read_text(encoding="utf-8")
+    assert "JSON.stringify(event, null, 2)" in script and "JSON original del evento" in script
+    assert "JSON.stringify(events, null, 2)" in script and "'#download'" in script
+
+
+def test_the_visor_colors_are_tokens_with_the_same_dark_palette_twice():
+    sheet = (SRC / "ui" / "conversacion.css").read_text(encoding="utf-8")
+    media = re.search(r':root:not\(\[data-theme="light"\]\) \{(.*?)\n  \}', sheet, re.S).group(1)
+    chosen = re.search(r':root\[data-theme="dark"\] \{(.*?)\n\}', sheet, re.S).group(1)
+    tokens = lambda block: dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
+    assert tokens(media) == tokens(chosen) and tokens(media)
+    light = tokens(re.search(r"^:root \{(.*?)\n\}", sheet, re.S | re.M).group(1))
+    assert set(tokens(media)) <= set(light)
+    # Fuera de las paletas no hay colores fijos: con uno suelto, el modo oscuro deja una caja clara.
+    for name in ("conversacion.css", "visor-panels.css", "harness-map.css"):
+        text = (SRC / "ui" / name).read_text(encoding="utf-8")
+        outside = re.sub(r":root[^{]*\{.*?\n\s*\}", "", text, flags=re.S)
+        assert len(outside) > len(text) / 2, name  # quitar las paletas no puede borrar la hoja entera
+        assert not re.findall(r"#[0-9A-Fa-f]{3,8}\b", outside), name
+    castle = (SRC / "ui" / "castillo.css").read_text(encoding="utf-8")
+    assert '.castle-stage.iso[data-theme="dark"]' in castle
+    assert 'id="castle-stage"' in (SRC / "ui" / "index.html").read_text(encoding="utf-8").split("data-follow-theme")[0][-200:]

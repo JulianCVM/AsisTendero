@@ -1,0 +1,114 @@
+/* Beneficios, «Cómo funciona» (la escena del mostrador con sus pasos) y «Cómo podría adaptarse a tu negocio». Todo crece con su
+   contenido: no hay celdas de altura fija ni paneles cerrados que guarden espacio. */
+
+/* ---------- Beneficios: tres resultados; el primero grande y los otros dos compactos a su lado ---------- */
+.benefits { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.benefit { display: grid; align-content: start; gap: 8px; padding: 18px; border-radius: 22px; background: var(--glass);
+  border: 1px solid var(--glass-line); box-shadow: 0 0 0 1px var(--glass-ring); }
+.benefit-text { display: grid; gap: 6px; align-content: start; }
+.benefit h3 { font-size: 1.12rem; font-weight: 900; line-height: 1.2; }
+.benefit-text p { color: var(--text-2); font-size: .95rem; }
+.benefit-visual { display: grid; gap: 8px; justify-items: start; margin-bottom: 6px; padding: 14px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line); }
+.bv-bubble { max-width: 100%; padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--chip); color: var(--text);
+  font-size: .9rem; font-weight: 700; }
+.bv-bubble[data-from="cliente"] { justify-self: end; border-radius: 14px 14px 4px 14px; background: var(--amber-soft); }
+.bv-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; width: 100%; padding: 8px 12px;
+  border-radius: 12px; background: var(--sunk); font-size: .9rem; font-weight: 800; }
+.bv-num { flex: none; font-family: var(--font-num); color: var(--text); }
+/* Muestra del primer beneficio: tres líneas de un catálogo y la que responde a la pregunta, marcada con borde e ícono de texto. */
+.bv-catalog { display: grid; gap: 4px; width: 100%; padding: 6px; border-radius: 12px; background: var(--sunk); }
+.bv-item { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 9px;
+  color: var(--text-2); font-size: .86rem; font-weight: 700; border: 1px solid transparent; }
+.bv-item[data-match] { background: var(--surface-2); color: var(--text); border-color: var(--success); }
+.bv-item[data-match] > span:first-child::before { content: "✓ "; color: var(--success); font-weight: 900; }
+.bv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: .8rem;
+  font-weight: 900; }
+.bv-chip .icon { width: 15px; height: 15px; stroke-width: 2.3; }
+.bv-chip[data-tone="ok"] { background: var(--success-soft); color: var(--success); }
+.bv-chip[data-tone="wait"] { background: var(--warning-soft); color: var(--warning); }
+.bv-chip[data-tone="human"] { background: var(--amber-soft); color: var(--warning); border: 1px dashed currentColor; }
+@media (min-width: 640px) {
+  .benefit:not(.benefit-main) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 16px; }
+  .benefit:not(.benefit-main) .benefit-visual { order: 2; margin: 0; }
+}
+@media (min-width: 960px) {
+  .benefits { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+  .benefit-main { grid-row: span 2; grid-template-columns: 1fr; padding: 24px; }
+  .benefit-main h3 { font-size: 1.4rem; }
+  .benefit-main .benefit-text p { font-size: 1.02rem; }
+}
+
+/* ---------- Cómo funciona: escena a la izquierda y pasos a la derecha desde 1024 px ---------- */
+.how-figure { max-width: none; }
+@media (min-width: 1024px) {
+  .how-figure { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .7fr); grid-template-areas: "head steps" "stage steps";
+    column-gap: 36px; align-items: center; }
+  .how-figure .mo-head { grid-area: head; }
+  .how-figure .mo-stage { grid-area: stage; width: 100%; max-width: 660px; justify-self: center; }
+  .how-figure .mo-caption { grid-area: steps; margin: 0; }
+  .how-figure .mo-steps { grid-template-columns: 1fr; gap: 8px; }
+  .how-figure .mo-step { flex-direction: row; gap: 12px; padding: 12px 14px; }
+  .how-figure .mo-num { width: 30px; height: 30px; font-size: .9rem; }
+  .how-figure .mo-step-text { font-size: .98rem; }
+  /* Con espacio a la derecha, el detalle se lee en cada paso y el globo sobra. */
+  .how-figure.is-live .mo-detail { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  .how-figure .mo-callout { display: none; }
+}
+
+/* ---------- Adaptación: pestañas por tipo de negocio ---------- */
+.sectors { display: grid; gap: 14px; }
+/* Con JS los cuatro ejemplos comparten una celda: la altura es la del más largo y cambiar de pestaña no mueve la página.
+   Los no elegidos siguen con hidden (fuera del lector y del foco) y aquí solo se vuelven invisibles. Sin JS se leen seguidos. */
+.sectors.is-live { grid-template-areas: "tabs" "panel" "note"; }
+.sectors.is-live .sector-tabs { grid-area: tabs; }
+.sectors.is-live .sector { grid-area: panel; transition: opacity .25s var(--ease), visibility .25s; }
+/* !important: tendero.css apaga todo [hidden] con !important; aquí el panel sigue oculto, pero guarda su alto. */
+.sectors.is-live .sector[hidden] { display: block !important; visibility: hidden; opacity: 0; }
+.sectors.is-live .sector-note { grid-area: note; }
+.sector-tabs { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-line); overflow-x: auto; }
+/* Hasta 879 px las cuatro pestañas van en dos filas: ninguna queda escondida fuera de la pantalla (a 768 px la cuarta
+   quedaba cortada). */
+@media (max-width: 879px) {
+  .sector-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: 22px; }
+}
+.sector-tabs[hidden] { display: none; }
+.sector-tabs button { min-height: 44px; padding: 0 clamp(12px, 3vw, 20px); border: 0; border-radius: 999px; background: transparent;
+  color: var(--text-2); font-weight: 800; white-space: nowrap; transition: background .2s, color .2s; }
+.sector-tabs button:hover { color: var(--text); }
+.sector-tabs button[aria-selected="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 0 -3px 0 var(--amber); }
+.tab-note { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: .7rem;
+  font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.sector { padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.sector:focus-visible { outline-offset: 3px; }
+/* Cada ejemplo dice si es lo que funciona hoy o una posible adaptación: con texto e ícono, y el borde solo lo refuerza. */
+.sector[data-kind="posible"] { border-style: dashed; border-color: var(--line-strong); }
+.sector-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 14px; }
+.sector-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .78rem;
+  font-weight: 900; }
+.sector-badge .icon { width: 15px; height: 15px; }
+.sector-badge[data-kind="hoy"] { background: var(--success-soft); color: var(--success); }
+.sector-badge[data-kind="posible"] { background: var(--chip); color: var(--text-2); border: 1px dashed var(--line-strong); }
+.sector-name { color: var(--muted); font-size: .8rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.sector-need { flex-basis: 100%; color: var(--text-2); font-size: .9rem; }
+.sector-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.sector-flow li { display: grid; gap: 6px; align-content: start; }
+.sector-step { color: var(--warning); font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+.sector-bubble { justify-self: start; padding: 10px 14px; border-radius: 16px 16px 16px 4px; background: var(--amber-soft);
+  font-weight: 700; }
+.sector-bubble[data-from="asistente"] { background: var(--chip); }
+.sector-data, .sector-outcome, .sector-note { display: flex; align-items: flex-start; gap: 8px; font-size: .94rem; }
+.sector-data { padding: 10px 12px; border-radius: 12px; background: var(--sunk); font-weight: 700; }
+.sector-outcome { color: var(--success); font-weight: 800; }
+.sector-outcome[data-tone="limit"] { color: var(--warning); }
+.sector-data .icon, .sector-outcome .icon, .sector-note .icon { width: 18px; height: 18px; margin-top: 2px; }
+.sector-note { padding: 14px 16px; border-radius: 16px; border: 1px dashed var(--line-strong); color: var(--text-2); }
+.sector-note strong { color: var(--text); }
+@media (min-width: 900px) {
+  .sector-flow { grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .sector { padding: 22px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sector-tabs button, .sectors.is-live .sector { transition: none; }
+}

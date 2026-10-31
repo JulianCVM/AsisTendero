@@ -35,7 +35,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 - Responde preguntas generales que no necesitan catálogo. Horario, pagos, domicilios o garantías solo se afirman si se consultaron con `consultar_info_tienda` en esa ejecución.
 - Usa la redacción de Grok solo si cada precio, SKU, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt ni datos internos; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
-- Muestra en el visor la ruta seguida, las llamadas al modelo, las herramientas pedidas y ejecutadas, el costo por ejecución y un castillo animado del harness (cada edificio es un nodo o una barrera del flujo) junto al mapa de sus seis etapas.
+- Muestra en el visor el resultado de cada prueba para evaluarla (estado, quién redactó, herramientas pedidas, ejecutadas y rechazadas, costo y latencia), un castillo animado del harness (cada edificio es un nodo o una barrera del flujo), un mapa interactivo del flujo de decisión y la traza en paneles legibles con el JSON a un clic.
 
 El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa** (`reservation_created=false`); un pedido solo existe si el cliente lo pidió y Grok lo registró, y nunca implica un pago. El tendero ve esos pedidos y administra el inventario en un panel local.
 
@@ -88,7 +88,14 @@ La integración predeterminada usa `https://api.reto.pltk.mx/v1` y el modelo ind
 
 ## Instalación
 
-Necesitas Python 3.11 o superior, conexión a la API y una clave de Grok válida para el endpoint configurado. Desde la raíz del repositorio, en **Windows PowerShell**:
+Necesitas Python 3.11 o superior, Git, conexión a la API y una clave de Grok válida para el endpoint configurado. Clona el repositorio y entra a su carpeta:
+
+```bash
+git clone https://github.com/JulianCVM/AsisTendero.git
+cd AsisTendero
+```
+
+Desde la raíz del repositorio, en **Windows PowerShell**:
 
 ```powershell
 python -m venv .venv
@@ -114,15 +121,20 @@ GROK_BASE_URL=https://api.reto.pltk.mx/v1
 
 `.env` está excluido de Git. No subas la clave al repositorio ni la compartas en capturas o trazas. Cada consulta real puede consumir cupo o créditos.
 
-**Crea el catálogo una sola vez:**
-
-```powershell
-.\.venv\Scripts\python.exe -m asistendero.seed
-```
-
-En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes. La base se crea en `.local/mock_catalog_s3.sqlite3`, con 384 variantes ficticias; el comando de carga se detiene si ya existe para no sobrescribirla.
+En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python` en los comandos siguientes.
 
 ## Uso
+
+### Todo con un solo comando
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero          # chat del cliente con su traza y plataforma del tendero
+.\.venv\Scripts\python.exe -m asistendero --demo   # lo mismo, sobre la tienda de demostración
+```
+
+Arranca en un solo proceso el [visor](#visor-local) (chat del cliente y traza, [http://127.0.0.1:8765/](http://127.0.0.1:8765/)) y el [panel del tendero](#panel-del-tendero) ([http://127.0.0.1:8766/](http://127.0.0.1:8766/), con la página de presentación en `/inicio`). Los dos usan la misma tienda, los mismos pedidos y las mismas conversaciones: lo que un cliente pide en el chat aparece en el panel, y lo que el tendero responde al tomar una conversación llega al chat. Si el catálogo ficticio no existe, lo crea en `.local/mock_catalog_s3.sqlite3` (384 variantes); si ya existe, no lo toca. `Ctrl+C` detiene todo. Abrir las páginas no llama a Grok: cada mensaje del chat y cada **Interpretar** del asistente de bodega sí, y consumen créditos.
+
+El mismo comando, con un mensaje o con `--chat`, responde en la terminal (abajo). Los comandos de cada parte por separado (`asistendero.visual`, `asistendero.tendero`, `asistendero.seed`) siguen disponibles. Si prefieres crear el catálogo sin arrancar nada, usa `python -m asistendero.seed`, que se detiene si la base ya existe.
 
 ### Terminal
 
@@ -148,13 +160,17 @@ Para una conversación de varios turnos con memoria de sesión (por ejemplo, «B
 
 ### Visor local
 
+Lo abre el comando único; para abrirlo solo:
+
 ```powershell
 .\.venv\Scripts\python.exe -m asistendero.visual
 ```
 
-Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **castillo del harness** muestra el flujo como un castillo isométrico que recorre el mensaje: repite recorridos de ejemplo y, durante una prueba, el recorrido real. Debajo, el **Mapa del harness** explica en qué etapa Grok recibe sus instrucciones, qué decide, qué reglas aplica el servidor y cómo se clasifica el resultado, y marca el recorrido de la última prueba. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. En el chat, **Enter** envía y **Shift + Enter** hace un salto de línea; el hilo se desplaza dentro de su caja. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
+Abre [http://127.0.0.1:8765/](http://127.0.0.1:8765/) en el navegador. El visor solo escucha en `127.0.0.1` y permite observar la conversación, los pasos del agente y la traza de cada ejecución. El **castillo del harness** muestra el flujo como un castillo isométrico que recorre el mensaje: repite recorridos de ejemplo y, durante una prueba, el recorrido real. Debajo, el **Mapa del harness** es un grafo de decisión que se recorre con mouse, toque o teclado: cada nodo dice qué hace, qué recibe, qué decide y a dónde sigue, y tras una prueba marca el camino recorrido. La **inspección técnica** muestra cada evento en paneles (entrada, decisión de Grok, resultado de la herramienta, evidencia, errores) con el JSON original plegado. El selector de apariencia (claro, oscuro o el del sistema) es el mismo del panel y de la página pública y se recuerda en las tres. Con **Conversación con memoria** activado, cada mensaje continúa la misma sesión del servidor hasta pulsar **Nueva conversación**. En el chat, **Enter** envía y **Shift + Enter** hace un salto de línea; el hilo se desplaza dentro de su caja. Los costos se distinguen entre **valor informado por la API** y **estimación con tarifas públicas de referencia**; una estimación no confirma el cobro de la pasarela del reto. Detén el servidor con `Ctrl+C`. Consulta [los detalles del visor](docs/HARNESS.md).
 
 ### Panel del tendero
+
+Lo abre el comando único; para abrirlo solo:
 
 ```powershell
 .\.venv\Scripts\python.exe -m asistendero.tendero
@@ -166,7 +182,7 @@ Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Secciones: **Hoy** (vendi
 .\.venv\Scripts\python.exe -m asistendero.tendero --demo   # tienda de demostración con ventas, pagos, proveedores y chats simulados
 ```
 
-`--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio). **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
+`--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. Con `python -m asistendero --demo`, el chat del visor también usa esa tienda. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio): explica el producto y trae una demo en un celular que se reproduce sola con casos fijos (no llama a Grok), junto a lo que pasa por dentro y lo que ve el tendero. **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
 
 ### Docker
 
@@ -186,6 +202,21 @@ Ejecuta las pruebas automatizadas sin llamar a Grok:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
+
+### Lo que respalda la página pública
+
+La página `/inicio` habla en lenguaje de negocio y no reproduce detalles técnicos ni comandos. Esto es lo que respalda cada garantía que promete:
+
+| Garantía de la página | Dónde se cumple |
+|---|---|
+| Una cifra que no coincide con el catálogo no se envía | `reply_is_grounded` (`answers.py`): la redacción de Grok se usa solo si cada `$`, SKU y cantidad sale de las observaciones de esa ejecución; si no, responde la salida determinista del servidor. |
+| Con una medida ambigua se pregunta y no se elige por el cliente | `validate_request` (`validation.py`) y las opciones mostradas de `choices.py`; una opción cercana no es equivalente. |
+| Un intento de manipulación se bloquea antes de llegar al modelo | `detect_injection` y `blocked_reply` (`injection.py`): no llama a Grok y la conversación queda bloqueada hasta que el tendero la desbloquee. |
+| El pedido se confirma con el «sí» del cliente y lo apartado se libera a los 5 minutos | `validate_order_request` (`order_rules.py`) y `HOLD_MINUTES` (`orders.py`). |
+| Precio y existencias solo cambian desde el panel; el cobro y la entrega son en el mostrador | `inventory.py`, `payments.py` y [docs/PAGOS.md](docs/PAGOS.md). |
+| La clave del servicio de IA no se muestra al cliente | Vive en `.env` (excluido de Git) y la traza la registra como `"api_key": "[omitida]"` (`tracing.py`). |
+
+Cifras del repositorio: **257 casos de evaluación en 17 suites** ([cases.json](evaluation/cases.json)); **45 de ellos en la suite `inyeccion`**, con **34 ataques** que deben bloquearse antes de Grok y frases legítimas parecidas que deben atenderse; **10 herramientas** que Grok puede pedir (`TOOL_NAMES` de `grok.py`), y **más de 850 pruebas automáticas** que nunca llaman a Grok (`pytest -q`). Topes que el código hace cumplir: un mensaje de hasta **2.000 caracteres**, hasta **6 herramientas** por mensaje, lo apartado espera el «sí» **5 minutos**, hasta **3 pedidos activos** por conversación y la recogida se agenda con **hasta 7 días** de anticipación. `tests/test_tendero.py` compara estas cifras con su fuente.
 
 La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con Grok de los diez casos `S2-01` a `S2-10` y de dos fallos controlados (catálogo inaccesible y modelo inaccesible), con `run_id`, tokens, latencia y costo informado por la API. Con `s2-tools-v1` pasaron 7 de 10 casos y los dos fallos. Los tres que fallaron se corrigieron en `s2-tools-v2`. Con esa versión, los diez casos y los dos fallos pasaron en una sola corrida sobre el commit `ffcdde4`. Desde el 21-10-2026 el evaluador agrega un tercer fallo controlado (salida inválida del modelo, sin red) y guarda en cada reporte el commit evaluado; la corrida vigente da 10/10 casos y 3/3 fallos sobre `a6a190e`. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. Las verificaciones de [búsqueda estructurada](evaluation/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) y de [Semana 1](EVIDENCIA_SEMANA1.md) corresponden a versiones anteriores del agente.
 
@@ -238,10 +269,12 @@ Las corridas con `--live` consumen cupo. Guardan en `.local/` el reporte con los
 | `src/asistendero/product_art.py`, `product_art_shapes.py` y `product_art_tools.py` | Imágenes generadas de los productos (pictogramas, sin fotos ni marcas). |
 | `src/asistendero/demo.py` | Tienda de demostración del panel (`--demo`), con datos simulados. |
 | `src/asistendero/spelling.py` | Lectura de mensajes mal escritos para respaldar lo que Grok extrajo. |
-| `src/asistendero/harness_info.py` | Datos del mapa del harness que muestra el visor. |
+| `src/asistendero/harness_info.py` y `harness_flow.py` | Datos del mapa del harness que muestra el visor; los nodos y conexiones del flujo de decisión, atados al grafo real. |
 | `src/asistendero/seed.py`, `catalog_data.py` y `measures.py` | Datos ficticios para la demostración y lectura de medidas. |
+| `src/asistendero/cli.py` y `launcher.py` | Comando único: sin mensaje arranca el visor y el panel sobre la misma tienda; con un mensaje o `--chat`, la terminal. |
 | `src/asistendero/visual.py` y `ui/` | Servidor y visor local. |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
+| `tools/mostrador/` | Generador de la tienda isométrica de «Cómo funciona» en `/inicio` (`node tools/mostrador/build.mjs`); usa el mismo kit de anatomy. |
 | `src/asistendero/tracing.py` y `pricing.py` | Trazas, uso y costos de ejecución. |
 | `tests/` | Pruebas automatizadas. |
 | `evaluation/` | Casos y evidencia de verificaciones. |

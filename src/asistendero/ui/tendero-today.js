@@ -1,6 +1,6 @@
 // Hoy: indicadores, lo que necesita revisión, la cola del mostrador, la plata del día, la actividad del asistente,
 // lo más vendido, la mercancía en camino y lo que está por surtir. Todo sale de /api/resumen y del inventario.
-import {$, api, art, cop, dayText, el, fill, icon, plural, units, whenText} from './tendero-core.js';
+import {$, api, art, cop, dayText, el, fill, foldList, icon, plural, units, whenText} from './tendero-core.js';
 import {byUrgency, orderCard} from './tendero-orders.js';
 import {availabilityPill, openEditor} from './tendero-inventory.js';
 
@@ -49,6 +49,7 @@ function renderAttention(items) {
     row.append(link);
     return row;
   }));
+  foldList($('#attention-list'), $('#attention-more'), 3, 'avisos');
 }
 
 function renderMoney(money) {
@@ -67,16 +68,15 @@ function renderAgent(agent) {
     fact('Bloqueos', String(agent.bloqueos), plural(agent.incidencias, 'incidencia', 'incidencias')));
   fill($('#activity-list'), $('#activity-empty'), agent.actividad, item => {
     const step = el('li');
-    const body = el('div');
+    // Con enlace, toda la fila se toca (no un «Ver» chiquito debajo del texto).
+    const body = el(item.enlace ? 'a' : 'div', item.enlace ? 'activity-link' : '');
+    if (item.enlace) body.href = item.enlace;
     body.append(el('strong', '', item.texto));
+    if (item.enlace) body.append(icon('arrow'));
     step.append(el('time', '', whenText(item.hora)), body);
-    if (item.enlace) {
-      const link = el('a', 'link', 'Ver');
-      link.href = item.enlace;
-      body.append(link);
-    }
     return step;
   });
+  foldList($('#activity-list'), $('#activity-more'), 4, 'movimientos');
 }
 
 function renderTop(best) {

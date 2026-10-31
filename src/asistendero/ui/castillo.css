@@ -1,3 +1,56 @@
+/* Sección del castillo: figura, controles y leyenda de estaciones (antes en conversacion.css). */
+.harness-panel { overflow: hidden; scroll-margin-top: 84px; }
+.castle-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(280px, .85fr); }
+.castle-figure { min-width: 0; margin: 0; padding: 18px; border-right: 1px solid var(--line-soft); background: var(--soft); }
+.castle-plate {
+  position: relative; padding: 30px 10px 8px; border: 1px solid var(--line); border-radius: 14px;
+  background: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0) 0 0 / 22px 22px, var(--cream);
+}
+.castle-corner { position: absolute; top: 10px; color: var(--muted); font: 800 .66rem var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.castle-corner[data-corner="fig"] { left: 14px; }
+.castle-corner[data-corner="title"] { right: 14px; }
+.castle-stage { background: transparent; }
+.castle-stage .castle-svg { display: block; width: 100%; height: auto; }
+.castle-readout {
+  min-height: 3.1em; margin: 6px 4px 2px; padding: 9px 12px; border-left: 3px solid var(--amber); border-radius: 8px;
+  color: var(--ink); background: var(--paper); font-size: .84rem; font-weight: 750; line-height: 1.45;
+}
+.castle-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+.castle-controls-label { color: var(--muted); font-size: .74rem; font-weight: 850; }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--amber-line); background: var(--amber-soft); }
+.chip-quiet { margin-left: auto; background: var(--surface-2); border-color: var(--line); }
+.castle-caption { margin: 10px 2px 0; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+.castle-legend { display: grid; align-content: start; gap: 6px; margin: 0; padding: 18px; list-style: none; }
+.castle-legend li {
+  display: flex; gap: 11px; padding: 10px 11px; border: 1px solid transparent; border-radius: 12px;
+  transition: background .2s ease, border-color .2s ease;
+}
+.castle-legend li:hover, .castle-legend li:focus-visible { background: var(--soft); border-color: var(--line); }
+.castle-legend li[aria-current="step"] { background: var(--amber-wash); border-color: var(--amber-line); box-shadow: inset 3px 0 0 var(--amber); }
+.station-number {
+  display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 8px;
+  color: var(--ink); background: var(--soft); border: 1px solid var(--line); font: 800 .74rem var(--font-mono);
+}
+.castle-legend li[aria-current="step"] .station-number { color: var(--on-amber); background: var(--amber); border-color: var(--amber-line); }
+.castle-legend h3 { margin: 0; font-size: .84rem; font-weight: 900; }
+.castle-legend h3 code { margin-left: 4px; color: var(--muted); font: 600 .68rem var(--font-mono); }
+.castle-legend p { margin: 3px 0 0; color: var(--text-2); font-size: .75rem; line-height: 1.42; }
+.castle-legend p code { font: .68rem var(--font-mono); }
+@media (max-width: 1050px) {
+  .castle-layout { grid-template-columns: 1fr; }
+  .castle-figure { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .castle-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .castle-figure { padding: 12px; }
+  .castle-plate { padding: 28px 2px 6px; }
+  .castle-legend { grid-template-columns: 1fr; padding: 12px; }
+}
+@media (max-width: 570px) {
+  .castle-corner[data-corner="title"] { display: none; }
+  .chip-quiet { margin-left: 0; }
+}
+
 /* El castillo del harness: los tonos del kit isométrico (iso.css) con la paleta de DESIGN.md. */
 .castle-stage.iso,
 .castle-preview.iso {
@@ -10,7 +63,20 @@
   --anatomy-red: #B23E3E; --anatomy-green: #276B52;
   --anatomy-weight: .7px;
 }
-.castle-preview { margin: 0; padding: 16px; background: #FBF6EA; }
+.castle-preview { margin: 0; padding: 16px; background: var(--cream, #FBF6EA); }
+/* En oscuro, el castillo toma la paleta oscura del panel: caras petróleo, bordes claros y el ámbar de siempre.
+   tendero-theme.js pone data-theme en #castle-stage (data-follow-theme) según el tema de la página. */
+.castle-stage.iso[data-theme="dark"] {
+  --anatomy-paper: #14242B; --anatomy-face: #1A2E36; --anatomy-top: #1D343D;
+  --anatomy-shade-0: #0B161A; --anatomy-shade-1: #0F1D23; --anatomy-shade-2: #13242B; --anatomy-shade-3: #172A32;
+  --anatomy-lit-top: #8C5919; --anatomy-lit-shade: #6B4512;
+  --anatomy-hi: #D5E3E4; --anatomy-mid: #8FA8AC; --anatomy-lo: #4B6870; --anatomy-faint: #2B4A55;
+  --anatomy-lit: #F3B862; --anatomy-dot: #E9F0EF;
+  --anatomy-halo: #000000; --anatomy-halo-opacity: .45;
+  --anatomy-red: #F29086; --anatomy-green: #7BD3A8;
+}
+.castle-stage.iso[data-theme="dark"] [data-part="flag"] .iso-top { fill: #1D343D; }
+.castle-stage.iso[data-theme="dark"] [data-part="flag"] .iso-shade { fill: #13242B; }
 .castle-spare { display: none; }
 
 /* Lo que se enciende solo cuando le toca: la linterna de Grok, las cajas y el candado de la bodega. */

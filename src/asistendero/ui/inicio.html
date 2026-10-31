@@ -3,86 +3,477 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#173B4A">
-  <meta name="description" content="AsisTendero responde a los clientes de una ferretería de barrio con el precio y las existencias reales del catálogo, aparta pedidos para recoger y le deja al tendero el control.">
-  <title>AsisTendero · el asistente de la ferretería de barrio</title>
+  <meta name="theme-color" content="#173B4A" data-dark="#0A1519">
+  <meta name="description" content="AsisTendero responde las consultas de tus clientes con el catálogo, los precios y las existencias de tu negocio, organiza solicitudes para recoger y te pasa el chat cuando hace falta. Hoy viene configurado para ferreterías; la demo usa datos ficticios.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AsisTendero · Atiende consultas con los datos de tu negocio">
+  <meta property="og:description" content="Un asistente de chat que responde con tus precios y existencias, organiza solicitudes para recoger y te deja las decisiones importantes. Demo con datos ficticios.">
+  <title>AsisTendero · Atiende consultas con los datos de tu negocio</title>
   <link rel="icon" href="/assets/cercania-mark.png" type="image/png">
+  <!-- Las fuentes llegan antes del primer pintado: el cambio de letra no mueve la página al cargar. -->
+  <link rel="preload" href="/assets/NunitoSans.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="/assets/Inter.ttf" as="font" type="font/ttf" crossorigin>
   <script src="/assets/tendero-theme.js"></script>
+  <link rel="stylesheet" href="/assets/tendero-theme.css">
   <link rel="stylesheet" href="/assets/tendero.css">
   <link rel="stylesheet" href="/assets/inicio.css">
+  <link rel="stylesheet" href="/assets/inicio-mostrador.css">
+  <link rel="stylesheet" href="/assets/inicio-demo.css">
+  <link rel="stylesheet" href="/assets/inicio-secciones.css">
+  <link rel="stylesheet" href="/assets/inicio-cierre.css">
+  <script type="module" src="/assets/inicio.js"></script>
 </head>
 <body class="landing">
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20.5V16h-4.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/><path d="M9.5 12.5 11 14l3.5-3.5"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5"/><path d="M12 12v9"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10h-8l-4.5 4v-4H4.5z"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.9L12 18.5l-1.8-5.8-5.7-1.9L10.2 9z"/><path d="M18.5 3.5v3M17 5h3"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5"/><path d="M12 17.2v.1"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4.5 13.5 20l-2-6.5z"/><path d="m11.5 13.5 4-4"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M10.5 6.5 5 12l5.5 5.5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V8.5A1.5 1.5 0 0 1 6.5 7H10"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  </svg>
+
+  <div class="aura" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span></div>
+  <div class="scroll-meter" aria-hidden="true"><span id="scroll-meter"></span></div>
   <a class="skip" href="#main">Ir al contenido</a>
-  <header class="land-top">
-    <a class="land-brand" href="/inicio">
+
+  <header class="land-top" id="land-top">
+    <a class="land-brand" href="#inicio">
       <img src="/assets/cercania-mark.png" alt="" width="36" height="36">
-      <span>AsisTendero</span>
+      <span><strong>AsisTendero</strong><small>Asistente para tu negocio</small></span>
     </a>
-    <nav aria-label="Secciones de la página">
-      <a href="#que-hace">Qué hace</a>
-      <a href="#como">Cómo funciona</a>
-      <a href="#limites">Lo que no hace</a>
+    <nav class="land-nav" id="land-nav" aria-label="Secciones de la página">
+      <span class="nav-glow" id="nav-glow" aria-hidden="true"></span>
+      <a href="#demo">Demo</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#adaptable">Adaptación</a>
+      <a href="#confianza">Confianza</a>
+      <a href="#alcance">Alcance</a>
+      <a href="#preguntas">Preguntas</a>
+      <a class="primary nav-cta" href="#demo">Ver demo</a>
+      <div class="theme-row nav-theme"><span class="theme-row-label">Apariencia</span>
+        <div class="theme-switch" data-theme-switch role="group" aria-label="Apariencia">
+          <button type="button" data-theme-choice="claro" aria-pressed="false" aria-label="Claro" title="Claro"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+          <button type="button" data-theme-choice="oscuro" aria-pressed="false" aria-label="Oscuro" title="Oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+          <button type="button" data-theme-choice="sistema" aria-pressed="false" title="Igual que el sistema">Igual que el sistema</button>
+        </div>
+      </div>
     </nav>
-    <a class="primary" href="/">Abrir el panel</a>
+    <div class="land-actions">
+      <div class="theme-switch top-theme" data-theme-switch role="group" aria-label="Apariencia">
+        <button type="button" data-theme-choice="claro" aria-pressed="false" aria-label="Claro" title="Claro"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+        <button type="button" data-theme-choice="oscuro" aria-pressed="false" aria-label="Oscuro" title="Oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+        <button type="button" data-theme-choice="sistema" aria-pressed="false" title="Igual que el sistema">Sistema</button>
+      </div>
+      <a class="primary top-cta" href="#demo">Ver demo</a>
+      <button class="glass-icon menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="land-nav" aria-label="Abrir el menú">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
   </header>
 
   <main id="main">
-    <section class="land-hero" aria-labelledby="hero-title">
-      <div class="land-hero-text">
-        <p class="land-kicker">Para ferreterías de barrio</p>
-        <h1 id="hero-title">Tus clientes preguntan por el chat. AsisTendero responde con tu precio y tu bodega.</h1>
-        <p class="land-lead">Cotiza con lo que de verdad tienes, aparta pedidos para recoger y te avisa cuando un cliente necesita
-          hablar contigo. Tú decides los precios, el inventario y cuándo un pago está confirmado.</p>
-        <div class="button-row">
-          <a class="primary" href="/">Ver el panel del tendero</a>
-          <a class="secondary" href="#como">Cómo funciona</a>
+    <section class="hero" id="inicio" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Asistente de chat para negocios de barrio</p>
+        <h1 id="hero-title">Atiende consultas con <span class="marker">los datos de tu negocio</span></h1>
+        <p class="hero-lead">Responde a tus clientes con tus precios, lo que tienes disponible y tu horario, y deja listas las
+          solicitudes para recoger. Lo importante lo sigues decidiendo tú.</p>
+        <div class="hero-ctas">
+          <a class="primary" href="#demo">Ver demo <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="text-link" href="#como-funciona">Cómo funciona</a>
         </div>
-        <p class="land-note">Prototipo del Agent Challenge de Platica. Todo lo que ves usa un catálogo y datos <strong>ficticios</strong>.</p>
       </div>
-      <figure class="land-chat" aria-label="Ejemplo de conversación">
-        <p class="bubble from-customer">Veci, ¿tiene cemento gris? Necesito 3 bultos.</p>
-        <p class="bubble from-agent">¡Hola! Sí, el cemento gris de 50 kg está a $32.500 el bulto y hay disponibles. Los 3 bultos te
-          quedan en $97.500. ¿Te los aparto para recoger?</p>
-        <p class="bubble from-customer">Sí, paso a las 5.</p>
-        <p class="bubble from-agent">Listo: te aparté 3 bultos para recoger hoy a las 17:00. Pagas en el mostrador.</p>
-        <figcaption>Conversación ilustrativa con datos ficticios.</figcaption>
+
+      <figure class="hero-example" aria-labelledby="hero-example-title">
+        <figcaption class="example-badge" id="hero-example-title"><span class="example-dot" aria-hidden="true"></span>Ejemplo · datos ficticios</figcaption>
+        <div class="chat-sample glass">
+          <ol class="chat-sample-lines">
+            <li class="sample-msg" data-from="cliente"><span class="visually-hidden">Cliente: </span>¿Tienen pintura blanca en galón? Necesito 2.</li>
+            <li class="sample-msg" data-from="asistente"><span class="visually-hidden">Asistente: </span>Sí, a $56.000 el galón: los 2 te salen en $112.000. ¿Te los aparto para recoger?</li>
+          </ol>
+          <div class="result-sample">
+            <p class="result-sample-head"><svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg>En tu panel · Solicitud para recoger</p>
+            <p class="result-sample-line">2 galones de pintura blanca · <strong>$112.000</strong></p>
+            <p class="result-sample-meta"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Espera el «sí» del cliente · se paga al recoger</p>
+          </div>
+        </div>
       </figure>
     </section>
 
-    <section class="land-section" id="que-hace" aria-labelledby="features-title">
-      <h2 id="features-title">Qué hace por tu negocio</h2>
-      <ul class="land-features">
-        <li><h3>Responde sin inventar</h3><p>Cada precio y cada existencia sale del catálogo de tu tienda. Si el cliente no dice la medida, pregunta en vez de adivinar.</p></li>
-        <li><h3>Aparta pedidos para recoger</h3><p>Registra el pedido solo si el cliente lo pide, espera su «sí» y lo libera solo si no lo confirma a tiempo.</p></li>
-        <li><h3>Te deja el control</h3><p>Desde el panel ves cada conversación, tomas el chat cuando quieras y se lo devuelves al asistente.</p></li>
-        <li><h3>Inventario conversando</h3><p>Escribe o dicta «llegaron 12 de los 20 bultos»: el asistente de bodega propone el cambio y tú lo confirmas.</p></li>
-        <li><h3>Ventas y pagos claros</h3><p>Separa lo vendido de lo cobrado. Un pantallazo no es un pago: solo cuenta lo que tú confirmas.</p></li>
-        <li><h3>Se protege solo</h3><p>Detecta intentos de manipular al asistente, bloquea la conversación y te deja la evidencia para revisarla.</p></li>
+    <section class="land-section" id="beneficios" aria-labelledby="benefits-title">
+      <div class="section-head reveal">
+        <p class="kicker">Lo que ganas</p>
+        <h2 id="benefits-title">Menos tiempo pegado al chat</h2>
+      </div>
+      <ul class="benefits">
+        <li class="benefit benefit-main reveal">
+          <div class="benefit-visual" aria-hidden="true">
+            <p class="bv-bubble" data-from="cliente">¿Tienen cemento gris de 50 kg?</p>
+            <div class="bv-catalog">
+              <p class="bv-item"><span>Tubo PVC 1/2"</span><span class="bv-num">$8.500 · 12</span></p>
+              <p class="bv-item" data-match="true"><span>Cemento gris 50 kg</span><span class="bv-num">$39.500 · 9</span></p>
+              <p class="bv-item"><span>Pintura blanca galón</span><span class="bv-num">$56.000 · 4</span></p>
+            </div>
+            <p class="bv-bubble">Sí, a $39.500 el bulto, y hay 9.</p>
+          </div>
+          <div class="benefit-text">
+            <h3>Responde con la información de tu negocio</h3>
+            <p>Precios, existencias y horario salen de lo que tú registras, no de lo que el cliente supone.</p>
+          </div>
+        </li>
+        <li class="benefit reveal">
+          <div class="benefit-visual" aria-hidden="true">
+            <p class="bv-row"><span>Solicitud · 2 galones</span><span class="bv-num">$112.000</span></p>
+            <p class="bv-chip" data-tone="wait"><svg class="icon"><use href="#i-clock"/></svg>Espera el «sí» del cliente</p>
+          </div>
+          <div class="benefit-text">
+            <h3>Organiza solicitudes para recoger</h3>
+            <p>Aparta lo que el cliente pide y lo confirma solo con su «sí». Sin respuesta, se libera a los 5 minutos.</p>
+          </div>
+        </li>
+        <li class="benefit reveal">
+          <div class="benefit-visual" aria-hidden="true">
+            <p class="bv-bubble" data-from="cliente">Quiero hablar con una persona.</p>
+            <p class="bv-chip" data-tone="human"><svg class="icon"><use href="#i-user"/></svg>Te avisa para que tomes el chat</p>
+          </div>
+          <div class="benefit-text">
+            <h3>Pasa el control a una persona cuando corresponde</h3>
+            <p>Si el cliente pide hablar contigo, te avisa. Tomas el chat desde tu panel y luego se lo devuelves.</p>
+          </div>
+        </li>
       </ul>
     </section>
 
-    <section class="land-section" id="como" aria-labelledby="how-title">
-      <h2 id="how-title">Cómo funciona</h2>
-      <ol class="land-steps">
-        <li><strong>El cliente escribe</strong><span>Como habla: «¿tiene tubo de media?», «qué venden», con errores y todo.</span></li>
-        <li><strong>Grok entiende y elige</strong><span>Decide qué consultar: buscar productos, ver una categoría o registrar un pedido.</span></li>
-        <li><strong>El servidor valida y consulta</strong><span>Revisa cada solicitud contra reglas fijas y lee tu catálogo. Grok nunca toca la base.</span></li>
-        <li><strong>La respuesta se verifica</strong><span>Si una cifra no coincide con lo consultado, se responde con el texto seguro del servidor.</span></li>
+    <section class="land-section demo-section" id="demo" aria-labelledby="demo-title">
+      <header class="section-head reveal">
+        <p class="kicker">Demo</p>
+        <h2 id="demo-title">Mira cómo atiende una conversación</h2>
+        <p>Elige un caso: verás el chat del cliente, lo que comprueba el asistente y lo que llega a tu panel.</p>
+        <div class="demo-notice">
+          <p class="demo-tag"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Simulación · datos ficticios</p>
+          <details class="demo-about" data-float>
+            <summary>Qué es esta simulación</summary>
+            <p>Son casos fijos de una ferretería ficticia que se reproducen solos: no se conecta al servicio de inteligencia
+              artificial ni a ninguna tienda.</p>
+          </details>
+        </div>
+      </header>
+
+      <div class="demo-controls reveal">
+        <div class="scenario-rail" id="scenario-rail">
+          <div class="scenario-list" id="scenario-list" role="group" aria-label="Casos de la simulación"></div>
+        </div>
+        <div class="demo-buttons">
+          <p class="demo-count" id="demo-count">Caso 1 de 6</p>
+          <button class="glass-icon" id="demo-prev" type="button" aria-label="Caso anterior">
+            <svg class="icon" aria-hidden="true"><use href="#i-back"/></svg>
+          </button>
+          <button class="glass-icon" id="demo-toggle" type="button" aria-label="Pausar la simulación">
+            <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>
+          </button>
+          <button class="glass-icon" id="demo-restart" type="button" aria-label="Repetir este caso">
+            <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+          </button>
+          <button class="glass-icon" id="demo-next" type="button" aria-label="Caso siguiente">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="demo-stage reveal">
+        <div class="phone" aria-label="Chat del cliente (simulación)" role="region">
+          <div class="phone-body">
+            <div class="phone-status" aria-hidden="true"><span>5:02</span><span class="phone-notch"></span><span>5G · 82&nbsp;%</span></div>
+            <div class="phone-head">
+              <img src="/assets/cercania-mark.png" alt="" width="34" height="34">
+              <div><strong>Ferretería La Esquina</strong><small id="phone-presence">AsisTendero · en línea</small></div>
+              <span class="sim-badge">Simulación</span>
+            </div>
+            <ol class="phone-thread" id="phone-thread" aria-label="Mensajes de la simulación"></ol>
+            <div class="phone-composer" aria-hidden="true">
+              <span class="composer-field" id="composer-field">Escribe un mensaje</span>
+              <span class="composer-send"><svg class="icon"><use href="#i-send"/></svg></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pane-switch" role="group" aria-label="Qué ver debajo del chat">
+          <button type="button" class="pane-tab" data-pane="inside" aria-pressed="true">Qué comprobó</button>
+          <button type="button" class="pane-tab" data-pane="panel" aria-pressed="false">Qué llega al panel</button>
+        </div>
+
+        <section class="pane glass" id="pane-inside" data-pane="inside" aria-labelledby="inside-title">
+          <h3 id="inside-title"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Qué comprobó el asistente</h3>
+          <ol class="inside-list" id="inside-list"></ol>
+          <p class="pane-empty" id="inside-empty">Cuando el cliente escriba, aquí verás qué entiende el asistente y qué comprueba antes de responder.</p>
+        </section>
+
+        <section class="pane glass" id="pane-panel" data-pane="panel" aria-labelledby="panel-title">
+          <h3 id="panel-title"><svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg>Qué llega a tu panel</h3>
+          <ul class="mirror-list" id="mirror-list"></ul>
+          <p class="pane-empty" id="mirror-empty">Lo que cambie para ti (pedidos, chats, alertas) aparece aquí.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="land-section how" id="como-funciona" aria-labelledby="how-title">
+      <div class="section-head reveal">
+        <p class="kicker">Cómo funciona</p>
+        <h2 id="how-title">De la pregunta a la solicitud, con tus datos</h2>
+        <p>Una consulta, paso a paso. Toca un paso para verlo en el mostrador.</p>
+      </div>
+      <figure class="mostrador how-figure" id="mostrador" aria-labelledby="mostrador-title">
+        <div class="mo-head">
+          <p class="mo-badge"><span class="mo-badge-dot" aria-hidden="true"></span>Ejemplo · datos ficticios</p>
+          <button type="button" class="mo-play" id="mo-play" aria-pressed="false" aria-label="Pausar el recorrido" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg></button>
+        </div>
+        <div class="mo-stage">
+          <!-- mostrador:inicio --><svg class="mo-svg" viewBox="0 0 560 430" aria-hidden="true" focusable="false" data-anchor-celular="60.8 25.7" data-anchor-catalogo="28.9 32.9" data-anchor-pedido="45.7 40.1"><path class="mo-halo" d="M43.9 267L44.3 264.8L45.6 262.7L47.7 260.7L50.5 259L236.8 165.8L240.2 164.4L244.1 163.4L248.3 162.8L252.7 162.6L257.1 162.8L261.3 163.4L265.2 164.4L268.6 165.8L509.5 286.3L512.3 288L514.4 289.9L515.7 292L516.1 294.2L516.1 310.9L515.7 313.1L514.4 315.2L512.3 317.2L509.5 318.9L323.2 412L319.8 413.4L315.9 414.5L311.7 415.1L307.3 415.3L302.9 415.1L298.7 414.5L294.8 413.4L291.4 412L50.5 291.6L47.7 289.9L45.6 288L44.3 285.9L43.9 283.7Z"/><g class="mo-solid" data-mat="floor"><path class="mo-fill" d="M44.7 269.9L44.7 264.1L50.5 259L236.8 165.8L246.9 162.9L258.6 162.9L268.6 165.8L509.5 286.3L515.3 291.3L515.3 313.8L509.5 318.9L323.2 412L313.1 415L301.4 415L291.4 412L50.5 291.6L44.7 286.6Z"/><path class="mo-shade" data-shade="0" d="M515.3 313.8L509.5 318.9L509.5 302.2L515.3 297.1ZM509.5 318.9L323.2 412L323.2 395.3L509.5 302.2ZM323.2 412L313.1 415L313.1 398.3L323.2 395.3Z"/><path class="mo-shade" data-shade="2" d="M313.1 415L301.4 415L301.4 398.3L313.1 398.3Z"/><path class="mo-shade" data-shade="3" d="M301.4 415L291.4 412L291.4 395.3L301.4 398.3ZM291.4 412L50.5 291.6L50.5 274.9L291.4 395.3ZM50.5 291.6L44.7 286.6L44.7 269.9L50.5 274.9Z"/><path class="mo-top" d="M509.5 286.3L515.3 291.3L515.3 297.1L509.5 302.2L323.2 395.3L313.1 398.3L301.4 398.3L291.4 395.3L50.5 274.9L44.7 269.9L44.7 264.1L50.5 259L236.8 165.8L246.9 162.9L258.6 162.9L268.6 165.8Z"/><path class="mo-edge" d="M44.7 269.9L44.7 264.1L50.5 259L236.8 165.8L246.9 162.9L258.6 162.9L268.6 165.8L509.5 286.3L515.3 291.3L515.3 297.1M515.3 313.8L509.5 318.9L323.2 412L313.1 415L301.4 415L291.4 412L50.5 291.6L44.7 286.6M515.3 297.1L515.3 313.8M44.7 269.9L44.7 286.6"/></g><path class="mo-line" data-line="tile" d="M273.2 174.9L68.7 277.2M300.5 188.6L95.9 290.8M327.7 202.2L123.2 304.5M355 215.8L150.5 318.1M382.3 229.5L177.7 331.7M409.5 243.1L205 345.4M436.8 256.7L232.3 359M464.1 270.4L259.5 372.6M491.3 284L286.8 386.3M232.3 174.9L491.3 304.5M205 188.6L464.1 318.1M177.7 202.2L436.8 331.7M150.5 215.8L409.5 345.4M123.2 229.5L382.3 359M95.9 243.1L355 372.6M68.7 256.7L327.7 386.3"/><g class="mo-piece" data-piece="catalogo"><g class="mo-solid" data-mat="shelf"><path class="mo-fill" d="M77.8 94.1L245.9 10L250.5 12.3L250.5 168.1L82.3 252.2L77.8 249.9Z"/><path class="mo-shade" data-shade="0" d="M250.5 168.1L82.3 252.2L82.3 96.3L250.5 12.3Z"/><path class="mo-shade" data-shade="3" d="M82.3 252.2L77.8 249.9L77.8 94.1L82.3 96.3Z"/><path class="mo-top" d="M250.5 12.3L82.3 96.3L77.8 94.1L245.9 10Z"/><path class="mo-edge" d="M77.8 94.1L245.9 10L250.5 12.3M250.5 168.1L82.3 252.2L77.8 249.9M250.5 12.3L250.5 168.1M77.8 94.1L77.8 249.9"/></g><g class="mo-solid" data-mat="shelf"><path class="mo-fill" d="M245.9 14.5L250.5 12.3L282.3 28.2L282.3 184L277.7 186.3L245.9 170.4Z"/><path class="mo-shade" data-shade="0" d="M282.3 184L277.7 186.3L277.7 30.5L282.3 28.2Z"/><path class="mo-shade" data-shade="3" d="M277.7 186.3L245.9 170.4L245.9 14.5L277.7 30.5Z"/><path class="mo-top" d="M282.3 28.2L277.7 30.5L245.9 14.5L250.5 12.3Z"/><path class="mo-edge" d="M245.9 14.5L250.5 12.3L282.3 28.2M282.3 184L277.7 186.3L245.9 170.4M282.3 28.2L282.3 184M245.9 14.5L245.9 170.4"/></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M86.9 241.6L248.2 160.9L280 176.8L280 185.2L118.7 265.8L86.9 249.9Z"/><path class="mo-shade" data-shade="0" d="M280 185.2L118.7 265.8L118.7 257.5L280 176.8Z"/><path class="mo-shade" data-shade="3" d="M118.7 265.8L86.9 249.9L86.9 241.6L118.7 257.5Z"/><path class="mo-top" d="M280 176.8L118.7 257.5L86.9 241.6L248.2 160.9Z"/><path class="mo-edge" d="M86.9 241.6L248.2 160.9L280 176.8M280 185.2L118.7 265.8L86.9 249.9M280 176.8L280 185.2M86.9 241.6L86.9 249.9"/></g><g class="mo-solid" data-mat="amber"><path class="mo-fill" d="M232.4 158.2L232.8 156.8L233.9 155.4L235.7 154.2L238 153.3L240.7 152.8L243.6 152.6L246.6 152.8L249.3 153.3L251.6 154.2L253.4 155.4L254.5 156.8L254.9 158.2L254.9 179.1L254.5 180.5L253.4 181.9L251.6 183.1L249.3 184L246.6 184.5L243.6 184.7L240.7 184.5L238 184L235.7 183.1L233.9 181.9L232.8 180.5L232.4 179.1Z"/><path class="mo-shade" data-shade="0" d="M251.6 183.1L249.3 184L249.3 163.1L251.6 162.2ZM254.9 179.1L254.5 180.5L254.5 159.7L254.9 158.2ZM254.5 180.5L253.4 181.9L253.4 161L254.5 159.7ZM253.4 181.9L251.6 183.1L251.6 162.2L253.4 161Z"/><path class="mo-shade" data-shade="1" d="M249.3 184L246.6 184.5L246.6 163.6L249.3 163.1ZM246.6 184.5L243.6 184.7L243.6 163.8L246.6 163.6Z"/><path class="mo-shade" data-shade="2" d="M243.6 184.7L240.7 184.5L240.7 163.6L243.6 163.8ZM240.7 184.5L238 184L238 163.1L240.7 163.6Z"/><path class="mo-shade" data-shade="3" d="M238 184L235.7 183.1L235.7 162.2L238 163.1ZM235.7 183.1L233.9 181.9L233.9 161L235.7 162.2ZM233.9 181.9L232.8 180.5L232.8 159.7L233.9 161ZM232.8 180.5L232.4 179.1L232.4 158.2L232.8 159.7Z"/><path class="mo-top" d="M251.6 162.2L249.3 163.1L246.6 163.6L243.6 163.8L240.7 163.6L238 163.1L235.7 162.2L233.9 161L232.8 159.7L232.4 158.2L232.8 156.8L233.9 155.4L235.7 154.2L238 153.3L240.7 152.8L243.6 152.6L246.6 152.8L249.3 153.3L251.6 154.2L253.4 155.4L254.5 156.8L254.9 158.2L254.5 159.7L253.4 161Z"/><path class="mo-edge" d="M232.4 158.2L232.8 156.8L233.9 155.4L235.7 154.2L238 153.3L240.7 152.8L243.6 152.6L246.6 152.8L249.3 153.3L251.6 154.2L253.4 155.4L254.5 156.8L254.9 158.2M254.9 179.1L254.5 180.5L253.4 181.9L251.6 183.1L249.3 184L246.6 184.5L243.6 184.7L240.7 184.5L238 184L235.7 183.1L233.9 181.9L232.8 180.5L232.4 179.1M232.4 158.2L232.4 179.1M254.9 158.2L254.9 179.1"/></g><g class="mo-solid" data-mat="info"><path class="mo-fill" d="M211.9 168.4L212.3 167L213.5 165.6L215.2 164.5L217.6 163.6L220.3 163L223.2 162.8L226.1 163L228.8 163.6L231.1 164.5L232.9 165.6L234.1 167L234.4 168.4L234.4 189.3L234.1 190.8L232.9 192.1L231.1 193.3L228.8 194.2L226.1 194.7L223.2 194.9L220.3 194.7L217.6 194.2L215.2 193.3L213.5 192.1L212.3 190.8L211.9 189.3Z"/><path class="mo-shade" data-shade="0" d="M231.1 193.3L228.8 194.2L228.8 173.3L231.1 172.4ZM234.4 189.3L234.1 190.8L234.1 169.9L234.4 168.4ZM234.1 190.8L232.9 192.1L232.9 171.2L234.1 169.9ZM232.9 192.1L231.1 193.3L231.1 172.4L232.9 171.2Z"/><path class="mo-shade" data-shade="1" d="M228.8 194.2L226.1 194.7L226.1 173.9L228.8 173.3ZM226.1 194.7L223.2 194.9L223.2 174.1L226.1 173.9Z"/><path class="mo-shade" data-shade="2" d="M223.2 194.9L220.3 194.7L220.3 173.9L223.2 174.1ZM220.3 194.7L217.6 194.2L217.6 173.3L220.3 173.9Z"/><path class="mo-shade" data-shade="3" d="M217.6 194.2L215.2 193.3L215.2 172.4L217.6 173.3ZM215.2 193.3L213.5 192.1L213.5 171.2L215.2 172.4ZM213.5 192.1L212.3 190.8L212.3 169.9L213.5 171.2ZM212.3 190.8L211.9 189.3L211.9 168.4L212.3 169.9Z"/><path class="mo-top" d="M231.1 172.4L228.8 173.3L226.1 173.9L223.2 174.1L220.3 173.9L217.6 173.3L215.2 172.4L213.5 171.2L212.3 169.9L211.9 168.4L212.3 167L213.5 165.6L215.2 164.5L217.6 163.6L220.3 163L223.2 162.8L226.1 163L228.8 163.6L231.1 164.5L232.9 165.6L234.1 167L234.4 168.4L234.1 169.9L232.9 171.2Z"/><path class="mo-edge" d="M211.9 168.4L212.3 167L213.5 165.6L215.2 164.5L217.6 163.6L220.3 163L223.2 162.8L226.1 163L228.8 163.6L231.1 164.5L232.9 165.6L234.1 167L234.4 168.4M234.4 189.3L234.1 190.8L232.9 192.1L231.1 193.3L228.8 194.2L226.1 194.7L223.2 194.9L220.3 194.7L217.6 194.2L215.2 193.3L213.5 192.1L212.3 190.8L211.9 189.3M211.9 168.4L211.9 189.3M234.4 168.4L234.4 189.3"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M168.7 190.8L198.2 176L218.6 186.2L218.6 202.9L189.1 217.7L168.7 207.5Z"/><path class="mo-shade" data-shade="0" d="M218.6 202.9L189.1 217.7L189.1 201L218.6 186.2Z"/><path class="mo-shade" data-shade="3" d="M189.1 217.7L168.7 207.5L168.7 190.8L189.1 201Z"/><path class="mo-top" d="M218.6 186.2L189.1 201L168.7 190.8L198.2 176Z"/><path class="mo-edge" d="M168.7 190.8L198.2 176L218.6 186.2M218.6 202.9L189.1 217.7L168.7 207.5M218.6 186.2L218.6 202.9M168.7 190.8L168.7 207.5"/></g><g class="mo-solid" data-mat="green"><path class="mo-fill" d="M139.1 200L164.1 187.5L184.6 197.7L184.6 220L159.6 232.5L139.1 222.3Z"/><path class="mo-shade" data-shade="0" d="M184.6 220L159.6 232.5L159.6 210.2L184.6 197.7Z"/><path class="mo-shade" data-shade="3" d="M159.6 232.5L139.1 222.3L139.1 200L159.6 210.2Z"/><path class="mo-top" d="M184.6 197.7L159.6 210.2L139.1 200L164.1 187.5Z"/><path class="mo-edge" d="M139.1 200L164.1 187.5L184.6 197.7M184.6 220L159.6 232.5L139.1 222.3M184.6 197.7L184.6 220M139.1 200L139.1 222.3"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M105 213.7L134.6 199L150.5 206.9L150.5 234.8L120.9 249.5L105 241.6Z"/><path class="mo-shade" data-shade="0" d="M150.5 234.8L120.9 249.5L120.9 221.7L150.5 206.9Z"/><path class="mo-shade" data-shade="3" d="M120.9 249.5L105 241.6L105 213.7L120.9 221.7Z"/><path class="mo-top" d="M150.5 206.9L120.9 221.7L105 213.7L134.6 199Z"/><path class="mo-edge" d="M105 213.7L134.6 199L150.5 206.9M150.5 234.8L120.9 249.5L105 241.6M150.5 206.9L150.5 234.8M105 213.7L105 241.6"/></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M86.9 191.5L248.2 110.8L280 126.7L280 132.3L118.7 213L86.9 197Z"/><path class="mo-shade" data-shade="0" d="M280 132.3L118.7 213L118.7 207.4L280 126.7Z"/><path class="mo-shade" data-shade="3" d="M118.7 213L86.9 197L86.9 191.5L118.7 207.4Z"/><path class="mo-top" d="M280 126.7L118.7 207.4L86.9 191.5L248.2 110.8Z"/><path class="mo-edge" d="M86.9 191.5L248.2 110.8L280 126.7M280 132.3L118.7 213L86.9 197M280 126.7L280 132.3M86.9 191.5L86.9 197"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M223.2 110.6L245.9 99.3L264.1 108.4L264.1 127.9L241.4 139.2L223.2 130.1Z"/><path class="mo-shade" data-shade="0" d="M264.1 127.9L241.4 139.2L241.4 119.7L264.1 108.4Z"/><path class="mo-shade" data-shade="3" d="M241.4 139.2L223.2 130.1L223.2 110.6L241.4 119.7Z"/><path class="mo-top" d="M264.1 108.4L241.4 119.7L223.2 110.6L245.9 99.3Z"/><path class="mo-edge" d="M223.2 110.6L245.9 99.3L264.1 108.4M264.1 127.9L241.4 139.2L223.2 130.1M264.1 108.4L264.1 127.9M223.2 110.6L223.2 130.1"/></g><g class="mo-solid" data-mat="green"><path class="mo-fill" d="M198.2 112L218.6 101.8L236.8 110.9L236.8 141.5L216.4 151.7L198.2 142.6Z"/><path class="mo-shade" data-shade="0" d="M236.8 141.5L216.4 151.7L216.4 121.1L236.8 110.9Z"/><path class="mo-shade" data-shade="3" d="M216.4 151.7L198.2 142.6L198.2 112L216.4 121.1Z"/><path class="mo-top" d="M236.8 110.9L216.4 121.1L198.2 112L218.6 101.8Z"/><path class="mo-edge" d="M198.2 112L218.6 101.8L236.8 110.9M236.8 141.5L216.4 151.7L198.2 142.6M236.8 110.9L236.8 141.5M198.2 112L198.2 142.6"/></g><g class="mo-solid" data-mat="amber"><path class="mo-fill" d="M159.6 148L193.7 131L211.8 140.1L211.8 154L177.7 171L159.6 161.9Z"/><path class="mo-shade" data-shade="0" d="M211.8 154L177.7 171L177.7 157.1L211.8 140.1Z"/><path class="mo-shade" data-shade="3" d="M177.7 171L159.6 161.9L159.6 148L177.7 157.1Z"/><path class="mo-top" d="M211.8 140.1L177.7 157.1L159.6 148L193.7 131Z"/><path class="mo-edge" d="M159.6 148L193.7 131L211.8 140.1M211.8 154L177.7 171L159.6 161.9M211.8 140.1L211.8 154M159.6 148L159.6 161.9"/></g><g class="mo-product"><g class="mo-solid" data-mat="product"><path class="mo-fill" d="M138 143.3L151.6 136.4L166.4 143.8L166.4 174.4L152.8 181.3L138 173.9Z"/><path class="mo-shade" data-shade="0" d="M166.4 174.4L152.8 181.3L152.8 150.6L166.4 143.8Z"/><path class="mo-shade" data-shade="3" d="M152.8 181.3L138 173.9L138 143.3L152.8 150.6Z"/><path class="mo-top" d="M166.4 143.8L152.8 150.6L138 143.3L151.6 136.4Z"/><path class="mo-edge" d="M138 143.3L151.6 136.4L166.4 143.8M166.4 174.4L152.8 181.3L138 173.9M166.4 143.8L166.4 174.4M138 143.3L138 173.9"/></g><g class="mo-solid" data-mat="product"><path class="mo-fill" d="M122.1 151.2L135.7 144.4L150.5 151.8L150.5 182.4L136.8 189.2L122.1 181.8Z"/><path class="mo-shade" data-shade="0" d="M150.5 182.4L136.8 189.2L136.8 158.6L150.5 151.8Z"/><path class="mo-shade" data-shade="3" d="M136.8 189.2L122.1 181.8L122.1 151.2L136.8 158.6Z"/><path class="mo-top" d="M150.5 151.8L136.8 158.6L122.1 151.2L135.7 144.4Z"/><path class="mo-edge" d="M122.1 151.2L135.7 144.4L150.5 151.8M150.5 182.4L136.8 189.2L122.1 181.8M150.5 151.8L150.5 182.4M122.1 151.2L122.1 181.8"/></g><g class="mo-solid" data-mat="product"><path class="mo-fill" d="M106.2 170.3L119.8 163.5L134.6 170.9L134.6 190.3L120.9 197.2L106.2 189.8Z"/><path class="mo-shade" data-shade="0" d="M134.6 190.3L120.9 197.2L120.9 177.7L134.6 170.9Z"/><path class="mo-shade" data-shade="3" d="M120.9 197.2L106.2 189.8L106.2 170.3L120.9 177.7Z"/><path class="mo-top" d="M134.6 170.9L120.9 177.7L106.2 170.3L119.8 163.5Z"/><path class="mo-edge" d="M106.2 170.3L119.8 163.5L134.6 170.9M134.6 190.3L120.9 197.2L106.2 189.8M134.6 170.9L134.6 190.3M106.2 170.3L106.2 189.8"/></g></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M86.9 138.6L248.2 57.9L280 73.8L280 79.4L118.7 160.1L86.9 144.2Z"/><path class="mo-shade" data-shade="0" d="M280 79.4L118.7 160.1L118.7 154.5L280 73.8Z"/><path class="mo-shade" data-shade="3" d="M118.7 160.1L86.9 144.2L86.9 138.6L118.7 154.5Z"/><path class="mo-top" d="M280 73.8L118.7 154.5L86.9 138.6L248.2 57.9Z"/><path class="mo-edge" d="M86.9 138.6L248.2 57.9L280 73.8M280 79.4L118.7 160.1L86.9 144.2M280 73.8L280 79.4M86.9 138.6L86.9 144.2"/></g><g class="mo-solid" data-mat="green"><path class="mo-fill" d="M209.6 59L239.1 44.3L257.3 53.3L257.3 78.4L227.7 93.2L209.6 84.1Z"/><path class="mo-shade" data-shade="0" d="M257.3 78.4L227.7 93.2L227.7 68.1L257.3 53.3Z"/><path class="mo-shade" data-shade="3" d="M227.7 93.2L209.6 84.1L209.6 59L227.7 68.1Z"/><path class="mo-top" d="M257.3 53.3L227.7 68.1L209.6 59L239.1 44.3Z"/><path class="mo-edge" d="M209.6 59L239.1 44.3L257.3 53.3M257.3 78.4L227.7 93.2L209.6 84.1M257.3 53.3L257.3 78.4M209.6 59L209.6 84.1"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M182.3 81L205 69.6L223.2 78.7L223.2 95.4L200.5 106.8L182.3 97.7Z"/><path class="mo-shade" data-shade="0" d="M223.2 95.4L200.5 106.8L200.5 90.1L223.2 78.7Z"/><path class="mo-shade" data-shade="3" d="M200.5 106.8L182.3 97.7L182.3 81L200.5 90.1Z"/><path class="mo-top" d="M223.2 78.7L200.5 90.1L182.3 81L205 69.6Z"/><path class="mo-edge" d="M182.3 81L205 69.6L223.2 78.7M223.2 95.4L200.5 106.8L182.3 97.7M223.2 78.7L223.2 95.4M182.3 81L182.3 97.7"/></g><g class="mo-solid" data-mat="info"><path class="mo-fill" d="M159 83L159.3 81.7L160.3 80.6L161.8 79.6L163.8 78.8L166.2 78.3L168.7 78.2L171.2 78.3L173.5 78.8L175.5 79.6L177 80.6L178 81.7L178.3 83L178.3 113.6L178 114.9L177 116L175.5 117L173.5 117.8L171.2 118.3L168.7 118.4L166.2 118.3L163.8 117.8L161.8 117L160.3 116L159.3 114.9L159 113.6Z"/><path class="mo-shade" data-shade="0" d="M175.5 117L173.5 117.8L173.5 87.2L175.5 86.4ZM178.3 113.6L178 114.9L178 84.2L178.3 83ZM178 114.9L177 116L177 85.4L178 84.2ZM177 116L175.5 117L175.5 86.4L177 85.4Z"/><path class="mo-shade" data-shade="1" d="M173.5 117.8L171.2 118.3L171.2 87.7L173.5 87.2ZM171.2 118.3L168.7 118.4L168.7 87.8L171.2 87.7Z"/><path class="mo-shade" data-shade="2" d="M168.7 118.4L166.2 118.3L166.2 87.7L168.7 87.8ZM166.2 118.3L163.8 117.8L163.8 87.2L166.2 87.7Z"/><path class="mo-shade" data-shade="3" d="M163.8 117.8L161.8 117L161.8 86.4L163.8 87.2ZM161.8 117L160.3 116L160.3 85.4L161.8 86.4ZM160.3 116L159.3 114.9L159.3 84.2L160.3 85.4ZM159.3 114.9L159 113.6L159 83L159.3 84.2Z"/><path class="mo-top" d="M175.5 86.4L173.5 87.2L171.2 87.7L168.7 87.8L166.2 87.7L163.8 87.2L161.8 86.4L160.3 85.4L159.3 84.2L159 83L159.3 81.7L160.3 80.6L161.8 79.6L163.8 78.8L166.2 78.3L168.7 78.2L171.2 78.3L173.5 78.8L175.5 79.6L177 80.6L178 81.7L178.3 83L178 84.2L177 85.4Z"/><path class="mo-edge" d="M159 83L159.3 81.7L160.3 80.6L161.8 79.6L163.8 78.8L166.2 78.3L168.7 78.2L171.2 78.3L173.5 78.8L175.5 79.6L177 80.6L178 81.7L178.3 83M178.3 113.6L178 114.9L177 116L175.5 117L173.5 117.8L171.2 118.3L168.7 118.4L166.2 118.3L163.8 117.8L161.8 117L160.3 116L159.3 114.9L159 113.6M159 83L159 113.6M178.3 83L178.3 113.6"/></g><g class="mo-solid" data-mat="info"><path class="mo-fill" d="M136.3 94.4L136.6 93.1L137.6 91.9L139.1 90.9L141.1 90.2L143.4 89.7L145.9 89.5L148.4 89.7L150.8 90.2L152.8 90.9L154.3 91.9L155.2 93.1L155.6 94.4L155.6 125L155.2 126.2L154.3 127.4L152.8 128.4L150.8 129.1L148.4 129.6L145.9 129.8L143.4 129.6L141.1 129.1L139.1 128.4L137.6 127.4L136.6 126.2L136.3 125Z"/><path class="mo-shade" data-shade="0" d="M152.8 128.4L150.8 129.1L150.8 98.5L152.8 97.8ZM155.6 125L155.2 126.2L155.2 95.6L155.6 94.4ZM155.2 126.2L154.3 127.4L154.3 96.8L155.2 95.6ZM154.3 127.4L152.8 128.4L152.8 97.8L154.3 96.8Z"/><path class="mo-shade" data-shade="1" d="M150.8 129.1L148.4 129.6L148.4 99L150.8 98.5ZM148.4 129.6L145.9 129.8L145.9 99.2L148.4 99Z"/><path class="mo-shade" data-shade="2" d="M145.9 129.8L143.4 129.6L143.4 99L145.9 99.2ZM143.4 129.6L141.1 129.1L141.1 98.5L143.4 99Z"/><path class="mo-shade" data-shade="3" d="M141.1 129.1L139.1 128.4L139.1 97.8L141.1 98.5ZM139.1 128.4L137.6 127.4L137.6 96.8L139.1 97.8ZM137.6 127.4L136.6 126.2L136.6 95.6L137.6 96.8ZM136.6 126.2L136.3 125L136.3 94.4L136.6 95.6Z"/><path class="mo-top" d="M152.8 97.8L150.8 98.5L148.4 99L145.9 99.2L143.4 99L141.1 98.5L139.1 97.8L137.6 96.8L136.6 95.6L136.3 94.4L136.6 93.1L137.6 91.9L139.1 90.9L141.1 90.2L143.4 89.7L145.9 89.5L148.4 89.7L150.8 90.2L152.8 90.9L154.3 91.9L155.2 93.1L155.6 94.4L155.2 95.6L154.3 96.8Z"/><path class="mo-edge" d="M136.3 94.4L136.6 93.1L137.6 91.9L139.1 90.9L141.1 90.2L143.4 89.7L145.9 89.5L148.4 89.7L150.8 90.2L152.8 90.9L154.3 91.9L155.2 93.1L155.6 94.4M155.6 125L155.2 126.2L154.3 127.4L152.8 128.4L150.8 129.1L148.4 129.6L145.9 129.8L143.4 129.6L141.1 129.1L139.1 128.4L137.6 127.4L136.6 126.2L136.3 125M136.3 94.4L136.3 125M155.6 94.4L155.6 125"/></g><g class="mo-solid" data-mat="amber"><path class="mo-fill" d="M98.2 120.3L118.7 110L136.8 119.1L136.8 138.6L116.4 148.8L98.2 139.7Z"/><path class="mo-shade" data-shade="0" d="M136.8 138.6L116.4 148.8L116.4 129.3L136.8 119.1Z"/><path class="mo-shade" data-shade="3" d="M116.4 148.8L98.2 139.7L98.2 120.3L116.4 129.3Z"/><path class="mo-top" d="M136.8 119.1L116.4 129.3L98.2 120.3L118.7 110Z"/><path class="mo-edge" d="M98.2 120.3L118.7 110L136.8 119.1M136.8 138.6L116.4 148.8L98.2 139.7M136.8 119.1L136.8 138.6M98.2 120.3L98.2 139.7"/></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M86.9 94.1L248.2 13.4L280 29.3L280 34.9L118.7 115.5L86.9 99.6Z"/><path class="mo-shade" data-shade="0" d="M280 34.9L118.7 115.5L118.7 110L280 29.3Z"/><path class="mo-shade" data-shade="3" d="M118.7 115.5L86.9 99.6L86.9 94.1L118.7 110Z"/><path class="mo-top" d="M280 29.3L118.7 110L86.9 94.1L248.2 13.4Z"/><path class="mo-edge" d="M86.9 94.1L248.2 13.4L280 29.3M280 34.9L118.7 115.5L86.9 99.6M280 29.3L280 34.9M86.9 94.1L86.9 99.6"/></g><g transform="matrix(1.136 -0.568 0 1.391 145.934 199.318)"><rect class="mo-label" x="0" y="0.6" width="24" height="7" rx="1"/><text class="mo-label-text" x="12" y="5.6" font-size="4.4" text-anchor="middle">$1.500</text></g><g class="mo-solid" data-mat="shelf"><path class="mo-fill" d="M82.3 96.3L86.9 94.1L118.7 110L118.7 265.8L114.1 268.1L82.3 252.2Z"/><path class="mo-shade" data-shade="0" d="M118.7 265.8L114.1 268.1L114.1 112.3L118.7 110Z"/><path class="mo-shade" data-shade="3" d="M114.1 268.1L82.3 252.2L82.3 96.3L114.1 112.3Z"/><path class="mo-top" d="M118.7 110L114.1 112.3L82.3 96.3L86.9 94.1Z"/><path class="mo-edge" d="M82.3 96.3L86.9 94.1L118.7 110M118.7 265.8L114.1 268.1L82.3 252.2M118.7 110L118.7 265.8M82.3 96.3L82.3 252.2"/></g></g><g class="mo-piece" data-piece="mostrador"><g class="mo-solid" data-mat="brand"><path class="mo-fill" d="M220.1 240L220.9 239.3L350.4 174.6L351.9 174.1L353.5 174.1L355 174.6L389.1 191.6L389.9 192.3L389.9 257.2L389.1 257.9L259.5 322.6L258.1 323.1L256.4 323.1L255 322.6L220.9 305.6L220.1 304.9Z"/><path class="mo-shade" data-shade="0" d="M389.9 257.2L389.1 257.9L389.1 193.9L389.9 193.1ZM389.1 257.9L259.5 322.6L259.5 258.6L389.1 193.9ZM259.5 322.6L258.1 323.1L258.1 259L259.5 258.6Z"/><path class="mo-shade" data-shade="2" d="M258.1 323.1L256.4 323.1L256.4 259L258.1 259ZM256.4 323.1L255 322.6L255 258.6L256.4 259Z"/><path class="mo-shade" data-shade="3" d="M255 322.6L220.9 305.6L220.9 241.6L255 258.6ZM220.9 305.6L220.1 304.9L220.1 240.9L220.9 241.6Z"/><path class="mo-top" d="M389.1 191.6L389.9 192.3L389.9 193.1L389.1 193.9L259.5 258.6L258.1 259L256.4 259L255 258.6L220.9 241.6L220.1 240.9L220.1 240L220.9 239.3L350.4 174.6L351.9 174.1L353.5 174.1L355 174.6Z"/><path class="mo-edge" d="M220.1 240.9L220.1 240L220.9 239.3L350.4 174.6L351.9 174.1L353.5 174.1L355 174.6L389.1 191.6L389.9 192.3L389.9 193.1M389.9 257.2L389.1 257.9L259.5 322.6L258.1 323.1L256.4 323.1L255 322.6L220.9 305.6L220.1 304.9M389.9 193.1L389.9 257.2M220.1 240.9L220.1 304.9"/></g><g transform="matrix(1.136 -0.568 0 1.391 273.183 265.725)"><rect class="mo-sign" x="0" y="0" width="90" height="16" rx="2"/><text class="mo-sign-text" x="45" y="10.6" font-size="7.4" text-anchor="middle">TU NEGOCIO</text></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M209.6 232.1L352.7 160.5L400.4 184.4L400.4 192.7L257.3 264.3L209.6 240.4Z"/><path class="mo-shade" data-shade="0" d="M400.4 192.7L257.3 264.3L257.3 256L400.4 184.4Z"/><path class="mo-shade" data-shade="3" d="M257.3 264.3L209.6 240.4L209.6 232.1L257.3 256Z"/><path class="mo-top" d="M400.4 184.4L257.3 256L209.6 232.1L352.7 160.5Z"/><path class="mo-edge" d="M209.6 232.1L352.7 160.5L400.4 184.4M400.4 192.7L257.3 264.3L209.6 240.4M400.4 184.4L400.4 192.7M209.6 232.1L209.6 240.4"/></g></g><g class="mo-piece" data-piece="celular"><g class="mo-solid" data-mat="ink"><path class="mo-fill" d="M323.2 185.6L343.6 175.4L357.3 182.2L357.3 185.5L336.8 195.7L323.2 188.9Z"/><path class="mo-shade" data-shade="0" d="M357.3 185.5L336.8 195.7L336.8 192.4L357.3 182.2Z"/><path class="mo-shade" data-shade="3" d="M336.8 195.7L323.2 188.9L323.2 185.6L336.8 192.4Z"/><path class="mo-top" d="M357.3 182.2L336.8 192.4L323.2 185.6L343.6 175.4Z"/><path class="mo-edge" d="M323.2 185.6L343.6 175.4L357.3 182.2M357.3 185.5L336.8 195.7L323.2 188.9M357.3 182.2L357.3 185.5M323.2 185.6L323.2 188.9"/></g><g class="mo-solid" data-mat="ink"><path class="mo-fill" d="M326.2 123.6L326.4 123.3L326.8 123L353.6 109.6L354.2 109.3L355 109.3L355.7 109.3L356.3 109.6L357.5 110.1L357.9 110.4L358.1 110.8L358.1 177.6L357.9 178L357.5 178.3L330.7 191.7L330 191.9L329.3 192L328.6 191.9L327.9 191.7L326.8 191.1L326.4 190.8L326.2 190.4Z"/><path class="mo-shade" data-shade="0" d="M358.1 177.6L357.9 178L357.9 111.2L358.1 110.8ZM357.9 178L357.5 178.3L357.5 111.5L357.9 111.2ZM357.5 178.3L330.7 191.7L330.7 124.9L357.5 111.5ZM330.7 191.7L330 191.9L330 125.1L330.7 124.9Z"/><path class="mo-shade" data-shade="1" d="M330 191.9L329.3 192L329.3 125.2L330 125.1Z"/><path class="mo-shade" data-shade="2" d="M329.3 192L328.6 191.9L328.6 125.1L329.3 125.2Z"/><path class="mo-shade" data-shade="3" d="M328.6 191.9L327.9 191.7L327.9 124.9L328.6 125.1ZM327.9 191.7L326.8 191.1L326.8 124.3L327.9 124.9ZM326.8 191.1L326.4 190.8L326.4 124L326.8 124.3ZM326.4 190.8L326.2 190.4L326.2 123.6L326.4 124Z"/><path class="mo-top" d="M357.5 110.1L357.9 110.4L358.1 110.8L357.9 111.2L357.5 111.5L330.7 124.9L330 125.1L329.3 125.2L328.6 125.1L327.9 124.9L326.8 124.3L326.4 124L326.2 123.6L326.4 123.3L326.8 123L353.6 109.6L354.2 109.3L355 109.3L355.7 109.3L356.3 109.6Z"/><path class="mo-edge" d="M326.2 123.6L326.4 123.3L326.8 123L353.6 109.6L354.2 109.3L355 109.3L355.7 109.3L356.3 109.6L357.5 110.1L357.9 110.4L358.1 110.8M358.1 177.6L357.9 178L357.5 178.3L330.7 191.7L330 191.9L329.3 192L328.6 191.9L327.9 191.7L326.8 191.1L326.4 190.8L326.2 190.4M358.1 110.8L358.1 177.6M326.2 123.6L326.2 190.4"/></g><g transform="matrix(1.136 -0.568 0 1.391 329.309 125.572)"><rect class="mo-screen" x="2" y="3.4" width="22" height="41" rx="2"/><g class="mo-bubble" data-bubble="q"><rect x="4" y="8" width="15" height="8" rx="2.4"/><rect class="mo-bar" x="6" y="10.6" width="10" height="1.2"/><rect class="mo-bar" x="6" y="13" width="7" height="1.2"/></g><g class="mo-bubble" data-bubble="a"><rect x="5" y="19" width="17" height="11" rx="2.4"/><rect class="mo-bar" x="7" y="21.6" width="12" height="1.2"/><rect class="mo-bar" x="7" y="24" width="13" height="1.2"/><rect class="mo-bar" x="7" y="26.4" width="8" height="1.2"/></g><g class="mo-bubble" data-bubble="ok"><rect x="4" y="33" width="9" height="6" rx="2.4"/><path class="mo-tick" d="M6.4 36l1.6 1.6 3-3.2"/></g></g></g><g class="mo-piece" data-piece="pedido"><g class="mo-solid" data-mat="kraft"><path class="mo-fill" d="M233 187.9L233.4 187.5L258.4 175L259.1 174.8L260 174.8L260.7 175L278.9 184.1L279.3 184.5L279.3 226.6L278.9 227L253.9 239.5L253.1 239.7L252.3 239.7L251.6 239.5L233.4 230.4L233 230Z"/><path class="mo-shade" data-shade="0" d="M279.3 226.6L278.9 227L278.9 185.2L279.3 184.9ZM278.9 227L253.9 239.5L253.9 197.7L278.9 185.2ZM253.9 239.5L253.1 239.7L253.1 197.9L253.9 197.7Z"/><path class="mo-shade" data-shade="1" d="M253.1 239.7L252.3 239.7L252.3 197.9L253.1 197.9Z"/><path class="mo-shade" data-shade="3" d="M252.3 239.7L251.6 239.5L251.6 197.7L252.3 197.9ZM251.6 239.5L233.4 230.4L233.4 188.7L251.6 197.7ZM233.4 230.4L233 230L233 188.3L233.4 188.7Z"/><path class="mo-top" d="M278.9 184.1L279.3 184.5L279.3 184.9L278.9 185.2L253.9 197.7L253.1 197.9L252.3 197.9L251.6 197.7L233.4 188.7L233 188.3L233 187.9L233.4 187.5L258.4 175L259.1 174.8L260 174.8L260.7 175Z"/><path class="mo-edge" d="M233 188.3L233 187.9L233.4 187.5L258.4 175L259.1 174.8L260 174.8L260.7 175L278.9 184.1L279.3 184.5L279.3 184.9M279.3 226.6L278.9 227L253.9 239.5L253.1 239.7L252.3 239.7L251.6 239.5L233.4 230.4L233 230M279.3 184.9L279.3 226.6M233 188.3L233 230"/></g><g class="mo-solid" data-mat="kraft-top"><path class="mo-fill" d="M232.3 184.6L260.9 170.3L280 179.8L280 184L251.4 198.3L232.3 188.8Z"/><path class="mo-shade" data-shade="0" d="M280 184L251.4 198.3L251.4 194.1L280 179.8Z"/><path class="mo-shade" data-shade="3" d="M251.4 198.3L232.3 188.8L232.3 184.6L251.4 194.1Z"/><path class="mo-top" d="M280 179.8L251.4 194.1L232.3 184.6L260.9 170.3Z"/><path class="mo-edge" d="M232.3 184.6L260.9 170.3L280 179.8M280 184L251.4 198.3L232.3 188.8M280 179.8L280 184M232.3 184.6L232.3 188.8"/></g><path class="mo-line" data-line="handle" d="M265.8 182.2L265.6 183L265.2 183.9L264.5 184.6L263.5 185.3L262.3 185.9L261 186.4L259.4 186.7L257.8 187L256.1 187L254.5 187L252.8 186.7L251.3 186.4L249.9 185.9L248.8 185.3L247.8 184.6L247.1 183.9L246.6 183L246.5 182.2"/><g transform="matrix(1.136 -0.568 0 1.391 257.277 204.385)"><rect class="mo-tag" x="0" y="0" width="16" height="10" rx="1.4"/><path class="mo-tick" d="M4.4 5.2l2.2 2.2 4.6-4.6"/></g></g><g class="mo-solid" data-mat="wood"><path class="mo-fill" d="M395.9 277.9L441.3 255.2L493.6 281.3L493.6 289.7L448.1 312.4L395.9 286.3Z"/><path class="mo-shade" data-shade="0" d="M493.6 289.7L448.1 312.4L448.1 304.1L493.6 281.3Z"/><path class="mo-shade" data-shade="3" d="M448.1 312.4L395.9 286.3L395.9 277.9L448.1 304.1Z"/><path class="mo-top" d="M493.6 281.3L448.1 304.1L395.9 277.9L441.3 255.2Z"/><path class="mo-edge" d="M395.9 277.9L441.3 255.2L493.6 281.3M493.6 289.7L448.1 312.4L395.9 286.3M493.6 281.3L493.6 289.7M395.9 277.9L395.9 286.3"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M424.3 251.6L441.3 243.1L484.5 264.6L484.5 281.3L467.5 289.9L424.3 268.3Z"/><path class="mo-shade" data-shade="0" d="M484.5 281.3L467.5 289.9L467.5 273.2L484.5 264.6Z"/><path class="mo-shade" data-shade="3" d="M467.5 289.9L424.3 268.3L424.3 251.6L467.5 273.2Z"/><path class="mo-top" d="M484.5 264.6L467.5 273.2L424.3 251.6L441.3 243.1Z"/><path class="mo-edge" d="M424.3 251.6L441.3 243.1L484.5 264.6M484.5 281.3L467.5 289.9L424.3 268.3M484.5 264.6L484.5 281.3M424.3 251.6L424.3 268.3"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M403.8 261.8L420.9 253.3L464.1 274.9L464.1 291.6L447 300.1L403.8 278.5Z"/><path class="mo-shade" data-shade="0" d="M464.1 291.6L447 300.1L447 283.4L464.1 274.9Z"/><path class="mo-shade" data-shade="3" d="M447 300.1L403.8 278.5L403.8 261.8L447 283.4Z"/><path class="mo-top" d="M464.1 274.9L447 283.4L403.8 261.8L420.9 253.3Z"/><path class="mo-edge" d="M403.8 261.8L420.9 253.3L464.1 274.9M464.1 291.6L447 300.1L403.8 278.5M464.1 274.9L464.1 291.6M403.8 261.8L403.8 278.5"/></g><g class="mo-solid" data-mat="box"><path class="mo-fill" d="M425.4 236.6L441.3 228.6L480 247.9L480 264.6L464.1 272.6L425.4 253.3Z"/><path class="mo-shade" data-shade="0" d="M480 264.6L464.1 272.6L464.1 255.9L480 247.9Z"/><path class="mo-shade" data-shade="3" d="M464.1 272.6L425.4 253.3L425.4 236.6L464.1 255.9Z"/><path class="mo-top" d="M480 247.9L464.1 255.9L425.4 236.6L441.3 228.6Z"/><path class="mo-edge" d="M425.4 236.6L441.3 228.6L480 247.9M480 264.6L464.1 272.6L425.4 253.3M480 247.9L480 264.6M425.4 236.6L425.4 253.3"/></g><g class="mo-links"><path class="mo-link" data-link="2" d="M344.1 143.2Q247.3 97.2 150.5 149.5"/><path class="mo-link" data-link="3" d="M150.5 149.5Q247.3 97.2 344.1 143.2"/><path class="mo-link" data-link="4" d="M344.1 143.2Q305.2 117.2 266.4 202.6"/></g></svg><!-- mostrador:fin -->
+          <p class="mo-callout" id="mo-callout" aria-live="polite"></p>
+        </div>
+        <figcaption class="mo-caption">
+          <span class="visually-hidden" id="mostrador-title">Una consulta en el mostrador, paso a paso</span>
+          <ol class="mo-steps">
+            <li><button type="button" class="mo-step" data-step="1" data-piece="celular" aria-pressed="false">
+              <span class="mo-num" aria-hidden="true">1</span><span class="mo-step-text"><strong>Tu cliente pregunta</strong>
+              <span class="mo-detail">«¿Tienen cinta teflón de media? Necesito 4 rollos.»</span></span></button></li>
+            <li><button type="button" class="mo-step" data-step="2" data-piece="catalogo" aria-pressed="false">
+              <span class="mo-num" aria-hidden="true">2</span><span class="mo-step-text"><strong>Consulta tu información</strong>
+              <span class="mo-detail">En tu catálogo: cinta teflón de 1/2", $1.500 el rollo, 33 disponibles.</span></span></button></li>
+            <li><button type="button" class="mo-step" data-step="3" data-piece="celular" aria-pressed="false">
+              <span class="mo-num" aria-hidden="true">3</span><span class="mo-step-text"><strong>Responde y lo comprueba</strong>
+              <span class="mo-detail">«Los 4 rollos te salen en $6.000.» El precio y la cantidad coinciden con tu catálogo.</span></span></button></li>
+            <li><button type="button" class="mo-step" data-step="4" data-piece="pedido" aria-pressed="false">
+              <span class="mo-num" aria-hidden="true">4</span><span class="mo-step-text"><strong>Tú decides lo importante</strong>
+              <span class="mo-detail">La solicitud espera el «sí» del cliente; el cobro y la entrega los registras tú.</span></span></button></li>
+          </ol>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="land-section" id="adaptable" aria-labelledby="adapt-title">
+      <div class="section-head reveal">
+        <p class="kicker">Otros negocios</p>
+        <h2 id="adapt-title">Cómo podría adaptarse a tu negocio</h2>
+        <p>El primer ejemplo es lo que funciona hoy; los demás muestran cómo podría verse en otro tipo de negocio.</p>
+      </div>
+      <div class="sectors reveal">
+        <div class="sector-tabs" role="tablist" aria-label="Ejemplos por tipo de negocio" hidden>
+          <button type="button" role="tab" id="sector-tab-ferreteria" aria-controls="sector-ferreteria" aria-selected="true">Ferretería <span class="tab-note">Hoy</span></button>
+          <button type="button" role="tab" id="sector-tab-papeleria" aria-controls="sector-papeleria" aria-selected="false" tabindex="-1">Papelería <span class="tab-note">Posible</span></button>
+          <button type="button" role="tab" id="sector-tab-repuestos" aria-controls="sector-repuestos" aria-selected="false" tabindex="-1">Repuestos <span class="tab-note">Posible</span></button>
+          <button type="button" role="tab" id="sector-tab-servicios" aria-controls="sector-servicios" aria-selected="false" tabindex="-1">Servicios <span class="tab-note">Posible</span></button>
+        </div>
+        <div class="sector" role="tabpanel" id="sector-ferreteria" aria-labelledby="sector-tab-ferreteria" tabindex="0" data-kind="hoy">
+          <p class="sector-head"><span class="sector-badge" data-kind="hoy"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Disponible hoy</span><span class="sector-name">Ferretería</span><span class="sector-need">Configuración de ferretería, con datos ficticios.</span></p>
+          <ol class="sector-flow">
+            <li><span class="sector-step">Pregunta</span><p class="sector-bubble">¿Tienen cemento blanco de 5 kg?</p></li>
+            <li><span class="sector-step">Consulta</span><p class="sector-data"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Catálogo: cemento blanco, bolsa de 5 kg, $19.900, 47 disponibles.</p></li>
+            <li><span class="sector-step">Resultado</span><p class="sector-bubble" data-from="asistente">Sí, a $19.900 la bolsa, y hay 47. ¿Cuántas necesitas?</p>
+              <p class="sector-outcome"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Es lo que puedes probar hoy en la demo y en el panel con datos ficticios.</p></li>
+          </ol>
+        </div>
+        <div class="sector" role="tabpanel" id="sector-papeleria" aria-labelledby="sector-tab-papeleria" tabindex="0" data-kind="posible">
+          <p class="sector-head"><span class="sector-badge" data-kind="posible"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Posible adaptación</span><span class="sector-name">Papelería · Ejemplo ilustrativo</span><span class="sector-need">Requiere cargar catálogo e información y ajustar reglas.</span></p>
+          <ol class="sector-flow">
+            <li><span class="sector-step">Pregunta</span><p class="sector-bubble">¿Tienen cuadernos cuadriculados de 100 hojas? Necesito 5.</p></li>
+            <li><span class="sector-step">Consulta</span><p class="sector-data"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Catálogo: cuaderno cuadriculado de 100 hojas, $6.500, 30 disponibles.</p></li>
+            <li><span class="sector-step">Resultado</span><p class="sector-bubble" data-from="asistente">Sí: los 5 te salen en $32.500. ¿Te los aparto para recoger?</p>
+              <p class="sector-outcome"><svg class="icon" aria-hidden="true"><use href="#i-bag"/></svg>Solicitud para recoger, cuando el cliente dice «sí».</p></li>
+          </ol>
+        </div>
+        <div class="sector" role="tabpanel" id="sector-repuestos" aria-labelledby="sector-tab-repuestos" tabindex="0" data-kind="posible">
+          <p class="sector-head"><span class="sector-badge" data-kind="posible"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Posible adaptación</span><span class="sector-name">Repuestos · Ejemplo ilustrativo</span><span class="sector-need">Requiere cargar catálogo e información y ajustar reglas.</span></p>
+          <ol class="sector-flow">
+            <li><span class="sector-step">Pregunta</span><p class="sector-bubble">¿Tienen pastillas de freno para una moto de 125?</p></li>
+            <li><span class="sector-step">Consulta</span><p class="sector-data"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Catálogo: dos referencias coinciden, delanteras y traseras.</p></li>
+            <li><span class="sector-step">Resultado</span><p class="sector-bubble" data-from="asistente">Tengo delanteras y traseras. ¿Cuáles necesitas?</p>
+              <p class="sector-outcome"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Si hay varias opciones, pregunta en vez de elegir por el cliente.</p></li>
+          </ol>
+        </div>
+        <div class="sector" role="tabpanel" id="sector-servicios" aria-labelledby="sector-tab-servicios" tabindex="0" data-kind="posible">
+          <p class="sector-head"><span class="sector-badge" data-kind="posible"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Posible adaptación</span><span class="sector-name">Servicios · Ejemplo ilustrativo</span><span class="sector-need">Requiere cargar catálogo e información y ajustar reglas.</span></p>
+          <ol class="sector-flow">
+            <li><span class="sector-step">Pregunta</span><p class="sector-bubble">¿Atienden el sábado? ¿Cómo se paga?</p></li>
+            <li><span class="sector-step">Consulta</span><p class="sector-data"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Información del negocio: horario y medios de pago.</p></li>
+            <li><span class="sector-step">Resultado</span><p class="sector-bubble" data-from="asistente">Los sábados atendemos de 8:00 a. m. a 1:00 p. m. Se paga en el local: efectivo, transferencia o tarjeta.</p>
+              <p class="sector-outcome" data-tone="limit"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Hoy no agenda citas. Si el cliente pide hablar con una persona, te avisa.</p></li>
+          </ol>
+        </div>
+        <p class="sector-note"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span><strong>Hoy, la demostración y las
+          reglas del asistente están preparadas para una ferretería.</strong> Otro tipo de negocio necesita cargar su catálogo y su
+          información y ajustar esas reglas; esa adaptación todavía no viene lista.</span></p>
+      </div>
+    </section>
+
+    <section class="land-section" id="confianza" aria-labelledby="trust-title">
+      <header class="section-head reveal">
+        <p class="kicker">Confianza y control</p>
+        <h2 id="trust-title">Responde con tus datos y lo importante lo decides tú</h2>
+        <p>Antes de enviar, el sistema compara la respuesta con tu catálogo. Si algo no cuadra, sale tu dato.</p>
+      </header>
+      <ol class="proof-flow glass g-demo reveal" aria-label="Ejemplo ilustrativo: una cifra que no coincide con tu catálogo">
+        <li class="proof-beat" data-beat="dato">
+          <span class="proof-step"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Dato de tu negocio</span>
+          <p class="proof-record"><b>Silicona acética transparente, cartucho de 280 ml</b>
+            <span><b class="num">$13.900</b> c/u · <b class="num">20</b> en bodega</span></p>
+        </li>
+        <li class="proof-beat" data-beat="respuesta">
+          <span class="proof-step"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Respuesta comprobada</span>
+          <p class="proof-draft">El borrador decía <s>$12.900</s>: no coincide, no se envía.</p>
+          <p class="proof-bubble">«Sí, tenemos silicona acética transparente cartucho de 280 ml, a <b class="num">$13.900</b> c/u.
+            Me quedan 20 unidades.»</p>
+        </li>
+        <li class="proof-beat" data-beat="persona">
+          <span class="proof-step"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>Decisión humana</span>
+          <p class="proof-human"><b>¿Cambió el precio?</b> Lo actualizas tú en tu panel. El asistente no puede tocar precios
+            ni existencias.</p>
+        </li>
       </ol>
+      <p class="proof-note reveal">Ejemplo ilustrativo con el catálogo ficticio de la demo.</p>
+      <ul class="trust-points reveal" aria-label="Otras reglas que se cumplen en cada mensaje">
+        <li><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span><b>Si falta la medida, pregunta.</b>
+          Con varias opciones, no elige por el cliente.</span></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><span><b>Si intentan manipularlo, bloquea el chat.</b>
+          Solo tú puedes desbloquearlo.</span></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span><b>La clave del servicio de inteligencia
+          artificial vive en tu equipo.</b> El cliente nunca la ve.</span></li>
+      </ul>
+      <a class="repo-link reveal" href="https://github.com/JulianCVM/AsisTendero#lo-que-respalda-la-página-pública"
+        rel="noopener noreferrer">Cómo se comprueba cada regla, en el repositorio<svg class="icon" aria-hidden="true"><use href="#i-out"/></svg></a>
     </section>
 
-    <section class="land-section" id="limites" aria-labelledby="limits-title">
-      <h2 id="limits-title">Lo que no hace (todavía)</h2>
-      <ul class="land-limits">
-        <li>No cobra ni verifica pagos con un banco: el pago es en el mostrador y lo confirma el tendero.</li>
-        <li>No está conectado a WhatsApp: el chat de prueba vive en el visor local.</li>
-        <li>No usa datos de una tienda real: el catálogo, los pedidos y las conversaciones son simulados.</li>
-      </ul>
+    <section class="land-section" id="alcance" aria-labelledby="scope-title">
+      <span class="anchor-alias" id="limites" aria-hidden="true"></span>
+      <span class="anchor-alias" id="que-hace-hoy" aria-hidden="true"></span>
+      <header class="section-head reveal">
+        <p class="kicker">Alcance actual</p>
+        <h2 id="scope-title">Lo que resuelve hoy, lo que confirmas tú y lo que aún no hace</h2>
+      </header>
+      <div class="scope-grid">
+        <section class="scope-col reveal" data-kind="yes" aria-labelledby="scope-yes">
+          <h3 id="scope-yes"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Resuelve</h3>
+          <ul>
+            <li>Productos, precios y existencias de tu catálogo.</li>
+            <li>Pregunta la medida o la cantidad cuando falta.</li>
+            <li>Aparta pedidos para recoger: sin el «sí» del cliente, lo apartado se libera a los 5 minutos.</li>
+            <li>Horario, ubicación y medios de pago.</li>
+          </ul>
+        </section>
+        <section class="scope-col reveal" data-kind="you" aria-labelledby="scope-you">
+          <h3 id="scope-you"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>Tú confirmas</h3>
+          <ul>
+            <li>El cobro y la entrega, en el mostrador.</li>
+            <li>Los cambios de precio e inventario.</li>
+            <li>La atención cuando el cliente pide hablar con alguien.</li>
+            <li>Desbloquear un chat bloqueado por seguridad.</li>
+          </ul>
+        </section>
+        <section class="scope-col reveal" data-kind="no" aria-labelledby="scope-no">
+          <h3 id="scope-no"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Aún no disponible</h3>
+          <dl class="scope-limits">
+            <div><dt>Canal</dt><dd>Un chat de prueba en tu equipo; todavía no WhatsApp.</dd></div>
+            <div><dt>Pagos</dt><dd>No cobra, no fía ni hace domicilios por el chat.</dd></div>
+            <div><dt>Sector</dt><dd>Preparado para ferretería; otro negocio necesita adaptarlo.</dd></div>
+          </dl>
+        </section>
+      </div>
     </section>
+
+    <section class="land-section faq-section" id="preguntas" aria-labelledby="faq-title">
+      <header class="section-head reveal">
+        <h2 id="faq-title">Preguntas frecuentes</h2>
+        <p>Respuestas cortas a lo que más se pregunta.</p>
+      </header>
+      <div class="faq reveal">
+        <details class="faq-item" name="faq" open>
+          <summary>¿Qué información necesita?</summary>
+          <div class="faq-answer">
+            <p>Tu catálogo con el precio y las existencias de cada producto, y los datos que más preguntan tus clientes:
+              horario, ubicación y medios de pago. Todo eso lo mantienes al día desde tu panel.</p>
+          </div>
+        </details>
+        <details class="faq-item" name="faq">
+          <summary>¿Tengo que estar pendiente del chat?</summary>
+          <div class="faq-answer">
+            <p>No todo el tiempo: responde las consultas sobre tu catálogo y aparta pedidos para recoger. Si un cliente pide
+              hablar con alguien, la conversación queda marcada en tu panel y la tomas desde ahí.</p>
+          </div>
+        </details>
+        <details class="faq-item" name="faq">
+          <summary>¿Cobra o guarda pagos?</summary>
+          <div class="faq-answer">
+            <p>No. El cliente paga en el mostrador y tú registras el pago en tu panel: efectivo, datáfono, Nequi, Daviplata,
+              transferencia o Bre-B. Un pago digital lo confirmas tú, porque no hay pasarela de pagos.</p>
+          </div>
+        </details>
+        <details class="faq-item" name="faq">
+          <summary>¿Sirve para mi tipo de negocio?</summary>
+          <div class="faq-answer">
+            <p>Hoy está preparado para <strong>ferretería</strong>: el catálogo de ejemplo y las medidas que entiende son de
+              ferretería. Otro negocio con catálogo necesitaría adaptar ese catálogo, las instrucciones y las reglas de
+              medidas, y no agenda citas de servicios.</p>
+          </div>
+        </details>
+        <details class="faq-item" name="faq">
+          <summary>¿Cómo lo instalo en mi equipo?</summary>
+          <div class="faq-answer">
+            <p>Sigue la <a href="https://github.com/JulianCVM/AsisTendero#instalación" rel="noopener noreferrer">guía de
+              instalación del repositorio</a>. Necesitas Python y una clave del servicio de inteligencia artificial.</p>
+          </div>
+        </details>
+        <p class="faq-more"><a href="https://github.com/JulianCVM/AsisTendero#readme" rel="noopener noreferrer">¿Otra duda? El
+          repositorio lo explica en detalle<svg class="icon" aria-hidden="true"><use href="#i-out"/></svg></a></p>
+      </div>
+    </section>
+
+    <section class="land-section closing" id="probar" aria-labelledby="closing-title">
+      <div class="closing-band glass reveal">
+        <div>
+          <h2 id="closing-title">Míralo funcionar con datos ficticios</h2>
+          <p>Recorre la demo y después abre el panel de una tienda de demostración.</p>
+        </div>
+        <div class="closing-actions">
+          <a class="primary" href="#demo"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Ver demo</a>
+          <a class="secondary" href="/">Abrir panel <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="land-foot">
-    <p>AsisTendero · código abierto con licencia MIT · Agent Challenge de Platica, 2026.</p>
+    <div class="foot-inner glass">
+      <a class="foot-brand" href="#inicio">
+        <img src="/assets/cercania-mark.png" alt="" width="32" height="32">
+        <strong>AsisTendero</strong>
+      </a>
+      <nav class="foot-links" aria-label="Enlaces del pie">
+        <a href="#demo"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Ver demo</a>
+        <a href="/"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Abrir panel <small>datos ficticios</small></a>
+        <a href="https://github.com/JulianCVM/AsisTendero" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-out"/></svg>Repositorio <small>GitHub</small></a>
+      </nav>
+      <p class="foot-notice">Datos 100&nbsp;% ficticios · Código abierto, licencia MIT · Agent Challenge de Platica, 2026</p>
+      <a class="to-top" href="#inicio"><svg class="icon" aria-hidden="true"><use href="#i-up"/></svg>Volver arriba</a>
+    </div>
   </footer>
 </body>
 </html>

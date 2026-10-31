@@ -3,14 +3,16 @@
 import {$, api, art, cop, el, fill, plural, restockText, units} from './tendero-core.js';
 import {availabilityPill} from './tendero-product-editor.js';
 
-const state = {category:'', products:[], categories:[]};
+// 384 productos de una vez son un muro en el celular: se muestran de a PAGE, como en el inventario.
+const PAGE = 48;
+const state = {category:'', products:[], categories:[], shown:PAGE};
 const dialog = $('#catalog-dialog');
 
 function chip(label, value) {
   const node = el('button', 'chip', label);
   node.type = 'button';
   node.setAttribute('aria-pressed', String(state.category === value));
-  node.addEventListener('click', () => { state.category = value; render(); });
+  node.addEventListener('click', () => { state.category = value; state.shown = PAGE; render(); });
   return node;
 }
 
@@ -63,7 +65,10 @@ function render() {
     return words.every(word => text.includes(word));
   });
   $('#cat-count').textContent = plural(shown.length, 'producto', 'productos');
-  fill($('#catalog-grid'), $('#catalog-empty'), shown, item);
+  fill($('#catalog-grid'), $('#catalog-empty'), shown.slice(0, state.shown), item);
+  const rest = shown.length - state.shown;
+  $('#cat-more').hidden = rest <= 0;
+  $('#cat-more').textContent = 'Mostrar ' + Math.min(rest, PAGE) + ' más (quedan ' + rest + ')';
 }
 
 export async function loadCatalog() {
@@ -75,7 +80,8 @@ export async function loadCatalog() {
 }
 
 export function bindCatalog() {
-  $('#cat-search').addEventListener('input', render);
+  $('#cat-search').addEventListener('input', () => { state.shown = PAGE; render(); });
+  $('#cat-more').addEventListener('click', () => { state.shown += PAGE; render(); });
   dialog.querySelectorAll('[data-close]').forEach(node => node.addEventListener('click', () => dialog.close()));
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 }

@@ -20,11 +20,6 @@ const VIEWS = {
 };
 const LIVE = new Set(['hoy', 'pedidos', 'conversaciones']);
 const REFRESH_MS = 15000;
-const THEMES = [
-  {key:'sistema', icon:'auto', label:'igual al del equipo'},
-  {key:'claro', icon:'sun', label:'claro'},
-  {key:'oscuro', icon:'moon', label:'oscuro'},
-];
 const route = {view:'hoy', sub:''};
 let pendingFilter = null;
 
@@ -42,7 +37,8 @@ async function loadBadges() {
   setBadge('#badge-chats', counts.chats_atencion + counts.bloqueos, 'chats que necesitan atención');
   setBadge('#badge-ventas', counts.pagos_por_verificar, 'pagos por verificar');
   $('#more-ventas').textContent = counts.pagos_por_verificar ? counts.pagos_por_verificar + ' por verificar' : '';
-  $('#more-toggle').dataset.alert = String(counts.pagos_por_verificar > 0);
+  // Ventas vive dentro de «Más» en el celular: su aviso se ve en el botón, con número y no solo con color.
+  setBadge('#badge-more', counts.pagos_por_verificar, 'pagos por verificar en Ventas');
 }
 
 const loaders = {
@@ -103,35 +99,17 @@ $('#more-toggle').addEventListener('click', () => {
   const open = $('#more-menu').hidden;
   $('#more-menu').hidden = !open;
   $('#more-toggle').setAttribute('aria-expanded', String(open));
+  // Con teclado, el foco entra al menú; con el dedo no hace falta, pero tampoco estorba.
+  if (open) $('#more-menu a').focus();
 });
-document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMore(); });
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || $('#more-menu').hidden) return;
+  closeMore();
+  $('#more-toggle').focus();
+});
 document.addEventListener('click', event => {
   if (!$('#more-menu').hidden && !event.target.closest('#more-menu, #more-toggle')) closeMore();
 });
-
-function readTheme() {
-  try { return localStorage.getItem('tendero-tema') || 'sistema'; } catch (error) { return 'sistema'; }
-}
-function applyTheme(key) {
-  const theme = THEMES.find(item => item.key === key) || THEMES[0];
-  const root = document.documentElement;
-  if (theme.key === 'sistema') delete root.dataset.theme;
-  else root.dataset.theme = theme.key === 'oscuro' ? 'dark' : 'light';
-  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-  const toggle = $('#theme-toggle');
-  toggle.querySelector('use').setAttribute('href', '#i-' + theme.icon);
-  toggle.setAttribute('aria-label', 'Tema: ' + theme.label + '. Cambiar a ' + next.label);
-  toggle.title = 'Tema ' + theme.label;
-  const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]').content = dark ? '#0A1519' : '#173B4A';
-}
-$('#theme-toggle').addEventListener('click', () => {
-  const current = THEMES.findIndex(item => item.key === readTheme());
-  const next = THEMES[(current + 1) % THEMES.length].key;
-  try { localStorage.setItem('tendero-tema', next); } catch (error) { /* sin almacenamiento: dura esta visita */ }
-  applyTheme(next);
-});
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(readTheme()));
 
 // Un indicador de Hoy lleva a su lista ya filtrada: «Por confirmar» abre los pedidos pendientes.
 document.addEventListener('click', event => {
@@ -146,7 +124,6 @@ document.addEventListener('click', event => {
 });
 window.addEventListener('hashchange', show);
 $('#refresh').addEventListener('click', event => busy(event.currentTarget, refresh));
-applyTheme(readTheme());
 bindOrderSearch(refresh);
 bindInventory(refresh);
 bindSales();

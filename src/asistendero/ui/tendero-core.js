@@ -57,6 +57,24 @@ export function fill(list, emptyNode, items, render) {
   if (emptyNode) emptyNode.hidden = items.length > 0;
 }
 
+// Una lista larga muestra sus primeros elementos y un botón para el resto, para no empujar lo demás fuera de la
+// pantalla del celular. Lo que eligió el tendero (ver todo o menos) se conserva al refrescar cada 15 s.
+export function foldList(list, toggle, limit, noun) {
+  const items = [...list.children];
+  const extra = items.length - limit;
+  toggle.hidden = extra <= 0;
+  if (!toggle.dataset.bound) {
+    toggle.dataset.bound = 'true';
+    toggle.addEventListener('click', () => {
+      toggle.setAttribute('aria-expanded', String(toggle.getAttribute('aria-expanded') !== 'true'));
+      foldList(list, toggle, limit, noun);
+    });
+  }
+  const open = toggle.getAttribute('aria-expanded') === 'true';
+  items.forEach((item, index) => { item.hidden = extra > 0 && !open && index >= limit; });
+  toggle.textContent = open ? 'Ver menos' : 'Ver ' + extra + ' ' + noun + ' más';
+}
+
 export async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
