@@ -25,7 +25,7 @@ from asistendero.agente.respuesta.reply_text import (
 )
 from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence, restock_subjects
 from asistendero.agente.respuesta.store_replies import (
-    asks_assortment, full_category_listing, store_lines, store_reply_is_consistent,
+    asks_assortment, full_category_listing, promises_credit, store_lines, store_reply_is_consistent,
 )
 from asistendero.tienda.catalogo.catalog import Product, tokens
 from asistendero.tienda.vocabulario import format_cop, normalize_text
@@ -92,6 +92,10 @@ def direct_response(original: str, decision: Decision) -> str:
     # Sin explorar_categoria, una lista de lo que vende la tienda sería inventada («herramientas eléctricas», 26-10).
     if asks_assortment(normalize_text(original)):
         return "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad."
+    # Fiar nunca se promete, consulte o no la tienda: el pago es en el mostrador (contrato del agente). En la corrida
+    # 40 (M-33) Grok respondió sin herramientas «Listo, te lo anoto en el cuaderno… Pasa el viernes a pagar».
+    if promises_credit(normalize_text(reply)):
+        return "Aquí no fiamos: todo se paga en el mostrador cuando recoges. ¿Te ayudo con algo más?"
     # Sin herramientas no hay precio ni existencias comprobadas que se puedan afirmar.
     if (
         not reply or len(reply) > 400 or FORBIDDEN_CLAIMS.search(reply) or "$" in reply

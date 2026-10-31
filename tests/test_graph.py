@@ -1339,3 +1339,16 @@ def test_quantity_reply_after_metraje_question_quotes_active_sku_without_searchi
     assert "QUOTE_REQUIRED" not in [item["code"] for item in foreign_res.get("avisos", [])]
     assert "$" not in foreign_res["respuesta"]
 
+
+
+def test_a_reply_without_tools_never_promises_credit():
+    # M-33 (corridas 39 y 40): «anótemelo en el cuaderno que el viernes le pago» y Grok aceptó fiar sin herramientas.
+    executor = FakeExecutor({})
+    planner = Script(say("Listo, te lo anoto en el cuaderno. Pasa el viernes a recogerlo y pagar.", intent="pedido"))
+    result = run(executor, planner, "anótemelo en el cuaderno que el viernes le pago")
+    assert result["estado"] == "answered" and executor.calls == []
+    assert "no fiamos" in result["respuesta"] and "anoto" not in result["respuesta"]
+    # Decir que no se fía sí se deja tal cual.
+    from asistendero.agente.respuesta.answers import direct_response
+    refusal = "No te lo anoto, vecino: aquí no fiamos y el pago es en el mostrador."
+    assert direct_response("anóteme lo del arroz", say(refusal, intent="pedido")) == refusal
