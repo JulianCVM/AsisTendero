@@ -1,67 +1,83 @@
 NOTAS DE LA ENTREGA - S3 (Track 1)
 AsisTendero / PulsoTienda - Set de evaluación propio de 30+ casos y reporte de costo por tarea
-Repositorio: https://github.com/JulianCVM/AsisTendero (rama feat/s4-pedidos-tendero)
+Repositorio: https://github.com/JulianCVM/AsisTendero (rama feat/s4-pedidos-tendero, commit evaluado bef4913)
 Fecha del corte: 1 de noviembre de 2026. Modelo: grok-4.20-0309-non-reasoning por la pasarela del reto.
 Datos ficticios: el catálogo, las dos tiendas y los clientes son simulados. Ninguna cifra representa un piloto.
+Todas las cifras de estas notas salen de ejecutar los casos con la API real de Grok, no de pruebas guionizadas.
 
 QUÉ LOGRAMOS
 - Set de evaluación propio de 345 casos en 21 suites (500 mensajes del cliente), en
   evaluation/cases.json. Cubre catálogo, información de la tienda, seguridad e inyecciones, conversaciones con
   memoria, pedidos para recoger, varios clientes a la vez, mensajes mal escritos, casos pensados para que el agente
-  falle, una segunda tienda (mercado de barrio) y una suite nueva de fotos del cliente.
+  falle, una segunda tienda (mercado de barrio) y una suite de fotos del cliente.
 - Cada caso declara lo que debe pasar: estado final, SKU respaldado, textos obligatorios o prohibidos, herramientas
   y tope de llamadas a Grok. Un oráculo aparte revisa que cada precio salga de las herramientas y que no se muestre
   ningún SKU.
-- Última corrida completa con Grok real (corrida 42, commit c77dd48): 327/334 casos y
-  3/3 fallos controlados. Seis de los siete que fallaron se corrigieron y pasaron en la corrida 43.
+- Corrida final con la API real (corrida 48, commit bef4913): 344/345 casos y
+  3/3 fallos controlados. Por negocio: ferreteria 297/298 · mercado 47/47.
+- Suite de fotos con la visión real: 11/11, con 8 llamadas de visión.
 - Reporte de costo por tarea, por mensaje, por llamada, por operación de Grok, por suite, por negocio y tarea por
-  tarea: evaluation/COSTOS_POR_TAREA.md (generado sin llamar a Grok desde el reporte de la corrida 42).
+  tarea: evaluation/COSTOS_POR_TAREA.md (generado sin llamar a Grok desde los reportes de la corrida 48).
 - Reconocimiento de productos por foto: la foto se valida, se le quita el EXIF y se reduce; si es una foto del
   catálogo se reconoce por huella sin llamar a Grok; si no, una sola llamada de visión extrae atributos y el
   servidor busca en el catálogo. Grok nunca elige el SKU, el precio ni las existencias.
-- Biblioteca de 208 fotos de referencia con licencia libre (Wikimedia Commons), revisadas a ojo, con créditos.
+- Biblioteca de 183 fotos de referencia con licencia libre (Wikimedia Commons), auditada con la visión real de Grok.
 - Diagrama en el visor que muestra cómo se procesa cada foto: limpieza, huella, visión, respaldo del catálogo,
   búsqueda del harness, lo que guarda la sesión y las fotos de la respuesta.
-- 1.021 pruebas automáticas (pytest) que nunca llaman a Grok, incluidas versiones guionizadas de todas las suites.
 
-COSTO POR TAREA (corrida 42, 334 tareas reales, costo informado por la API)
-- Costo total de la corrida: USD 1,153100.
-- Costo medio por tarea: USD 0,003452 (mediana USD 0,001872, percentil 90 USD 0,007443, máximo USD 0,030941).
-- Costo medio por mensaje del cliente: USD 0,002368. Por llamada a Grok: USD 0,001147.
-- Llamadas a Grok por tarea: 3,01. Tareas resueltas sin llamar a Grok: 44 (costo cero).
-- Caché: 94,7 % de las llamadas reutilizaron el prompt fijo; 85,8 % de los tokens de entrada salieron de la caché.
-- Fotos (validación con Grok real del 31-10-2026): cada foto cuesta una sola llamada de visión, entre USD 0,00028 y
-  USD 0,00071; la foto del catálogo se reconoce por huella y cuesta cero.
-- Proyección a 1.000 tareas con la misma mezcla: USD 3,452395 (es una cuenta, no una medición).
+COSTO POR TAREA (corrida 48, 345 tareas reales, costo informado por la API)
+- Costo total de la corrida: USD 0,967176.
+- Costo medio por tarea: USD 0,002803 (mediana USD 0,001699, percentil 90 USD 0,006191, máximo USD 0,026348).
+- Costo medio por mensaje del cliente: USD 0,001934. Por llamada a Grok: USD 0,000936.
+- Llamadas a Grok por tarea: 2,99. Tareas resueltas sin llamar a Grok: 46 (costo cero).
+- Caché: 99,2 % de las llamadas reutilizaron el prompt fijo; 92,6 % de los tokens de entrada salieron de la caché.
+- Fotos: 8 llamadas de visión por USD 0,002672 en total (USD 0,000334 por llamada);
+  la foto del catálogo se reconoce por huella y cuesta cero. La suite de fotos completa costó USD 0,007694.
+- Proyección a 1.000 tareas con la misma mezcla: USD 2,803409 (es una cuenta, no una medición).
 - Las herramientas corren en el servidor sobre SQLite y no tienen costo de API.
 
-QUÉ FALLÓ O QUEDÓ ABIERTO
-- La corrida 44, sobre el commit de esta entrega con los 345 casos, se detuvo porque el equipo se quedó sin
-  memoria: alcanzó 207 casos, de los que pasaron 205, por USD 0,776183 (USD 0,003750 por tarea).
-  Faltan por correr: fallas (38), mercado (33), parafrasis (24), ampliacion (20), fotos (11), surtido (10), natural (2).
-  No se relanzó sin una decisión del equipo.
-- En esa corrida fallaron X-22 y H-02. X-22 («2 brochas de 3 pulgadas y un taladro») es una variación de Grok que
-  ya fallaba: inventa un código para el taladro, la validación lo rechaza y la respuesta queda segura pero a veces
-  sin el total. H-02 pasó en la corrida 42; la corrida se detuvo antes de guardar el motivo.
-- La suite de fotos del set (11 conversaciones) pasa con un Grok guionizado y una visión falsa, pero aún no tiene
-  una corrida completa con Grok real; la validación real del 31-10 cubrió 9 conversaciones con foto.
-- La validación con Grok real destapó un defecto en las fotos: lo que Grok supone al mirar (por ejemplo, «acero»)
-  convertía el producto exacto en una «opción cercana de otro material». Se corrigió: esos atributos se usan solo
-  si el catálogo los respalda. Una prueba reproduce el defecto.
-- Una foto recortada o tomada desde otro ángulo casi nunca se reconoce por huella; va a la visión (una llamada).
-- «¿Cuál de los dos es más barato?» después de unas opciones las vuelve a listar sin precio: es la regla de no
-  mostrar precio hasta que el cliente elige y queda como decisión de producto.
+QUÉ FALLÓ Y QUÉ SE ARREGLÓ
+Casos que no pasaron en la corrida final (48):
+- X-22 (extremos): no dice «$13.800».
+Lo que destapó la corrida 45 (340/345 sobre df6ef33) y se arregló antes de la final, cada arreglo con una prueba que
+falla sin él:
+- F-10: la foto de referencia del tubo PVC era una válvula; la visión real dijo «válvula» y el agente respondió con
+  el registro de bola. Se auditaron las 208 fotos con la visión real (208 llamadas, USD 0,0889): 24 mostraban otro
+  producto o uno ambiguo y quedaron sin foto; la del tubo PVC se cambió.
+- F-01: «¿y el de 20 oz cuánto vale?» terminaba sin precio (Grok escribió $28.500 sin respaldo; el real es $32.900).
+  Nuevo aviso del servidor: buscar la opción elegida y dar su precio unitario.
+- X-14: en «2 bags of grey cement 50 kg» se perdía la medida «50 kg»; ahora se conserva.
+- P-docena-2: con «12 huevos» Grok cotizó la cubeta de 30 y se preguntaba la cantidad ya dicha; ahora recibe otra
+  oportunidad de cotizar el huevo por unidad.
+Lo que destapó la corrida 46 (341/345 sobre 3f74387) y se arregló antes de la final:
+- F-10: la foto nueva del tubo PVC era un tubo de desagüe; la visión real dijo «sanitario» y el «del de 1/2»
+  terminó en el sanitario. La foto pasó al tubo sanitario y el de presión quedó sin foto; el caso se ajustó al
+  producto de la foto, con el mismo flujo y las mismas comprobaciones.
+- M-08: Grok reescribió «2 libras de papa criolla» como «papa criolla de 2 libras» y la cantidad se leía como tamaño;
+  ahora lo deciden las palabras del cliente.
+- L-02: consultar el pedido con el código vacío se rechazaba; ahora lista los pedidos de esa conversación.
+Lo que destapó la corrida 47 (343/345 sobre b552a2a) y se arregló antes de la final:
+- H-02: con pintura en la lista, «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura y
+  preguntó cuántas brochas. Ahora lo nuevo con su cantidad tiene que entrar al total pedido.
+Abierto:
+- X-22 («2 brochas de 3 pulgadas y un taladro») depende de Grok: la respuesta es segura pero a veces sin el total.
+- La visión en baja resolución confunde productos parecidos; el servidor nunca cotiza sin coincidencia en el
+  catálogo, así que el riesgo es una opción equivocada, no un precio inventado. 63 de 246 familias van sin foto.
+- La corrida 44 se cortó a los 207 casos porque el equipo se quedó sin memoria; desde la 45 el set se corre en
+  cinco tandas, una por proceso, sobre el mismo commit.
 - La comparación entre varios modelos Grok quedó interrumpida en S3 y no se repitió; este corte usa un solo modelo.
-- 38 de 246 familias de producto no tienen foto de referencia (no había una foto libre que no fuera ambigua).
 
 CÓMO SE CUIDÓ EL CONSUMO
-- Solo corridas con un objetivo de evaluación, sin reintentos ni relleno, con tope de gasto (--budget-usd) y una
-  bitácora por caso que se escribe apenas termina. Cada corrida queda registrada con commit, fecha, prompt y costo
-  (evaluation/S4_EVIDENCIA.md).
+- Solo corridas con un objetivo de evaluación, sin reintentos ni relleno, con tope de gasto por tanda
+  (--budget-usd) y una bitácora por caso que se escribe apenas termina. Cada corrida queda registrada con commit,
+  fecha, prompt y costo (evaluation/S4_EVIDENCIA.md).
 - La llave nunca está en el repositorio, en las trazas ni en la evidencia.
+- Gasto con la API desde la corrida 38 (corridas 38 a 48, validación y auditoría de fotos): USD 8,686498 de los 10
+  aprobados. Las corridas 45 a 48 corrieron los 345 casos cada una, para que lo entregado salga del commit final.
 
 CÓMO REPRODUCIRLO
-- Pruebas sin Grok: .venv\Scripts\python -m pytest -q
-- Evaluación con Grok real: .venv\Scripts\python -m asistendero.evaluacion --live --include-failures --concurrency 3 --budget-usd 0.60
-- Reporte de costo: .venv\Scripts\python -m asistendero.evaluacion.eval_costs .local\<reporte>.json --out evaluation\COSTOS_POR_TAREA.md
+- Pruebas sin Grok (desarrollo, no evidencia): .venv\Scripts\python -m pytest -q
+- Evaluación con Grok real, por tandas: .venv\Scripts\python -m asistendero.evaluacion --live --concurrency 3 --budget-usd 0.70 --suite <suites>
+  (la primera tanda con --include-failures para los 3 fallos controlados)
+- Reporte de costo: .venv\Scripts\python -m asistendero.evaluacion.eval_costs .local\<tanda1>.json .local\<tanda2>.json ... --out evaluation\COSTOS_POR_TAREA.md
 - Visor y panel del tendero: .venv\Scripts\python -m asistendero (http://127.0.0.1:8765 y http://127.0.0.1:8766)

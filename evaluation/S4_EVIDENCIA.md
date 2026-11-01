@@ -27,6 +27,49 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Corridas 45 a 48: los 345 casos con Grok real hasta el commit de la entrega (01-11-2026)
+
+Objetivo: que todo lo que se entrega (resultado, costo por tarea y reporte técnico) salga de una corrida real
+completa sobre el commit final, y arreglar lo que esas corridas destaparan. Modelo
+`grok-4.20-0309-non-reasoning`, prompts `s4-conversacion-v12` y `mercado-v1`, `--concurrency 3`. Desde la 45 el set
+se corre en **cinco tandas de suites**, cada una en su propio proceso y con su tope de gasto (la primera con
+`--include-failures`): la 44 se perdió por falta de memoria del equipo. Cada tanda se lanzó con el árbol limpio
+(`src_dirty: false`) y `eval_costs` solo las une si comparten commit y modelo y no repiten casos.
+
+| Corrida | Commit | Resultado | Fallos controlados | Llamadas | USD | USD por tarea |
+|---|---|---|---|---|---|---|
+| 45 | `df6ef33` | 340/345 | 3/3 | 1029 | 1.183481 | 0.003430 |
+| 46 | `3f74387` | 341/345 | 3/3 | 1036 | 1.107960 | 0.003212 |
+| 47 | `b552a2a` | 343/345 | 3/3 | 1037 | 0.953063 | 0.002763 |
+| **48 (final)** | **`bef4913`** | **344/345** | **3/3** | 1033 | **0.967176** | **0.002803** |
+
+Lo que destapó cada una y se arregló antes de la siguiente, cada arreglo con una prueba que falla sin él:
+
+- **45:** F-10, la foto de referencia del tubo PVC era sobre todo una válvula (la visión real dijo «válvula»). Se
+  auditaron las 208 fotos con la visión real, como las mandaría un cliente: 208 llamadas, **0.088889 USD**; 24
+  mostraban otro producto o uno ambiguo y quedaron sin foto (`docs/HARNESS.md`, «Fotos»). F-01, «¿y el de 20 oz cuánto
+  vale?» terminaba sin precio: aviso `PRICE_REQUIRED`. X-14, se perdían los «50 kg» de una presentación sin respaldo.
+  P-docena-2, con «12 huevos» Grok cotizó la cubeta de 30: segundo aviso de cotización con un solo producto.
+- **46:** F-10 otra vez por la foto: la nueva era un tubo de desagüe y la visión real dijo «sanitario». Pasó al tubo
+  sanitario (SAN) y el de presión quedó sin foto; el caso se ajustó al producto que muestra la foto, con el mismo
+  flujo y las mismas comprobaciones. M-08, Grok escribió «papa criolla de 2 libras» y la cantidad se leía como tamaño.
+  L-02, `consultar_pedido` con `pedido=null` se rechazaba.
+- **47:** H-02, con pintura en la lista, «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura
+  sin aviso del servidor (también había fallado en la 44).
+- **48:** solo X-22 («2 brochas de 3 pulgadas y un taladro»), que falla en todas: Grok inventa un SKU para el taladro,
+  la validación lo rechaza y la respuesta, segura, da el precio unitario de la brocha sin el total. Queda abierto como
+  variación de Grok.
+
+**Corrida 48 (la del entregable):** 344/345 y 3/3; ferretería 297/298 y mercado 47/47; la suite `fotos` 11/11 con 8
+llamadas de visión real (0.002672 USD). 0.002803 USD por tarea, mediana 0.001699, 2,99 llamadas por tarea y 46 tareas
+sin llamar a Grok. Reportes: `eval-20261101T203838787427Z`, `…204047172772Z`, `…204320123688Z`, `…204515745940Z` y
+`…204655840615Z` (`.local/`). El costo por tarea y por operación sale de esos cinco:
+[`COSTOS_POR_TAREA.md`](COSTOS_POR_TAREA.md).
+
+**Gasto acumulado desde la corrida 38:** 4.385929 (hasta la 44) + 1.183481 (45) + 0.088889 (auditoría de fotos) +
+1.107960 (46) + 0.953063 (47) + 0.967176 (48) = **8.686498 USD**, más unos 0,0001 de una llamada de visión para
+revisar una foto, de los 10 USD aprobados por Julian el 01-11-2026.
+
 ## Corrida 44: los 345 casos con la suite de fotos, interrumpida (01-11-2026)
 
 Objetivo: validar el commit de la entrega S3 (`e19594f`, con la visión integrada y la suite `fotos`) sobre los 345
@@ -49,8 +92,8 @@ por caso el resultado, las llamadas y el costo, pero no los motivos de un fallo.
   31-10 está en `docs/HARNESS.md` («Fotos»).
 - **Fallaron:** X-22, la misma variación de Grok de las corridas 39 a 43, y H-02 (pintura beige por galón en cuatro
   turnos), que pasó en la 42. Sin el reporte completo no hay motivo registrado; queda por revisar en la próxima corrida.
-- **Costo:** 0,003750 USD por tarea en estas 207, cerca de los 0,003452 de la corrida 42 completa, que sigue siendo
-  la fuente de `evaluation/COSTOS_POR_TAREA.md`.
+- **Costo:** 0,003750 USD por tarea en estas 207, cerca de los 0,003452 de la corrida 42 completa. Desde las
+  corridas 45 a 48 (arriba), `evaluation/COSTOS_POR_TAREA.md` sale de la 48.
 - **No se relanzó:** relanzarla sin pedirlo gastaría créditos sin una decisión de Julian, y el aviso del sistema pide
   no reiniciarla mientras falte memoria.
 - **Gasto acumulado desde la corrida 38:** 3.568553 (corridas 38 a 43) + 0.041193 (validación de fotos del 31-10) +
