@@ -93,3 +93,14 @@ def test_the_cost_report_adds_up_by_operation_task_and_tool_and_never_counts_a_m
     assert "| Proyección a 1.000 tareas con esta mezcla | 1.666667 USD |" in markdown
     assert "| D | flujos | ferreteria | 1 | 1 | 0 | 2800 (2432) | 40 | — |" in markdown
     assert "| Interpretar el mensaje y responder sin herramientas | 1 | 0.000000 | — |" in markdown
+
+
+def test_the_vision_call_of_a_photo_is_its_own_operation_and_not_another_call():
+    from asistendero.evaluacion.eval_costs import operation_rows
+
+    vision = call(900, 0, "0.0004")
+    vision["details"].update(phase="vision", duration_ms=1500)  # como lo emite tracing: sin «action»
+    full = report([case("F", suite="fotos", events=[vision, _grok("interpret", "respond", "0.0010")])])
+    operations = {group["operacion"]: group for group in operation_rows(full)}
+    assert operations["Mirar la foto del cliente (visión)"]["llamadas"] == 1
+    assert "Otra llamada" not in operations

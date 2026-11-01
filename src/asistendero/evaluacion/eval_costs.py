@@ -21,6 +21,8 @@ OPERATIONS = {
     ("interpret", "respond"): "Interpretar el mensaje y responder sin herramientas",
     ("resolve", "call_tool"): "Leer lo observado y pedir otra herramienta",
     ("resolve", "respond"): "Leer lo observado y redactar la respuesta",
+    # La llamada de visión no decide nada del grafo: solo devuelve los atributos de la foto (``look.look_at``).
+    ("vision", None): "Mirar la foto del cliente (visión)",
 }
 PROJECTED_TASKS = 1000
 
