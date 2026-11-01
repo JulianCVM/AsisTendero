@@ -28,10 +28,11 @@ from asistendero.agente.respuesta.reply_photos import reply_photos
 from asistendero.agente.vision.attributes import BASE64_DATA_URI, ImageAttributePayload, sanitize_image_text
 from asistendero.agente.vision.look import look_at
 from asistendero.agente.vision.photo import PhotoRejected
-from asistendero.agente.vision.photo_planner import PhotoPlanner, fixed_reply
+from asistendero.agente.vision.photo_planner import PhotoPlanner, backed_payload, fixed_reply
 from asistendero.observabilidad.tracing import run_traced
 from asistendero.datos.seed import BUSINESSES
 from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.catalogo.search import ProductQuery
 from asistendero.tienda.pedidos.orders import OrderBook
 from asistendero.tienda.reloj import WEEKDAYS
 
@@ -104,7 +105,7 @@ PHOTO_UNAVAILABLE_REPLY = ("No pude revisar la foto en este momento. Escríbeme 
 
 
 def _look(store: SessionStore, session_id: str, message: str, image: ImageAttributePayload | str, context: dict,
-          orders: OrderBook | None, emit: Callable[[dict], None]) -> dict | tuple | None:
+          orders: OrderBook | None, catalog: MockCatalog, emit: Callable[[dict], None]) -> dict | tuple | None:
     """Mira la foto antes del grafo.
 
     Devuelve el turno ya respondido si la foto no sirve o Grok falla; None si el texto intenta una inyección (el
@@ -123,9 +124,11 @@ def _look(store: SessionStore, session_id: str, message: str, image: ImageAttrib
     except ModelError as exc:
         return _without_grok(store, session_id, shown, "model_error", PHOTO_UNAVAILABLE_REPLY,
                              f"Grok no pudo revisar la foto ({exc.code}).", emit)
-    payload = seen.payload
+    # El turno guarda solo lo visto que el catálogo respalda: de ese texto salen la búsqueda, la memoria de
+    # especificaciones y lo que Grok lee en el turno siguiente. La traza conserva todo lo que Grok vio.
+    payload = backed_payload(seen.payload, lambda item: bool(catalog.search(ProductQuery(**item)).matches))
     summary = payload.semantic_summary()
-    vision = {"atributos": {key: value for key, value in payload.to_dict().items() if key != "usage"},
+    vision = {"atributos": {key: value for key, value in seen.payload.to_dict().items() if key != "usage"},
               "resumen": summary, "huella": seen.huella, "llamada": seen.llamada}
     planner = PhotoPlanner(payload, fixed_reply(payload, message, context))
     return f"{message.strip()} {summary}".strip(), planner, vision
@@ -166,12 +169,12 @@ def run_turn(
     if human is not None:
         return human
     previous = last_status(store, session_id)
+    catalog = MockCatalog(orders.path, orders.business_id, orders.store_id) if orders is not None else MockCatalog()
     if tool_executor is None:
-        catalog = MockCatalog(orders.path, orders.business_id, orders.store_id) if orders is not None else MockCatalog()
         tool_executor = catalog_executor(catalog, orders, session_id)
     vision = None
     if image is not None:
-        seen = _look(store, session_id, message, image, context, orders, emit)
+        seen = _look(store, session_id, message, image, context, orders, catalog, emit)
         if isinstance(seen, dict):
             return seen
         if seen is not None:

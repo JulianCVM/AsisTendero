@@ -480,7 +480,9 @@ def test_session_store_never_persists_raw_base64(session_store, orders):
     # Jamás debe persistirse el base64 pesado en SQLite
     assert "data:image/jpeg;base64" not in stored_customer
     assert "AAAAA" not in stored_customer
-    assert "[Foto: tornillo acero 1 pulgada madera" in stored_customer
+    # «acero» lo supuso la visión y ningún tornillo del catálogo lo nombra: no queda en el turno (ver backed_payload);
+    # «madera» sí, porque hay tornillos para madera.
+    assert "[Foto: tornillo 1 pulgada madera (confianza: alta)]" in stored_customer
 
 
 def test_sanitize_image_text():

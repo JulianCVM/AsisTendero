@@ -20,7 +20,7 @@ from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.modelo import grok
 from asistendero.agente.modelo.grok import Decision, ModelError
 from asistendero.agente.respuesta.reply_photos import MAX_REPLY_PHOTOS, reply_photos
-from asistendero.agente.vision import look
+from asistendero.agente.vision import look, photo_planner
 from asistendero.agente.vision.attributes import SAMPLE_COUNTER_TEMPLATE, ImageAttributePayload
 from asistendero.agente.vision.photo import MAX_PHOTO_PIXELS, VISION_SIDE, PhotoRejected, read_photo
 from asistendero.datos.seed import MARKET_PRODUCTS, PRODUCTS, create_mock_db
@@ -147,6 +147,16 @@ def test_look_recognizes_a_catalog_photo_by_fingerprint_without_grok(fake_manife
     assert no_grok == []
 
 
+def test_fingerprint_near_two_families_decides_nothing(fake_manifest, monkeypatch):
+    # Dos familias a la distancia de la misma foto: la huella no elige entre ellas, aunque una esté más cerca.
+    near = product_photos.dhash(Image.open(BytesIO(picture(color=(180, 30, 30)))))
+    monkeypatch.setitem(fake_manifest, "MARR", {**fake_manifest["MARR"], "huella": f"{~int(near, 16) & 2**64 - 1:016x}"})
+    assert product_photos.closest_family(near) == ("MAR", 0)
+    monkeypatch.setitem(fake_manifest, "MARR", {**fake_manifest["MARR"], "huella": f"{int(near, 16) ^ 1:016x}"})
+    assert product_photos.closest_family(near) is None
+    assert product_photos.closest_family(near, {"MAR"}) == ("MAR", 0)
+
+
 def test_look_only_matches_photos_of_the_serving_store(fake_manifest, monkeypatch):
     seen_calls = []
     monkeypatch.setattr(grok, "_complete", lambda *args, **kwargs: (
@@ -211,6 +221,43 @@ def test_photo_turn_quotes_from_the_catalog_with_one_vision_call(chat, fake_mani
     assert "[Foto: tubo pvc 1/2 pulgada agua" in stored and "base64" not in stored
     assert all(raw[30:80] not in json.dumps(event, ensure_ascii=False) for event in events)
     assert next(e for e in events if e["type"] == "model_response")["details"]["phase"] == "vision"
+
+
+def test_what_grok_guesses_from_the_photo_does_not_turn_the_exact_product_into_a_nearby_one(chat, monkeypatch):
+    # Prueba real del 31-10-2026: la foto de un martillo de uña volvía «así como lo pides no lo manejo… es de otro
+    # material», porque «acero» y «uña para extraer clavos» iban como campos de la búsqueda.
+    store, orders = chat
+    monkeypatch.setattr(grok, "_complete", lambda *args, **kwargs: (
+        '{"tipo_producto": "martillo", "material": "acero", "medidas_visibles": [], "presentacion_uso": '
+        '"uña para extraer clavos", "color_acabado": "plateado con mango negro", "confianza_visual": "alta"}',
+        "grok-4.20-0309-non-reasoning", 400, 40, 0, None))
+    events = []
+    session = store.create()
+    result = run_turn(store, session, "¿cuánto vale este?", emit=events.append, orders=orders,
+                      image=data_uri(picture(width=240, pattern="fade")))
+    searches = [e["details"]["tool_call"] for e in events if "tool_call" in (e.get("details") or {})]
+    assert len(searches) == 1  # una sola búsqueda: dos duplicaban la respuesta
+    search = searches[0]["arguments"]["items"][0]
+    assert set(search) == {"text", "product"} and "acero" not in search["text"]
+    assert result["estado"] == "clarify" and "otro material" not in result["respuesta"]
+    assert "20 oz" in result["respuesta"] and "16 oz" in result["respuesta"]
+    assert "$" not in result["respuesta"]  # sin medida no se cotiza: se pregunta cuál
+    # El turno siguiente tampoco hereda «acero»: ni en el texto guardado ni en la memoria de especificaciones.
+    context = store.context(session)
+    assert "acero" not in context["turnos"][-1]["cliente"]
+    assert "material" not in (context.get("especificaciones") or {}).get("martillo", {})
+    # La traza sí guarda todo lo que Grok vio.
+    assert next(e for e in events if e["type"] == "vision")["details"]["payload"]["material"] == "acero"
+
+
+def test_what_the_catalog_names_from_the_photo_still_narrows_the_search():
+    payload = ImageAttributePayload(tipo_producto="tubo", material="pvc", medidas_visibles=["1/2 pulgada"],
+                                    presentacion_uso="agua", color_acabado="blanco", confianza_visual="alta")
+    names = {"tubo", "pvc", "1/2 pulgada", "agua"}
+    kept = photo_planner.backed_payload(payload, lambda item: set(item.values()) - {item["text"]} <= names)
+    assert (kept.material, kept.presentacion_uso, kept.color_acabado) == ("pvc", "agua", None)
+    # Sin exactos ni para el tipo de producto, la foto queda como se vio: las opciones cercanas son la respuesta.
+    assert photo_planner.backed_payload(payload, lambda item: False) == payload
 
 
 def test_injection_in_the_caption_is_blocked_without_looking_at_the_photo(chat, no_grok):
@@ -331,3 +378,6 @@ def test_shipped_manifest_is_complete_free_and_matches_the_catalog():
         with Image.open(path) as image:
             assert max(image.size) <= 320 and not image.getexif(), family
         assert entry["fuente"] in credits, family
+    # Cada foto del catálogo se reconoce a sí misma por huella, sin quedar al alcance de la de otra familia.
+    for family, entry in entries.items():
+        assert product_photos.closest_family(entry["huella"]) == (family, 0), family

@@ -9,6 +9,9 @@ Si la foto no se reconoce (sin tipo o con confianza baja), o el cliente ya mand�
 ``MAX_VISION_CLARIFICATIONS`` veces seguidas sin que se resolviera, se le pide traer la muestra al mostrador.
 """
 
+from collections.abc import Callable
+from dataclasses import replace
+
 from asistendero.agente.modelo.grok import Decision
 from asistendero.agente.vision.attributes import (
     MAX_VISION_CLARIFICATIONS, SAMPLE_COUNTER_TEMPLATE, SCREW_SAFEGUARD_TEMPLATE, ImageAttributePayload, search_item,
@@ -17,6 +20,32 @@ from asistendero.tienda.vocabulario import normalize_text
 
 # Marca las decisiones que tomó el servidor: no son una llamada a Grok ni tienen costo.
 SERVER_MODEL = "servidor"
+# Lo que Grok supone al mirar (de qué está hecho, para qué sirve, de qué color), no algo que el cliente haya pedido;
+# a la derecha, el campo de la búsqueda que lo usaría.
+GUESSED = {"material": "material", "presentacion_uso": "presentation", "color_acabado": "color"}
+
+
+def backed_payload(payload: ImageAttributePayload, has_exact: Callable[[dict], bool] | None) -> ImageAttributePayload:
+    """Lo visto en la foto, sin lo supuesto que dejaría sin ningún producto exacto lo que el catálogo sí tiene.
+
+    Prueba real del 31-10-2026: la foto de un martillo de uña volvió «acero» y «uña para extraer clavos»; el catálogo
+    no los nombra y la respuesta fue «así como lo pides no lo manejo… es de otro material». Y como el turno guardaba
+    «[Foto: martillo acero …]», el turno siguiente volvía a buscar con «acero» (memoria de especificaciones y
+    contexto de Grok). Si el catálogo sí lo nombra (el tubo PVC para agua), se queda y acota. Es la regla de la
+    búsqueda con «2 libras»: el dato dudoso se suelta solo si no deja ningún exacto. Si ni el tipo de producto tiene
+    exactos, no se toca: la respuesta de opciones cercanas es la correcta.
+    """
+    guessed = {attr: getattr(payload, attr) for attr in GUESSED if getattr(payload, attr)}
+    if has_exact is None or not guessed:
+        return payload
+    bare = replace(payload, **dict.fromkeys(guessed))
+    base = search_item(bare)
+    if not has_exact(base):
+        return payload
+    kept = {attr: value for attr, value in guessed.items() if has_exact({**base, GUESSED[attr]: value})}
+    if kept and not has_exact({**base, **{GUESSED[attr]: value for attr, value in kept.items()}}):
+        kept = {}
+    return replace(bare, **kept)
 
 
 def repeated_photo(summary: str, context: dict | None) -> int:

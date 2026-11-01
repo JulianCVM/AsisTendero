@@ -122,7 +122,7 @@ propio.
    - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
      (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
    - `read_photo` y `PhotoRejected` (`photo.py`), `look_at` (`look.py`), `ImageAttributePayload`,
-     `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner` y `fixed_reply` (`photo_planner.py`);
+     `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner`, `backed_payload` y `fixed_reply` (`photo_planner.py`);
      `dhash`, `closest_family`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
      `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`

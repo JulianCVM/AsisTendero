@@ -125,10 +125,11 @@ Integra la rama de Camila (`feat/vision-atributos-livianos`) con su principio: *
 
 1. **Validación** (`agente/vision/photo.py`): solo JPEG, PNG o WebP adjuntos, nunca un enlace (el servidor no descarga nada por URL). Hay tres topes: 1,5 MB (`MAX_PHOTO_BYTES`), 16 megapíxeles leídos del encabezado antes de descomprimir (`MAX_PHOTO_PIXELS`, contra imágenes bomba) y el cuerpo del visor (`MAX_BODY_BYTES`, unos 2 MB). La foto se vuelve a guardar como JPEG **sin EXIF** (las fotos del celular traen la ubicación) y reducida a 512 px. Lo que no sirve termina en `PHOTO_FORMAT`, `PHOTO_TOO_LARGE` o `PHOTO_UNREADABLE`, con una respuesta fija y sin Grok.
 2. **Inyección primero**: si el texto que acompaña la foto intenta cambiar las reglas, no se mira la foto. El turno sigue por el grafo, que lo bloquea y banea como cualquier otro.
-3. **Huella antes que Grok** (`look.py` y `tienda/catalogo/product_photos.py`): la foto se reduce a una huella de 64 bits (dHash) y se compara con las del catálogo de la tienda que atiende el hilo. Si está a 10 bits o menos, se sabe la familia sin llamar a Grok: es el caso del cliente que reenvía la foto que le mandó la tienda.
+3. **Huella antes que Grok** (`look.py` y `tienda/catalogo/product_photos.py`): la foto se reduce a una huella de 64 bits (dHash) y se compara con las del catálogo de la tienda que atiende el hilo. Si está a 8 bits o menos (`SAME_PHOTO_DISTANCE`) de **una sola** familia, se sabe cuál es sin llamar a Grok: es el caso del cliente que reenvía la foto que le mandó la tienda. Si dos familias quedan a esa distancia, la huella no elige y la foto va a Grok. El umbral se midió el 31-10-2026 con las 208 fotos. Recomprimida al 30 % o con la mitad o el doble de tamaño, se reconocen las 208; con 10 % más de brillo, 205. En ningún caso se confunde una familia con otra. Las dos fotos más parecidas de familias distintas están a 9. Un recorte se aleja rápido: con un 5 % de borde solo se reconocen 84, y el resto va a Grok.
 4. **Una sola llamada a Grok** si la huella no la reconoce: la foto va en `detail: "low"` (un solo tile), con salida JSON de seis atributos y tope de 200 tokens (`VISION_MAX_TOKENS`). La llamada usa `grok._complete`, así que comparte cliente, errores con código y el control de modelos del reglamento (`GROK_VISION_MODEL`, o el del agente). Cada atributo se valida con su tope (`MAX_ATTRIBUTE_CHARS`, `MAX_MEASURES`). Una salida inválida deja la foto como «no identificada», pero la llamada ya pagada queda en el costo.
-5. **El resto es el grafo de siempre**: lo visto entra al turno como una referencia corta, `[Foto: tubo pvc 1/2 pulgada agua (confianza: alta)]`, y un planificador del servidor (`photo_planner.PhotoPlanner`, `without_model`) pide `buscar_productos` con esos atributos. Desde ahí todo es igual que con un mensaje de texto: `validate_request`, la cotización automática si el cliente dijo la cantidad y el producto es único, las opciones si hay varias medidas, la salida determinista y la memoria de la sesión. El planificador del servidor no cuenta como llamada a Grok ni pide `model_request`; la llamada de visión sí entra en tokens, costo y `model_calls` (`run_traced(..., vision=...)`, evento `vision` y `model_response` con `phase: "vision"`).
-6. **Sin reconocer** (sin tipo o con confianza baja): se pide la muestra en el mostrador (`SAMPLE_COUNTER_TEMPLATE`), o el material y el largo si es un tornillo. Lo mismo pasa si el cliente manda la misma foto tres veces seguidas (`MAX_VISION_CLARIFICATIONS`).
+5. **Solo lo que el catálogo respalda** (`photo_planner.backed_payload`): material, uso y color son lo que Grok supone al mirar, no algo que el cliente pidió. Cada uno se queda solo si con él sigue habiendo algún producto exacto; es la misma regla con la que la búsqueda suelta «2 libras». Si el tipo de producto no tiene ningún exacto, no se toca nada y la respuesta de opciones cercanas es la correcta. En la prueba real, la foto de un martillo de uña volvió «acero» y «uña para extraer clavos». Como campos, la respuesta era «así como lo pides no lo manejo… es de otro material», y como el turno guardaba «acero», el turno siguiente volvía a buscarlo. El tubo PVC «para agua» conserva sus dos datos porque el catálogo los nombra. La traza guarda todo lo que Grok vio.
+6. **El resto es el grafo de siempre**: lo visto entra al turno como una referencia corta, `[Foto: tubo pvc 1/2 pulgada agua (confianza: alta)]`, y un planificador del servidor (`photo_planner.PhotoPlanner`, `without_model`) pide `buscar_productos` con esos atributos. Desde ahí todo es igual que con un mensaje de texto: `validate_request`, la cotización automática si el cliente dijo la cantidad y el producto es único, las opciones si hay varias medidas, la salida determinista y la memoria de la sesión. El planificador del servidor no cuenta como llamada a Grok ni pide `model_request`; la llamada de visión sí entra en tokens, costo y `model_calls` (`run_traced(..., vision=...)`, evento `vision` y `model_response` con `phase: "vision"`).
+7. **Sin reconocer** (sin tipo o con confianza baja): se pide la muestra en el mostrador (`SAMPLE_COUNTER_TEMPLATE`), o el material y el largo si es un tornillo. Lo mismo pasa si el cliente manda la misma foto tres veces seguidas (`MAX_VISION_CLARIFICATIONS`).
 
 La foto nunca se guarda ni llega a la traza: la sesión recuerda solo la referencia `[Foto: …]` y `sanitize_image_text` quita cualquier base64 del texto. Antes de la limpieza, la rama tenía otro comportamiento:
 
@@ -146,15 +147,29 @@ La foto nunca se guarda ni llega a la traza: la sesión recuerda solo la referen
 - reducida a 320 px y sin metadatos;
 - `fotos.json` guarda autor, licencia, fuente y huella de cada una, y `CREDITOS.md` la atribución que exigen esas licencias.
 
-La arma `tools/fotos/descargar_fotos.py`, que no llama a Grok. El script exige que el título del archivo nombre lo buscado, descarta títulos y descripciones con marcas y guarda el manifiesto tras cada familia. La hoja de contacto (`--hoja`) se revisa a ojo antes de subir. Las familias sin foto libre responden igual, sin imagen. El panel del tendero sigue usando los pictogramas de `product_art.py`.
+La arma `tools/fotos/descargar_fotos.py`, que no llama a Grok. El script exige que el título del archivo nombre lo buscado, descarta títulos y descripciones con marcas y guarda el manifiesto tras cada familia. La búsqueda sola trajo muchas fotos que no correspondían: paisajes, conciertos, documentos, un faro, un carro antiguo. Por eso la hoja de contacto (`--hoja`) se revisó a ojo el 31-10-2026:
 
-**Pendiente por validar (31-10-2026, al subir esta integración):**
+- 59 fotos se eligieron a mano entre las opciones numeradas de `--candidatos FAMILIA "términos"`; su título exacto queda en `ELEGIDAS`, para rehacer la biblioteca igual.
+- 28 familias quedaron sin foto (`SIN_FOTO`) porque solo había fotos ambiguas, de otro producto parecido o con marca: aerosol, anticorrosivo, pegantes, thinner, puntillas, blanqueador y otros. Una foto parecida haría pasar un producto por otro.
 
-- La biblioteca tiene 215 de 246 familias: la descarga se cortó y faltan 31.
-- Falta revisar a ojo la hoja de contacto: la búsqueda de Commons trae fotos que no corresponden o con marcas.
-- No se ha probado con Grok real que la pasarela del reto acepte imágenes: las pruebas reemplazan `grok._complete`.
-- Falta calibrar el umbral de la huella (`SAME_PHOTO_DISTANCE`) con las fotos reales.
-- Falta recorrer en el navegador el adjuntar y las fotos de la respuesta (escritorio y 390 px).
+La biblioteca tiene **208 de 246 familias**. A las 28 de `SIN_FOTO` se suman 10 familias sin foto libre que las nombre: accesorios de PVC (codo de 45°, unión, tapón, reducción, yee), sifón, válvula de llenado, silicona, pegante para cerámica y plafón. Las familias sin foto responden igual, sin imagen. Cada foto se reconoce a sí misma por huella sin quedar al alcance de otra (`test_shipped_manifest_is_complete_free_and_matches_the_catalog`): TAU y TLA habían quedado con el mismo archivo, y por eso TLA va sin foto. El panel del tendero sigue usando los pictogramas de `product_art.py`.
+
+**Validado con Grok real (31-10-2026, `s4-conversacion-v12` y `mercado-v1`).** La pasarela acepta imágenes en `detail: "low"`: cada foto costó entre 0,00028 y 0,00071 USD, con una sola llamada. Los casos fueron:
+
+- martillo de uña (pregunta la medida: 20 oz o 16 oz);
+- 2 bultos de cemento (cotiza $79.000 sin otra llamada);
+- tornillo drywall (tres medidas);
+- huevos en el mercado ($650 c/u);
+- una imagen que no es un producto (pide la muestra);
+- un martillo en el mercado («no lo manejo»);
+- la foto del catálogo tal cual (por huella, 0 llamadas).
+
+El visor se recorrió por HTTP contra el servidor real: foto por `/api/trace`, evento `vision`, `imagenes` en el evento `session`, `/fotos/foto-MAR.jpg` servida y 404 para `fotos.json`, `../` y archivos fuera del manifiesto.
+
+**Pendiente:**
+
+- El recorrido en el navegador (escritorio y 390 px) del botón de adjuntar y de las fotos bajo la respuesta. El Chrome conectado el 31-10 no alcanzaba el `127.0.0.1` de esta máquina; el JavaScript del visor pasa `node --check`.
+- «¿Cuál de los dos es más barato?» tras unas opciones vuelve a listarlas sin precio, con foto y sin ella, porque `option_lines` no pone precio mientras el cliente no elige. Es una decisión de diseño: cambiarla es otra tarea.
 
 ## Mensajes mal escritos y pruebas de caos
 

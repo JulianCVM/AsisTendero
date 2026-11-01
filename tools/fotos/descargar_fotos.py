@@ -6,6 +6,7 @@ Uso (desde la raíz del repositorio; no llama a Grok):
     .venv\Scripts\python tools\fotos\descargar_fotos.py MAR CEM      # rehacer solo esas
     .venv\Scripts\python tools\fotos\descargar_fotos.py --todas      # rehacer todas
     .venv\Scripts\python tools\fotos\descargar_fotos.py --hoja       # hoja de contacto para revisarlas
+    .venv\Scripts\python tools\fotos\descargar_fotos.py --candidatos MAR "claw hammer"   # opciones numeradas
 
 Cada foto se reduce a 320 px de lado mayor, se guarda como JPEG sin metadatos (los EXIF pueden traer ubicación) y
 se anota en ``fotos.json`` con su autor, licencia, fuente y huella perceptual. ``CREDITOS.md`` se rehace desde el
@@ -112,6 +113,74 @@ TERMS = {
     "MPFR": "potato chips", "MCHT": "chocolate bar", "MMNI": "salted peanuts", "MCHU": "lollipop",
     "MVEL": "candles", "MFOS": "matches", "MPIL": "AA batteries", "MALP": "dry dog food",
 }
+# Fotos elegidas a ojo en la hoja de contacto: título exacto del archivo en Commons. Mandan sobre la búsqueda y
+# hacen que la biblioteca se pueda rehacer igual.
+ELEGIDAS: dict[str, str] = {
+    "ADO": "File:Stippled cement paving blocks for texture.jpg",
+    "ARA": "File:Washers.agr.jpg",
+    "ARE": "File:Pile of Sand for Building in Anambra State.jpg",
+    "BAN": "File:Paint Tray (1535689884).jpg",
+    "BIS": "File:Door Hinge.jpg",
+    "BOM": "File:LED light bulb ~171113.jpg",
+    "BOQ": "File:Applying grout.jpg",
+    "BRM": "File:Twist Drill Bit (6954956907).jpg",
+    "BRO": "File:2000s Wistoba Chinex Plus professional trade paintbrush model 1508 50 mm width stainless steel ferrule.jpg",
+    "CAB": "File:Drum Roll - geograph.org.uk - 1003165.jpg",
+    "CAJ": "File:Cable junction box for maintaining electrical functional integrity according to DIN 4102 Part 12.JPG",
+    "CEM": "File:Portland Type 1 paper bags of Taiwan Cement on Fu 2nd Street 20180501.jpg",
+    "CEN": "File:A Roll of Masking Tape (32410678777).jpg",
+    "CHA": "File:Mormon Helping Hands (high-visibility vest, Hungarian).jpg",
+    "CHM": "File:Bookcase cabinet door handles made by Loach & Clarke. One lock faceplate is stamped with a royal crown and the letters VR.png",
+    "CON": "File:Rigid Non-Metallic Conduit 1.jpg",
+    "CPV": "File:Pipeing.jpeg",
+    "DIS": "File:Abrasive-Discs 41508-480x360 (5000494680).jpg",
+    "DUP": "File:Power cord (817840840).jpg",
+    "ESC": "File:Broomstick.jpg",
+    "ESX": "File:Spray Polyurethane Foam Application.jpg",
+    "FLX": "File:Measuring-tape.jpg",
+    "GRV": "File:Gravel Stones.jpg",
+    "IMP": "File:Roof waterproofing system application by Monotica Athens.jpg",
+    "LLT": "File:Outdoor water tap.jpg",
+    "LMA": "File:Rough-Sandpaper- 28805-480x360 (4999892287).jpg",
+    "MAC": "File:Various sledge hammers and an axe in hardware store in Germany.jpg",
+    "MAGT": "File:Water bottle in room.jpg",
+    "MAZU": "File:Granulated White Sugar with Large Crystals, Bright Side Light.jpg",
+    "MBOL": "File:Black garbage bag.jpg",
+    "MCEL": "File:Fresh scallions from Gorzynski Ornery Farm, Union Square Greenmarket, May 17 2025, Manhattan, New York.jpg",
+    "MCHA": "File:Green shampoo bottle.jpg",
+    "MCHU": "File:Transparent film wrapped swirl lollipop.jpg",
+    "MDF": "File:MDF Sample.jpg",
+    "MESP": "File:Cleaning sponge.jpg",
+    "MFOS": "File:Closeup of match stick heads.jpg",
+    "MGSC": "File:Glass of Cola.jpg",
+    "MHUE": "File:Brown eggs in a deviled egg plate.jpg",
+    "MJBR": "File:Savons en train de sécher par David Damour.jpg",
+    "MLDL": "File:Milk carton clip art.png",
+    "MLEC": "File:Milk Bag.jpg",
+    "MPAN": "File:Panela.jpg",
+    "MPAP": "File:Potato sprout, January 23, 2006.jpg",
+    "MPHI": "File:Toilet paper roll.jpg",
+    "MTOA": "File:Sanitary towel 1.jpg",
+    "MYUC": "File:PeeLawPeeNam Cassava root Yuca Manioc.jpg",
+    "NIV": "File:Tool-level.jpg",
+    "PAL": "File:Shovel 2.jpg",
+    "PIS": "File:Caulking.jpg",
+    "PMA": "File:Wood glue.jpg",
+    "SAN": "File:Fernco PVC Drain Trap J-Bend.jpg",
+    "SEN": "File:Ranex Smartwares 6000.293 - board - motion sensor and photoresistor-5608.jpg",
+    "SER": "File:Swedish hand saw No 315 by AB Stridsberg and Bioerck second half of 20th century.jpg",
+    "TAB": "File:Pine plank fence 2019 G1.jpg",
+    "TEE": "File:Tés de plomberie.jpg",
+    "TEF": "File:PTFE seal tape.jpg",
+    "TUE": "File:Hex nut.JPG",
+    "TZN": "File:Seabees apply metal roofing sheets while reconstructing. (44604813675).jpg",
+    "VRS": "File:White spirit.JPG",
+}
+# Familias sin una foto libre que muestre el producto sin confundirlo con otro: van sin foto, nunca con una parecida.
+SIN_FOTO: set[str] = set((
+    "AER ALA ANG ANT CBL CNC CPI ESD ESM EST FLO FUM LLV MAB MACE MAGB MBLQ MJUG MSUA PCO PEI PLN PUN SOL "
+    "THI TLA TPL YES"
+).split())
 # Si el término no da una foto libre que lo nombre en su título, se prueba este, más general.
 FALLBACK = {
     "ADH": "PVC fitting", "ADM": "PVC pipe fitting", "ANT": "primer paint", "BOQ": "grout", "C45": "PVC elbow",
@@ -149,33 +218,49 @@ def _key_words(term: str) -> set[str]:
     return _words(" ".join(word for word in term.split() if word.lower() not in FILLER)) or _words(term)
 
 
-def _candidates(term: str) -> list[dict]:
+IMAGE_INFO = {"prop": "imageinfo", "iiprop": "url|extmetadata|mime", "iiurlwidth": 640}
+
+
+def _candidate(page: dict) -> dict | None:
+    """Los datos de un archivo de Commons, o None si su licencia no es libre o nombra una marca."""
+    info = (page.get("imageinfo") or [{}])[0]
+    meta = info.get("extmetadata") or {}
+    license_name = _plain((meta.get("LicenseShortName") or {}).get("value", ""))
+    if info.get("mime") not in {"image/jpeg", "image/png"} or not FREE.match(license_name):
+        return None
+    description = _plain((meta.get("ImageDescription") or {}).get("value", ""))
+    if BRANDED.search(page["title"]) or BRANDED.search(description):
+        return None
+    return {"titulo": page["title"], "fuente": info.get("descriptionurl", ""), "url": info.get("thumburl") or info["url"],
+            "autor": _plain((meta.get("Artist") or {}).get("value", "")) or "Autor sin nombre en Commons",
+            "licencia": license_name, "licencia_url": _plain((meta.get("LicenseUrl") or {}).get("value", ""))}
+
+
+def _candidates(term: str, strict: bool = True, limit: int = 30) -> list[dict]:
+    """Archivos libres para el término.
+
+    ``strict`` exige que el título nombre lo buscado: todas las palabras del objeto, o todas menos una con tres o
+    más. La búsqueda de Commons mira también la descripción y devolvía paisajes, vías férreas y esferas.
+    """
     wanted = _key_words(term)
-    # Todas las palabras del objeto en el título del archivo; con tres o más, basta con que falte una. La búsqueda
-    # de Commons mira también la descripción y devolvía paisajes, vías férreas y esferas.
-    needed = max(1, len(wanted) - (len(wanted) >= 3))
+    needed = max(1, len(wanted) - (len(wanted) >= 3)) if strict else 0
     data = _get({"action": "query", "generator": "search", "gsrsearch": f"{term} filetype:bitmap",
-                 "gsrnamespace": 6, "gsrlimit": 30, "prop": "imageinfo",
-                 "iiprop": "url|extmetadata|mime", "iiurlwidth": 640})
+                 "gsrnamespace": 6, "gsrlimit": limit, **IMAGE_INFO})
     pages = sorted((data.get("query") or {}).get("pages", {}).values(), key=lambda page: page.get("index", 99))
     found = []
     for page in pages:
-        info = (page.get("imageinfo") or [{}])[0]
-        meta = info.get("extmetadata") or {}
-        license_name = _plain((meta.get("LicenseShortName") or {}).get("value", ""))
-        if info.get("mime") not in {"image/jpeg", "image/png"} or not FREE.match(license_name):
-            continue
-        description = _plain((meta.get("ImageDescription") or {}).get("value", ""))
+        candidate = _candidate(page)
         score = len(wanted & _words(page["title"]))
-        if BRANDED.search(page["title"]) or BRANDED.search(description) or score < needed:
-            continue
-        found.append({"puntaje": score,
-            "titulo": page["title"], "fuente": info.get("descriptionurl", ""), "url": info.get("thumburl") or info["url"],
-            "autor": _plain((meta.get("Artist") or {}).get("value", "")) or "Autor sin nombre en Commons",
-            "licencia": license_name, "licencia_url": _plain((meta.get("LicenseUrl") or {}).get("value", "")),
-        })
+        if candidate is not None and score >= needed:
+            found.append({**candidate, "puntaje": score})
     # Más palabras del término en el título primero; a igual puntaje, el orden de relevancia de Commons.
     return sorted(found, key=lambda candidate: -candidate["puntaje"])
+
+
+def _by_title(title: str) -> dict | None:
+    data = _get({"action": "query", "titles": title, **IMAGE_INFO})
+    pages = list((data.get("query") or {}).get("pages", {}).values())
+    return _candidate(pages[0]) if pages and "missing" not in pages[0] else None
 
 
 def _download(url: str) -> Image.Image:
@@ -188,29 +273,55 @@ def _download(url: str) -> Image.Image:
 
 
 def fetch(family: str, business: str, name: str) -> dict | None:
+    """La foto elegida a ojo (``ELEGIDAS``) o, si no hay, la primera libre que nombre el término."""
+    if family in SIN_FOTO:
+        return None
+    if family in ELEGIDAS:
+        candidate = _by_title(ELEGIDAS[family])
+        if candidate is None:
+            raise SystemExit(f"{family}: {ELEGIDAS[family]} ya no está en Commons o su licencia no es libre")
+        return _save(family, business, name, candidate, "elegida a ojo")
     for term in (TERMS[family], FALLBACK.get(family)):
-        entry = _fetch_term(family, business, name, term) if term else None
-        if entry is not None:
-            return entry
+        for candidate in _candidates(term) if term else []:
+            entry = _save(family, business, name, candidate, term)
+            if entry is not None:
+                return entry
     return None
 
 
-def _fetch_term(family: str, business: str, name: str, term: str) -> dict | None:
-    for candidate in _candidates(term):
+def _save(family: str, business: str, name: str, candidate: dict, term: str) -> dict | None:
+    try:
+        image = _download(candidate["url"])
+    except OSError as error:
+        print(f"  {family}: no se pudo leer {candidate['titulo']} ({type(error).__name__})")
+        return None
+    # Con prefijo: «CON», «AUX» o «PRN» solos son nombres reservados de Windows y git no los puede leer.
+    archivo = f"foto-{family}.jpg"
+    # Sin exif ni icc: el JPEG solo lleva los píxeles.
+    image.save(PHOTOS_DIR / archivo, "JPEG", quality=80, optimize=True)
+    credit = f"{candidate['autor']} · {candidate['licencia']} · Wikimedia Commons"
+    return {"archivo": archivo, "negocio": business, "producto": name, "busqueda": term,
+            **{key: candidate[key] for key in ("titulo", "fuente", "autor", "licencia", "licencia_url")},
+            "credito": credit, "huella": dhash(image), "ancho": image.width, "alto": image.height}
+
+
+def candidate_sheet(family: str, term: str, out: Path) -> None:
+    """Hasta 12 opciones libres numeradas para elegir a ojo; el título elegido va a ``ELEGIDAS``."""
+    found = _candidates(term, strict=False, limit=40)[:12]
+    cell = 200
+    sheet = Image.new("RGB", (4 * cell, max(1, -(-len(found) // 4)) * (cell + 16)), "white")
+    draw = ImageDraw.Draw(sheet)
+    for index, candidate in enumerate(found):
+        print(f"  {index}: {candidate['titulo']} ({candidate['licencia']})")
         try:
             image = _download(candidate["url"])
-        except OSError as error:
-            print(f"  {family}: no se pudo leer {candidate['titulo']} ({type(error).__name__})")
+        except OSError:
             continue
-        # Con prefijo: «CON», «AUX» o «PRN» solos son nombres reservados de Windows y git no los puede leer.
-        archivo = f"foto-{family}.jpg"
-        # Sin exif ni icc: el JPEG solo lleva los píxeles.
-        image.save(PHOTOS_DIR / archivo, "JPEG", quality=80, optimize=True)
-        credit = f"{candidate['autor']} · {candidate['licencia']} · Wikimedia Commons"
-        return {"archivo": archivo, "negocio": business, "producto": name, "busqueda": term,
-                **{key: candidate[key] for key in ("titulo", "fuente", "autor", "licencia", "licencia_url")},
-                "credito": credit, "huella": dhash(image), "ancho": image.width, "alto": image.height}
-    return None
+        image.thumbnail((cell - 6, cell - 6))
+        x, y = (index % 4) * cell, (index // 4) * (cell + 16)
+        sheet.paste(image, (x + 3, y + 3))
+        draw.text((x + 4, y + cell), f"{family} {index}", fill="black")
+    sheet.save(out)
 
 
 def write_credits(entries: dict[str, dict]) -> None:
@@ -245,6 +356,13 @@ def contact_sheet(entries: dict[str, dict], out: Path) -> None:
 def main(argv: list[str]) -> int:
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
     entries = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.is_file() else {}
+    if argv and argv[0] == "--candidatos":
+        family = argv[1].upper()
+        out = Path(argv[3]) if len(argv) > 3 else ROOT / ".local" / f"fotos-candidatos-{family}.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        candidate_sheet(family, argv[2] if len(argv) > 2 else TERMS[family], out)
+        print(out)
+        return 0
     if argv and argv[0] == "--hoja":
         out = Path(argv[1]) if len(argv) > 1 else ROOT / ".local" / "fotos-hoja.png"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -268,7 +386,7 @@ def main(argv: list[str]) -> int:
             print(f"  {family}: sin conexión con Commons ({type(error).__name__}); se reintenta en otra corrida")
             continue
         if entry is None:
-            print(f"  {family}: sin foto libre para «{TERMS[family]}»")
+            print(f"  {family}: sin foto" + ("" if family in SIN_FOTO else f" libre para «{TERMS[family]}»"))
             entries.pop(family, None)
             (PHOTOS_DIR / f"foto-{family}.jpg").unlink(missing_ok=True)
         else:

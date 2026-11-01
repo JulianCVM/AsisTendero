@@ -20,9 +20,11 @@ PHOTOS_DIR = Path(__file__).resolve().parents[2] / "datos" / "fotos"
 MANIFEST = PHOTOS_DIR / "fotos.json"
 PHOTO_ROUTE = "/fotos/"
 HASH_BITS = 64
-# Distancia de Hamming máxima entre huellas para dar por hecho que es la misma foto (recortada, comprimida o con
-# otro tamaño). Con 64 bits, dos fotos distintas del catálogo quedan a más de 20; 10 deja margen sin confundirlas.
-SAME_PHOTO_DISTANCE = 10
+# Distancia de Hamming máxima entre huellas para dar por hecho que es la misma foto. Medido con las 208 fotos del
+# 31-10-2026: recomprimida o con la mitad o el doble de tamaño se reconocen las 208; con un 10 % más de brillo, 205;
+# ninguna se confunde con otra familia, y las dos fotos más parecidas de familias distintas están a 9. Un recorte se
+# aleja rápido (con 5 % de borde, 84 de 208): entonces no hay atajo y la foto va a Grok.
+SAME_PHOTO_DISTANCE = 8
 
 
 def dhash(image: Image.Image) -> str:
@@ -69,12 +71,16 @@ def photo_file(name: str) -> Path | None:
 
 
 def closest_family(fingerprint: str, families: set[str] | None = None) -> tuple[str, int] | None:
-    """La familia cuya foto se parece a la huella dada, si está a ``SAME_PHOTO_DISTANCE`` o menos."""
-    best = None
+    """La familia cuya foto se parece a la huella dada, si está a ``SAME_PHOTO_DISTANCE`` o menos.
+
+    Si dos familias quedan a esa distancia, la huella no decide entre ellas: None, y la foto va a Grok. Elegir la
+    más cercana sería tomar una opción parecida por la pedida.
+    """
+    near = []
     for family, entry in manifest().items():
         if families is not None and family not in families:
             continue
         gap = distance(fingerprint, entry["huella"])
-        if gap <= SAME_PHOTO_DISTANCE and (best is None or gap < best[1]):
-            best = (family, gap)
-    return best
+        if gap <= SAME_PHOTO_DISTANCE:
+            near.append((family, gap))
+    return near[0] if len(near) == 1 else None
