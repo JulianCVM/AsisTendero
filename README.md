@@ -226,6 +226,8 @@ La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con G
 
 La [evidencia S3](evaluation/S3_EVIDENCIA.md) mide el set propio de **43 casos (48 turnos)** en cinco suites (S2, catálogo, tienda, seguridad y conversación) con costo por tarea. Con `s3-conversacion-v1` pasaron 33/43; corregidos los fallos, `s3-conversacion-v2` dio **42/43 y 3/3 fallos controlados sobre `76f86c4`**, con USD 0.0036 por tarea y 2,95 llamadas a Grok por tarea. El caso restante (C-08) se corrigió en `8a4ac95` y no se ha vuelto a medir. La comparación entre modelos Grok quedó interrumpida y sigue pendiente.
 
+La [evidencia S4](evaluation/S4_EVIDENCIA.md) mide hoy **334 casos** de la ferretería y de una tienda de mercado ficticia. La corrida 42 dio **327/334 y 3/3 fallos controlados sobre `c77dd48`**, por 1,1531 USD. Seis de los siete que fallaron se corrigieron en `e1e0b12` y pasaron en la corrida 43; X-22 queda como variación de Grok, con una respuesta segura. El [costo por tarea y por operación](evaluation/COSTOS_POR_TAREA.md) de esas 334 tareas reales sale de la corrida 42. Muestra cada tarea, cada tipo de llamada a Grok y cada herramienta: 0,003452 USD por tarea, mediana de 0,001872 y 3,01 llamadas a Grok por tarea.
+
 El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama a Grok si se usa `--live`**:
 
 ```powershell

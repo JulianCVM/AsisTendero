@@ -27,6 +27,41 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Segunda tanda y costo por operación (corridas 42 y 43, 31-10-2026 y 01-11-2026 UTC)
+
+Pedido de Julian: otra tanda de pruebas, arreglar lo que falle y presentar 30 o más casos reales con su costo por
+ejecución y por operación. Mismo modelo y prompts que las corridas 38 a 41 (`s4-conversacion-v12` y `mercado-v1`),
+`GROK_CONV_ID` apagada, `--concurrency 3`, desde un árbol de trabajo limpio en el commit indicado.
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 42 | `c77dd48` | los 334 casos y 3 fallos controlados | **327/334** y 3/3 | 1005 | 1.153100 | `eval-20261101T015603746928Z` |
+| 43 | `e1e0b12` | los 7 que fallaron en la 42 | 6/7 | 31 | 0.030435 | `eval-20261101T021405970554Z` |
+
+- **Corrida 42.** Arregló 17 casos que fallaban en la 39 (A-04, A-10, A-20, M-06, M-08, M-09, M-20, M-29, M-33, M-35,
+  M-36, P-docena-1, P-docena-2, P-tanque-2, X-06, Z-30 y Z-35; los arreglos están en `67503f8`). `mercado` queda en
+  33/33 y paráfrasis, en 7 de 8 grupos coherentes. Z-30 cambió en el caso, no en el agente: «La lija de agua grano 80
+  está agotada por ahora» es la conducta correcta y el caso ahora acepta `insufficient_stock`; sigue exigiendo que
+  diga que está agotada y que no invente fecha.
+- **Oráculo sobre la corrida 42** (sin llamar a Grok): de 487 turnos, 290 respuestas traían cifras en pesos y
+  **ninguna** sin respaldo en las herramientas del turno. **Ninguna** muestra un SKU.
+- **Los 7 que fallaron en la 42** y su arreglo (`e1e0b12`, con una prueba que falla sin él):
+  - V-17, X-14 y A-18: Grok llenó un campo con «plis», «bolsa 50 kg» o «tapar huecos», y el producto exacto quedó
+    como opción cercana. Las cortesías pasan a palabras vacías; el cemento gris suma «bolsa» y la masilla, «tapar».
+  - P-fiado-2 «anótemelo y le pago el viernes»: no decía que no se fía. Pagar otro día ahora cuenta como pedir fiado.
+  - Q-10 «agrégale 2 brochas» con un pedido activo: el aviso solo pedía cotizar. Ahora pide registrar.
+  - H-09: Grok registró el pedido y escribió «apartado por 5 minutos» sin pedir el «sí». Esa redacción se reemplaza.
+  - X-22 «2 brochas de 3 pulgadas y un taladro»: Grok inventó el SKU «TALADRO-1» al cotizar y la validación lo
+    rechazó. La respuesta quedó segura (precio unitario real, sin taladro), pero sin el total de las brochas. Pasó
+    en la 38 y falló en la 39 a la 43: es variación de Grok y queda abierto. Cotizar solo lo identificado en un
+    mensaje de varios productos exige asignar cada cantidad a su producto, y no se cambió a la carrera.
+- **Corrida 43** (verificación): pasan los seis arreglados; X-22 sigue igual.
+- **Costo por operación:** `evaluation/COSTOS_POR_TAREA.md`, generado con `eval_costs.py` desde el reporte de la
+  corrida 42 (334 tareas reales, 487 mensajes del cliente). En resumen: 0,003452 USD por tarea, mediana de
+  0,001872, 3,01 llamadas a Grok por tarea, 0,001147 USD por llamada y 94,7 % de llamadas con el prompt fijo en
+  caché. Las herramientas no tienen costo de API.
+- **Gasto de las corridas 38 a 43:** 3.568553 USD (presupuesto aprobado por Julian: 5 USD).
+
 ## Línea base, catálogo ampliado, tienda de mercado y paráfrasis (corridas 38 a 41, 31-10-2026)
 
 Pedido de Julian: correr el set completo, ampliar el catálogo y agregar una tienda de barrio de mercado diario para
