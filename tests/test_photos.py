@@ -145,6 +145,10 @@ def test_look_recognizes_a_catalog_photo_by_fingerprint_without_grok(fake_manife
     assert seen.payload.tipo_producto == "Martillo de uña"
     assert seen.llamada is None and seen.huella["familia"] == "MAR"
     assert no_grok == []
+    # La traza cuenta el cotejo: solo se comparó con las fotos de la ferretería y la ganadora está dentro del umbral.
+    assert seen.cotejo == {"fotos": 1, "mas_cercana": seen.huella["distancia"], "umbral": product_photos.SAME_PHOTO_DISTANCE,
+                           "familia": "MAR"}
+    assert seen.limpieza["metadatos"] == "quitados" and seen.limpieza["limpia"]["bytes"] > 0
 
 
 def test_fingerprint_near_two_families_decides_nothing(fake_manifest, monkeypatch):
@@ -221,6 +225,12 @@ def test_photo_turn_quotes_from_the_catalog_with_one_vision_call(chat, fake_mani
     assert "[Foto: tubo pvc 1/2 pulgada agua" in stored and "base64" not in stored
     assert all(raw[30:80] not in json.dumps(event, ensure_ascii=False) for event in events)
     assert next(e for e in events if e["type"] == "model_response")["details"]["phase"] == "vision"
+    # Lo que el diagrama del visor lee de la foto: tamaños sin bytes, el cotejo que mandó a Grok y nada descartado.
+    vision = next(e for e in events if e["type"] == "vision")["details"]
+    assert vision["limpieza"]["entrada"] == {"bytes": vision["limpieza"]["entrada"]["bytes"], "ancho": 240, "alto": 150}
+    assert vision["limpieza"]["limpia"]["ancho"] == 240 and vision["limpieza"]["metadatos"] == "quitados"
+    assert vision["cotejo"]["familia"] is None and vision["cotejo"]["mas_cercana"] > vision["cotejo"]["umbral"]
+    assert vision["llamada"] is True and vision["descartados"] == []
 
 
 def test_what_grok_guesses_from_the_photo_does_not_turn_the_exact_product_into_a_nearby_one(chat, monkeypatch):
@@ -247,7 +257,10 @@ def test_what_grok_guesses_from_the_photo_does_not_turn_the_exact_product_into_a
     assert "acero" not in context["turnos"][-1]["cliente"]
     assert "material" not in (context.get("especificaciones") or {}).get("martillo", {})
     # La traza sí guarda todo lo que Grok vio.
-    assert next(e for e in events if e["type"] == "vision")["details"]["payload"]["material"] == "acero"
+    vision = next(e for e in events if e["type"] == "vision")["details"]
+    assert vision["payload"]["material"] == "acero"
+    # Y el diagrama del visor muestra qué se descartó por no tener respaldo en el catálogo.
+    assert set(vision["descartados"]) == {"material", "presentacion_uso", "color_acabado"}
 
 
 def test_what_the_catalog_names_from_the_photo_still_narrows_the_search():
@@ -274,9 +287,14 @@ def test_injection_in_the_caption_is_blocked_without_looking_at_the_photo(chat, 
 def test_rejected_photo_answers_without_grok(chat, no_grok):
     store, orders = chat
     session = store.create()
-    result = run_turn(store, session, "¿tienen esto?", orders=orders, image="https://example.com/x.jpg")
+    events = []
+    result = run_turn(store, session, "¿tienen esto?", emit=events.append, orders=orders,
+                      image="https://example.com/x.jpg")
     assert result["estado"] == "refused" and result["model_calls"] == 0
     assert "no enlaces" in result["respuesta"]
+    # El visor marca dónde se detuvo la foto con el código de la ruta.
+    assert next(e for e in events if e["type"] == "route")["details"]["foto"] == "PHOTO_FORMAT"
+    assert not any(e["type"] == "vision" for e in events)
 
 
 def test_grok_failure_on_the_photo_ends_in_a_safe_reply(chat, fake_manifest, monkeypatch):
@@ -287,9 +305,12 @@ def test_grok_failure_on_the_photo_ends_in_a_safe_reply(chat, fake_manifest, mon
 
     monkeypatch.setattr(grok, "_complete", fail)
     session = store.create()
-    result = run_turn(store, session, "", orders=orders, image=data_uri(picture(width=240, pattern="fade")))
+    events = []
+    result = run_turn(store, session, "", emit=events.append, orders=orders,
+                      image=data_uri(picture(width=240, pattern="fade")))
     assert result["estado"] == "model_error" and result["respuesta"] == PHOTO_UNAVAILABLE_REPLY
     assert "$" not in result["respuesta"]
+    assert next(e for e in events if e["type"] == "route")["details"]["foto"] == "MODEL_TIMEOUT"
 
 
 def test_low_confidence_photo_asks_for_the_sample_without_searching(chat):

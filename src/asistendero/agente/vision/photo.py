@@ -43,10 +43,20 @@ class PhotoRejected(ValueError):
 
 @dataclass(frozen=True)
 class Photo:
+    """La foto limpia (``jpeg``, ``width``, ``height``) y lo que llegó (``received``: bytes, ancho y alto)."""
+
     jpeg: bytes
     fingerprint: str
     width: int
     height: int
+    received: tuple[int, int, int] = (0, 0, 0)
+
+    def cleaning(self) -> dict:
+        """Lo que hizo la limpieza, para la traza: tamaño de entrada y de salida, sin los bytes."""
+        size, width, height = self.received
+        return {"entrada": {"bytes": size, "ancho": width, "alto": height},
+                "limpia": {"bytes": len(self.jpeg), "ancho": self.width, "alto": self.height},
+                "metadatos": "quitados"}
 
     def data_uri(self) -> str:
         return "data:image/jpeg;base64," + base64.b64encode(self.jpeg).decode("ascii")
@@ -78,6 +88,7 @@ def read_photo(data: str) -> Photo:
         # El tamaño se lee del encabezado, antes de descomprimir los píxeles.
         if image.width * image.height > MAX_PHOTO_PIXELS:
             raise PhotoRejected("PHOTO_TOO_LARGE", "La foto tiene demasiados píxeles: mándala más pequeña.")
+        received = (len(raw), image.width, image.height)
         image.load()
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
         raise PhotoRejected("PHOTO_UNREADABLE", "No pude abrir la foto. Intenta adjuntarla de nuevo.") from None
@@ -86,4 +97,5 @@ def read_photo(data: str) -> Photo:
     buffer = BytesIO()
     # Un JPEG nuevo, sin exif ni perfil: solo los píxeles.
     image.save(buffer, "JPEG", quality=JPEG_QUALITY, optimize=True)
-    return Photo(jpeg=buffer.getvalue(), fingerprint=dhash(image), width=image.width, height=image.height)
+    return Photo(jpeg=buffer.getvalue(), fingerprint=dhash(image), width=image.width, height=image.height,
+                 received=received)

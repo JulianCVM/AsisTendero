@@ -84,3 +84,13 @@ def closest_family(fingerprint: str, families: set[str] | None = None) -> tuple[
         if gap <= SAME_PHOTO_DISTANCE:
             near.append((family, gap))
     return near[0] if len(near) == 1 else None
+
+
+def fingerprint_report(fingerprint: str, families: set[str] | None = None) -> dict:
+    """Cómo salió el cotejo de la huella, para la traza: cuántas fotos se compararon y a qué distancia quedó la más
+    cercana. ``familia`` es la que reconoció ``closest_family`` (None si ninguna o si hubo empate)."""
+    gaps = [distance(fingerprint, entry["huella"]) for family, entry in manifest().items()
+            if families is None or family in families]
+    found = closest_family(fingerprint, families)
+    return {"fotos": len(gaps), "mas_cercana": min(gaps) if gaps else None, "umbral": SAME_PHOTO_DISTANCE,
+            "familia": found[0] if found else None}

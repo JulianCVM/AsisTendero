@@ -246,3 +246,50 @@ def test_the_visor_colors_are_tokens_with_the_same_dark_palette_twice():
     castle = web_file("castillo.css").decode("utf-8")
     assert '.castle-stage.iso[data-theme="dark"]' in castle
     assert 'id="castle-stage"' in web_file("index.html").decode("utf-8").split("data-follow-theme")[0][-200:]
+
+
+# ---------------------------------------------------------------- recorrido de una foto
+
+
+def test_the_photo_diagram_names_real_functions_and_real_limits():
+    from importlib import import_module
+
+    from asistendero.agente.vision import photo
+    from asistendero.observabilidad.photo_flow import BROWSER_SIDE, REJECTIONS
+    from asistendero.tienda.catalogo import product_photos
+
+    flow = describe_harness()["photo_flow"]
+    lanes = {lane["id"] for lane in flow["lanes"]}
+    stores = {store["id"] for store in flow["stores"]}
+    stages = {stage["id"]: stage for stage in flow["stages"]}
+    for stage in flow["stages"]:
+        assert stage["lane"] in lanes and stage["title"] and stage["does"]
+        assert {access["store"] for access in stage["data"]} <= stores
+        assert all(access["mode"] in {"lee", "escribe"} for access in stage["data"])
+        if ":" in stage["code"]:
+            module, name = stage["code"].split(":")
+            assert hasattr(import_module(module), name), stage["code"]
+    # Los códigos de rechazo son los que lanza read_photo, ni uno más ni uno menos.
+    raised = set(re.findall(r'PhotoRejected\("(PHOTO_\w+)"', module_file("photo.py").read_text(encoding="utf-8")))
+    assert set(REJECTIONS) == raised == set(stages["limpieza"]["exit"]["codes"])
+    # El navegador reduce a lo que dice el diagrama, y el servidor a lo que dice read_photo.
+    assert f"const maxDim = {BROWSER_SIDE};" in web_file("app.js").decode("utf-8")
+    assert f"{photo.VISION_SIDE} px" in stages["limpieza"]["does"]
+    assert flow["limits"]["photos"] == len(product_photos.manifest())
+    # Las conexiones unen etapas que existen, y la huella tiene las dos salidas: atajo sin Grok y visión.
+    assert all(edge["from"] in stages and edge["to"] in stages and edge["label"] for edge in flow["edges"])
+    assert {edge["to"] for edge in flow["edges"] if edge["from"] == "huella"} == {"vision", "respaldo"}
+    # Grok solo aparece en una etapa: mirar la foto. Nada de lo que escribe en la sesión es la foto.
+    assert [stage["id"] for stage in flow["stages"] if stage["lane"] == "grok"] == ["vision"]
+    assert any(access == {"store": "sesion", "mode": "escribe"} for access in stages["memoria"]["data"])
+
+
+def test_the_photo_diagram_is_on_the_visor_page_and_reads_the_trace():
+    page = web_file("index.html").decode("utf-8")
+    assert '<script type="module" src="/assets/foto-flujo.js"></script>' in page
+    assert 'href="/assets/foto-flujo.css"' in page
+    script = web_file("foto-flujo.js").decode("utf-8")
+    # Las piezas de la traza que lo mueven: la visión, la ruta que detiene la foto, la bodega y la sesión.
+    for piece in ("'vision'", "details.foto", "'retrieve'", "'session'", "details.limpieza", "details.cotejo",
+                  "details.descartados"):
+        assert piece in script, piece

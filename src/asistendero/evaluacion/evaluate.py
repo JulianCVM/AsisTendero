@@ -34,7 +34,7 @@ from asistendero.tienda.catalogo.catalog import MockCatalog
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
 SUITES = ("s2", "catalogo", "tienda", "seguridad", "conversacion", "ruido", "pedidos", "sesion_larga", "concurrencia",
           "extremos", "flujos", "variados", "inyeccion", "memoria", "natural", "surtido", "fallas", "ampliacion",
-          "mercado", "parafrasis")
+          "mercado", "parafrasis", "fotos")
 # Más hilos no prueban nada nuevo y en S3 cinco corridas en paralelo agotaron la memoria del equipo.
 MAX_CONCURRENCY = 6
 INVALID_LOCAL_BASE_URL = "http://127.0.0.1:9/v1"

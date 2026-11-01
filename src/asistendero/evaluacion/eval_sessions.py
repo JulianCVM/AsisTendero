@@ -12,6 +12,7 @@ Además de lo que revisa ``eval_checks.verdict``, un turno puede traer:
 - ``expected_orders``: estados de los pedidos de la sesión, del más viejo al más nuevo.
 - ``expected_pickup`` y ``expected_note``: texto que debe aparecer en la recogida o en la nota de algún pedido.
 - ``expected_status`` puede ser un código de sesión (``SESSION_BANNED``): el turno no llega al grafo.
+- ``foto``: el turno llega con una foto del cliente (``eval_photos.photo_for``), como desde el botón de adjuntar.
 
 Un caso con ``clients`` puede traer ``expected_active_total``: pedidos activos entre todos al final.
 Con ``"negocio": "mercado"`` la conversación es con la tienda de barrio (su catálogo, sus pedidos y su prompt).
@@ -34,6 +35,7 @@ from asistendero.agente.modelo.prompt import serving
 from asistendero.agente.respuesta.order_replies import notice_text
 from asistendero.datos.seed import BUSINESSES
 from asistendero.evaluacion.eval_checks import record, sum_known
+from asistendero.evaluacion.eval_photos import photo_for
 from asistendero.observabilidad.pricing import run_cost
 from asistendero.tienda import reloj
 from asistendero.tienda.inventario.inventory import Inventory
@@ -138,8 +140,9 @@ class Conversation:
         if check.get("query"):
             events: list[dict] = []
             try:
+                photo = {"image": photo_for(check["foto"])} if check.get("foto") else {}
                 result = run_turn(self.store, self.session_id, check["query"], events.append, None, self.planner,
-                                  orders=self.book)
+                                  orders=self.book, **photo)
             except SessionError as error:
                 turn = _session_error(check, error)
             else:

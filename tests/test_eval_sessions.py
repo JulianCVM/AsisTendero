@@ -565,6 +565,10 @@ SCRIPTS = {
     "cotíceme 4 metros de tubo pvc de 1/2 para agua": [search("tubo PVC de 1/2 para agua", **PVC),
                                                       quote(("PVC-050", 4)), finish()],
     "¿y si llevo 10 me hace precio?": [quote(("PVC-050", 10)), finish()],
+    # Turnos de texto que siguen a una foto (suite «fotos»).
+    "¿y el de 20 oz cuánto vale?": [search("martillo de uña 20 oz", product="martillo de uña", measure="20 oz"),
+                                    finish()],
+    "dame 3 metros del de 1/2": [search("tubo PVC de 1/2 para agua", **PVC), quote(("PVC-050", 3)), finish()],
 }
 
 
@@ -694,3 +698,67 @@ def test_cli_rejects_models_outside_the_challenge_and_too_many_threads(monkeypat
             evaluate.main()
         assert exit_info.value.code == 2
     assert "no es un modelo permitido" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- suite «fotos»
+
+# Lo que «ve» la visión falsa en cada foto del cliente: lo que la visión real devolvió el 31-10-2026 con esas fotos.
+# El martillo trae lo que Grok supone (acero, uña): el caso exige que eso no lo vuelva una opción cercana.
+SEEN = {
+    "MAR": {"tipo_producto": "martillo", "material": "acero", "presentacion_uso": "uña para extraer clavos",
+            "confianza_visual": "alta"},
+    "CEM": {"tipo_producto": "cemento gris", "medidas_visibles": ["50 kg"], "presentacion_uso": "bulto",
+            "confianza_visual": "alta"},
+    "TDR": {"tipo_producto": "tornillo drywall", "confianza_visual": "alta"},
+    "MHUE": {"tipo_producto": "huevo", "color_acabado": "rojo", "confianza_visual": "alta"},
+    "PVC": {"tipo_producto": "tubo pvc", "presentacion_uso": "agua", "confianza_visual": "media"},
+}
+
+
+@pytest.fixture
+def fake_vision(monkeypatch):
+    """Reconoce la foto «del cliente» por su huella entre las de ``SEEN``; cualquier otra imagen no la identifica."""
+    from asistendero.agente.modelo import grok
+    from asistendero.agente.vision.photo import read_photo
+    from asistendero.evaluacion.eval_photos import photo_for
+    from asistendero.tienda.catalogo.product_photos import distance
+
+    prints = {family: read_photo(photo_for({"catalogo": family, "como_cliente": True})).fingerprint for family in SEEN}
+    calls = []
+
+    def complete(system, payload, conversation=None, *, user_content=None, **kwargs):
+        if user_content is None:
+            pytest.fail("Un turno de texto llegó a Grok real")
+        uri = next(part["image_url"]["url"] for part in user_content if part["type"] == "image_url")
+        seen = read_photo(uri).fingerprint
+        family = min(prints, key=lambda name: distance(prints[name], seen))
+        answer = SEEN[family] if distance(prints[family], seen) <= 4 else {"confianza_visual": "baja"}
+        calls.append(family if answer is SEEN.get(family) else "otra")
+        return json.dumps(answer, ensure_ascii=False), MODEL, 300, 40, 0, None
+
+    monkeypatch.setattr(grok, "_complete", complete)
+    return calls
+
+
+def test_every_photo_case_passes_with_a_scripted_grok_and_a_fake_vision(catalog, fake_vision):
+    cases = _cases(suites={"fotos"})
+    assert len(cases) >= 10 and {case.get("negocio", "ferreteria") for case in cases} == {"ferreteria", "mercado"}
+    report = evaluate.evaluate_cases(cases, catalog=catalog, planner=ScriptedGrok(), clock=FixedClock())
+    failed = {record["id"]: record["fail_reasons"] for record in report["cases"] if not record["passed"]}
+    assert failed == {}
+    by_id = {record["id"]: record for record in report["cases"]}
+    # La foto del catálogo, el enlace y la inyección no llaman a la visión; cada foto «del cliente», una vez.
+    assert by_id["F-01"]["turns"][0]["model_calls"] == 0
+    assert by_id["F-06"]["model_calls"] == 0 and by_id["F-07"]["model_calls"] == 0
+    assert sorted(fake_vision) == sorted(["MAR", "CEM", "TDR", "otra", "MHUE", "MAR", "PVC", "MHUE"])
+    # Ninguna respuesta con foto lleva un precio que no saliera del catálogo (lo revisa el oráculo en cada turno).
+    assert all("precio sin respaldo" not in reason for record in report["cases"] for reason in record["fail_reasons"])
+
+
+def test_a_photo_case_names_a_library_photo_or_fails_before_running():
+    from asistendero.evaluacion.eval_photos import photo_for
+
+    with pytest.raises(ValueError):
+        photo_for({"catalogo": "NOEXISTE"})
+    # Un enlace llega tal cual: es el servidor el que lo rechaza, sin descargarlo.
+    assert photo_for({"enlace": "https://example.com/x.jpg"}) == "https://example.com/x.jpg"

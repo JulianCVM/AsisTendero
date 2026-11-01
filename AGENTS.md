@@ -123,7 +123,7 @@ propio.
      (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
    - `read_photo` y `PhotoRejected` (`photo.py`), `look_at` (`look.py`), `ImageAttributePayload`,
      `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner`, `backed_payload` y `fixed_reply` (`photo_planner.py`);
-     `dhash`, `closest_family`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`).
+     `dhash`, `closest_family`, `fingerprint_report`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`); `describe_photo_flow` (`photo_flow.py`, el diagrama de la foto del visor) y `photo_for` (`eval_photos.py`, la foto de un caso de evaluación).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
      `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
      (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
@@ -192,6 +192,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Qué arranca el comando único y con qué tienda | `launcher.py` (lo llama `cli.py` sin mensaje), con su prueba en `tests/test_launcher.py` |
 | La página pública `/inicio` o los casos de su demo | `entregas/web/pagina/` (`inicio.html`, `inicio*.css` e `inicio*.js`) (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
 | Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/harness-map.js` y `harness-map.css` |
+| Una etapa del diagrama de la foto del visor | `photo_flow.py` (atado a las funciones de `agente/vision/`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/foto-flujo.js` y `foto-flujo.css` |
 | Cómo se lee un evento de la traza o el resultado de una prueba en el visor | `traza.js`, `traza-lectura.js` y `resultado.js` de `entregas/web/visor/` (piezas comunes en `visor-comun.js`); cada archivo se registra en `TraceHandler._assets` de `visual.py` |
 | La apariencia (claro, oscuro o la del sistema) de la página pública, el panel y el visor | `entregas/web/comun/tendero-theme.js` (se carga en `<head>`; guarda la elección en una cookie común a los dos puertos) y `tendero-theme.css`, con su prueba en `tests/test_tendero.py` |
 | Datos de la tienda de demostración | `demo.py` (siempre ficticios y con los módulos reales), con su prueba en `tests/test_tendero.py` |
@@ -203,7 +204,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Una forma de inyección que bloquear y banear | `PATTERNS` o `_variants` de `injection.py`, con sus ataques y sus frases legítimas parecidas en `tests/test_injection.py` |
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
-| Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas o varios clientes: ver `eval_sessions.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
+| Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas, varios clientes o fotos: ver `eval_sessions.py` y `eval_photos.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
 | La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
 | Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |

@@ -47,6 +47,8 @@ class TraceHandler(BaseHTTPRequestHandler):
         "/assets/visor-comun.js": ("visor-comun.js", "text/javascript; charset=utf-8"),
         "/assets/visor-panels.css": ("visor-panels.css", "text/css; charset=utf-8"),
         "/assets/harness-map.css": ("harness-map.css", "text/css; charset=utf-8"),
+        "/assets/foto-flujo.js": ("foto-flujo.js", "text/javascript; charset=utf-8"),
+        "/assets/foto-flujo.css": ("foto-flujo.css", "text/css; charset=utf-8"),
         "/assets/iso.css": ("iso.css", "text/css; charset=utf-8"),
         "/assets/castillo.css": ("castillo.css", "text/css; charset=utf-8"),
         "/assets/castillo.js": ("castillo.js", "text/javascript; charset=utf-8"),

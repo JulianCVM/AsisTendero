@@ -57,8 +57,12 @@ def ban_session(store: SessionStore, session_id: str, injection: dict, message: 
 
 
 def _without_grok(store: SessionStore, session_id: str, message: str, status: str, reply: str, reason: str,
-                  emit: Callable[[dict], None]) -> dict:
-    """Turno respondido con un texto fijo: se guarda filtrado como cualquier otro y emite la misma forma de traza."""
+                  emit: Callable[[dict], None], photo: str | None = None) -> dict:
+    """Turno respondido con un texto fijo: se guarda filtrado como cualquier otro y emite la misma forma de traza.
+
+    ``photo`` es el código por el que la foto no siguió (``PHOTO_*`` o el error de Grok): el visor marca ahí dónde se
+    detuvo su recorrido.
+    """
     run_id, started = uuid4().hex[:12], perf_counter()
     customer = screen_message(message).consulta
     turn = store.record(session_id, customer, reply, status, [])
@@ -68,7 +72,7 @@ def _without_grok(store: SessionStore, session_id: str, message: str, status: st
         emit({"run_id": run_id, "type": event_type, "at": datetime.now(timezone.utc).isoformat(),
               "elapsed_ms": elapsed, "details": details})
 
-    push("route", {"motivo": reason})
+    push("route", {"motivo": reason, **({"foto": photo} if photo else {})})
     push("final", {"run_id": run_id, "prompt_version": active_prompt()[0], "estado": status, "respuesta": reply,
                    "error": None, "model_called": False, "model_calls": 0, "barreras": [], "inyeccion": None,
                    "tool_calls": 0, "tools_requested": [], "tools_executed": [], "input_tokens": None,
@@ -120,16 +124,20 @@ def _look(store: SessionStore, session_id: str, message: str, image: ImageAttrib
     try:
         seen = look_at(image, business)
     except PhotoRejected as exc:
-        return _without_grok(store, session_id, shown, "refused", str(exc), f"Foto rechazada ({exc.code}).", emit)
+        return _without_grok(store, session_id, shown, "refused", str(exc), f"Foto rechazada ({exc.code}).", emit,
+                             photo=exc.code)
     except ModelError as exc:
         return _without_grok(store, session_id, shown, "model_error", PHOTO_UNAVAILABLE_REPLY,
-                             f"Grok no pudo revisar la foto ({exc.code}).", emit)
+                             f"Grok no pudo revisar la foto ({exc.code}).", emit, photo=exc.code)
     # El turno guarda solo lo visto que el catálogo respalda: de ese texto salen la búsqueda, la memoria de
     # especificaciones y lo que Grok lee en el turno siguiente. La traza conserva todo lo que Grok vio.
     payload = backed_payload(seen.payload, lambda item: bool(catalog.search(ProductQuery(**item)).matches))
     summary = payload.semantic_summary()
-    vision = {"atributos": {key: value for key, value in seen.payload.to_dict().items() if key != "usage"},
-              "resumen": summary, "huella": seen.huella, "llamada": seen.llamada}
+    seen_fields = {key: value for key, value in seen.payload.to_dict().items() if key != "usage"}
+    kept = payload.to_dict()
+    vision = {"atributos": seen_fields, "resumen": summary, "huella": seen.huella, "llamada": seen.llamada,
+              "limpieza": seen.limpieza, "cotejo": seen.cotejo,
+              "descartados": [key for key, value in seen_fields.items() if value and not kept.get(key)]}
     planner = PhotoPlanner(payload, fixed_reply(payload, message, context))
     return f"{message.strip()} {summary}".strip(), planner, vision
 

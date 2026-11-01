@@ -40,7 +40,9 @@ def _push_vision(push: Callable[..., None], run_id: str, vision: dict | None,
         return None
     attributes = vision["atributos"]
     push("vision", details={"payload": attributes, "resumen": vision["resumen"], "huella": vision.get("huella"),
-                            "confianza": attributes.get("confianza_visual"), "tipo_producto": attributes.get("tipo_producto")})
+                            "confianza": attributes.get("confianza_visual"), "tipo_producto": attributes.get("tipo_producto"),
+                            "limpieza": vision.get("limpieza"), "cotejo": vision.get("cotejo"),
+                            "descartados": vision.get("descartados", []), "llamada": bool(vision.get("llamada"))})
     usage = vision.get("llamada")
     if not usage:
         return None

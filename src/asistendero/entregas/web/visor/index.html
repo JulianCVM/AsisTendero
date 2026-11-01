@@ -13,10 +13,12 @@
   <link rel="stylesheet" href="/assets/castillo.css">
   <link rel="stylesheet" href="/assets/visor-panels.css">
   <link rel="stylesheet" href="/assets/harness-map.css">
+  <link rel="stylesheet" href="/assets/foto-flujo.css">
   <script type="module" src="/assets/app.js"></script>
   <script type="module" src="/assets/resultado.js"></script>
   <script type="module" src="/assets/harness.js"></script>
   <script type="module" src="/assets/traza.js"></script>
+  <script type="module" src="/assets/foto-flujo.js"></script>
   <script src="/assets/castillo.js" defer></script>
 </head>
 <body>
@@ -255,8 +257,30 @@
       </div>
     </section>
 
-    <div class="section-title" id="traza">
+    <div class="section-title" id="foto">
       <span class="section-index">03</span>
+      <div><h2 id="photo-title">Cómo se procesa una foto</h2><p>Del celular del cliente a la respuesta: qué limpia el servidor, cuándo basta la huella, qué decide Grok, qué se guarda y qué consulta el harness en el catálogo.</p></div>
+    </div>
+
+    <section class="surface photo-panel" aria-labelledby="photo-title">
+      <div class="panel-head">
+        <div>
+          <span class="section-label">Recorrido de la foto</span>
+          <h2>Carriles de la foto</h2>
+          <p>Cada tarjeta es una etapa real del código y su función; a la derecha, la base que lee o escribe. Envía un mensaje con foto arriba y cada etapa dirá qué hizo con ella.</p>
+        </div>
+        <span id="photo-status" class="status-pill" role="status" aria-live="polite">Sin foto</span>
+      </div>
+      <div id="photo-flow" class="photo-flow">
+        <svg id="photo-links" class="photo-links" aria-hidden="true" focusable="false"></svg>
+        <ol id="photo-rows" class="photo-rows" aria-label="Etapas de una foto, en orden"></ol>
+      </div>
+      <p id="photo-verdict" class="photo-verdict">Aún no hay una foto en esta sesión del visor.</p>
+      <ul id="photo-stores" class="photo-stores" aria-label="Bases de datos que toca una foto"></ul>
+    </section>
+
+    <div class="section-title" id="traza">
+      <span class="section-index">04</span>
       <div><h2>Inspección técnica</h2><p>Cada evento de la última ejecución en paneles legibles: qué entró, qué decidió Grok, qué devolvió la herramienta y qué causó cada paso. El JSON original queda a un clic.</p></div>
     </div>
 

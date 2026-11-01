@@ -11,6 +11,7 @@ from asistendero.agente.flujo.reminders import REMINDER_CODES
 from asistendero.agente.modelo.grok import AGENT_PROMPT, MAX_ARGUMENT_CHARS, MAX_ITEMS, PROMPT_VERSION, TOOL_NAMES, current_model
 from asistendero.agente.reglas.validation import MAX_QUANTITY
 from asistendero.observabilidad.harness_flow import describe_flow
+from asistendero.observabilidad.photo_flow import describe_photo_flow
 from asistendero.tienda.pedidos.orders import HOLD_MINUTES
 
 
@@ -168,4 +169,5 @@ def describe_harness() -> dict:
         "injections": INJECTION_CODES,
         "outcomes": OUTCOMES,
         "flow": describe_flow(),
+        "photo_flow": describe_photo_flow(),
     }

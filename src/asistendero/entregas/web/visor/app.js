@@ -183,7 +183,8 @@ function reset(sentText, sentImage) {
   answer.textContent = 'Estoy revisando tu consulta…';
   responseBox.classList.remove('is-empty');
   responseBox.classList.add('is-typing');
-  document.dispatchEvent(new CustomEvent('asistendero:reset'));
+  // Con la foto, el diagrama de su recorrido se prepara para seguirla.
+  document.dispatchEvent(new CustomEvent('asistendero:reset', {detail: {foto: Boolean(currentSentImage)}}));
 }
 function show(event) {
   if (event.type === 'final') {

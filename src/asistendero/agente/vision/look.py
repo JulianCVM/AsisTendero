@@ -29,11 +29,17 @@ VISION_INSTRUCTION = "Atributos visibles del producto de esta foto, en el JSON i
 
 @dataclass(frozen=True)
 class Look:
-    """Lo que se vio en la foto y cómo: ``llamada`` es el uso de Grok (None si bastó la huella)."""
+    """Lo que se vio en la foto y cómo: ``llamada`` es el uso de Grok (None si bastó la huella).
+
+    ``limpieza`` y ``cotejo`` cuentan a la traza qué se hizo con la foto (tamaños, metadatos y la huella contra las
+    fotos del catálogo); son None si llegaron atributos ya armados.
+    """
 
     payload: ImageAttributePayload
     llamada: dict | None
     huella: dict | None
+    limpieza: dict | None = None
+    cotejo: dict | None = None
 
 
 def vision_model() -> str:
@@ -41,15 +47,18 @@ def vision_model() -> str:
     return os.getenv("GROK_VISION_MODEL", "").strip() or grok.current_model()
 
 
-def _by_fingerprint(fingerprint: str, business: str | None) -> Look | None:
+def _by_fingerprint(photo, business: str | None) -> tuple[Look | None, dict]:
+    """La familia reconocida por la huella (o None) y el cotejo completo para la traza."""
     entries = product_photos.manifest()
     families = {family for family, entry in entries.items() if business is None or entry.get("negocio") == business}
-    found = product_photos.closest_family(fingerprint, families)
-    if found is None:
-        return None
-    family, gap = found
+    report = product_photos.fingerprint_report(photo.fingerprint, families)
+    traced = {"limpieza": photo.cleaning(), "cotejo": report}
+    family = report["familia"]
+    if family is None:
+        return None, traced
     payload = ImageAttributePayload(tipo_producto=entries[family]["producto"], confianza_visual="alta", familia=family)
-    return Look(payload=payload, llamada=None, huella={"familia": family, "distancia": gap})
+    return Look(payload=payload, llamada=None, huella={"familia": family, "distancia": report["mas_cercana"]},
+                **traced), traced
 
 
 def look_at(image: str | ImageAttributePayload, business: str | None = None) -> Look:
@@ -61,7 +70,7 @@ def look_at(image: str | ImageAttributePayload, business: str | None = None) -> 
     if isinstance(image, ImageAttributePayload):
         return Look(payload=image, llamada=image.usage, huella=None)
     photo = read_photo(image)
-    known = _by_fingerprint(photo.fingerprint, business)
+    known, traced = _by_fingerprint(photo, business)
     if known is not None:
         return known
     model = vision_model()
@@ -82,4 +91,4 @@ def look_at(image: str | ImageAttributePayload, business: str | None = None) -> 
         # La llamada ya se pagó: se registra su uso y la foto queda como no identificada (se pide la muestra).
         usage["error"] = {"code": "VISION_INVALID_OUTPUT", "message": str(exc)}
         payload = ImageAttributePayload(confianza_visual="baja", usage=usage)
-    return Look(payload=payload, llamada=usage, huella=None)
+    return Look(payload=payload, llamada=usage, huella=None, **traced)

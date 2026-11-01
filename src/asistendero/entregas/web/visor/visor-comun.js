@@ -61,6 +61,6 @@ export function authorOf(final, lastDecision) {
 }
 
 export function onRun(handlers) {
-  document.addEventListener('asistendero:reset', () => handlers.reset?.());
+  document.addEventListener('asistendero:reset', ({detail}) => handlers.reset?.(detail));
   document.addEventListener('asistendero:event', ({detail}) => handlers.event?.(detail));
 }
