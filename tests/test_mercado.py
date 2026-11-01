@@ -228,3 +228,34 @@ def test_a_reply_that_promises_credit_is_never_grounded(reply, promises):
     assert promises_credit(normalized) is promises
     if promises:
         assert store_reply_is_consistent(normalized, []) == (False, set())
+
+
+def test_a_quote_of_the_wrong_presentation_gets_another_chance_with_the_identified_product(path):
+    # P-docena-2 (corrida 45): «12 huevos», Grok cotizó 12 cubetas de 30 (MCUB-30), la validación lo rechazó y la
+    # respuesta preguntaba «¿Cuántas unidades necesitas?» aunque el cliente dijo 12. Ahora hay un segundo aviso.
+    from asistendero.agente.flujo.graph import build_graph
+    from asistendero.agente.herramientas.executor import catalog_executor
+
+    seen = []
+    steps = [Decision("call_tool", "productos", "buscar_productos",
+                      {"items": [{"text": "huevos", "product": "huevos", "presentation": "12 unidades"}]}, ""),
+             Decision("respond", "productos", None, None, "Los huevos a $650 c/u o la cubeta en $17.900. ¿Cuántos?"),
+             Decision("call_tool", "productos", "calcular_cotizacion_informativa",
+                      {"lines": [{"sku": "MCUB-30", "quantity": 12}]}, ""),
+             Decision("respond", "pedido", None, None, "¿La cubeta o 12 sueltos?"),
+             Decision("call_tool", "productos", "calcular_cotizacion_informativa",
+                      {"lines": [{"sku": "MHUE-UNI", "quantity": 12}]}, ""),
+             Decision("respond", "productos", None, None, "")]
+
+    def planner(message, observations, remaining, context=None):
+        seen.append(observations)
+        return steps.pop(0)
+
+    with serving("mercado"):
+        result = build_graph(catalog_executor(MockCatalog(path, MARKET_BUSINESS_ID)), planner).invoke({"consulta": "12 huevos"})
+    reminders = [item["error"]["code"] for item in seen[-1] if item.get("estado") == "aviso"]
+    assert reminders == ["QUOTE_REQUIRED", "QUOTE_REQUIRED"]
+    assert result["estado"] == "quoted" and "$7.800" in result["respuesta"] and "Cuántas" not in result["respuesta"]
+    # La cubeta nunca se cotizó: la validación la rechazó y no llegó a la herramienta.
+    assert [call["requested_tool"] for call in result["tool_calls"] if call["executed"]] == [
+        "buscar_productos", "calcular_cotizacion_informativa"]

@@ -1411,3 +1411,59 @@ def test_a_courtesy_or_a_common_name_for_the_package_never_turns_the_exact_produ
     result = _real_executor(tmp_path)("buscar_productos", {"items": [item]})["data"]["results"][0]
     assert [match["sku"] for match in result["matches"]] == ([exact] if exact else [])
     assert result["nearby"] or exact
+
+
+def test_the_price_of_a_chosen_option_comes_from_a_search_and_never_from_grok(tmp_path):
+    # F-01 (corrida 45, foto real): tras «20 oz o 16 oz», «¿y el de 20 oz cuánto vale?» se cotizó 1 sin que el
+    # cliente lo dijera, Grok escribió $28.500 sin respaldo y la respuesta solo preguntaba cuántos, sin precio.
+    from asistendero.agente.conversacion.chat import run_turn
+    from asistendero.agente.conversacion.sessions import SessionStore
+    from asistendero.datos.seed import create_mock_db
+    from asistendero.tienda.pedidos.orders import OrderBook
+
+    db = create_mock_db(tmp_path / "catalog.sqlite3")
+    store = SessionStore(tmp_path / "sessions.sqlite3")
+    session = store.create()
+    hammer = {"text": "martillo de uña", "product": "martillo"}
+    first = run_turn(store, session, "¿tienen martillo de uña?", planner=Script(tool("buscar_productos", items=[hammer]),
+                                                                              say("")), orders=OrderBook(db))
+    assert "20 oz" in first["respuesta"] and "$" not in first["respuesta"]
+    chosen = {"text": "martillo de uña de 20 oz", "product": "martillo", "measure": "20 oz"}
+    planner = Script(tool("calcular_cotizacion_informativa", lines=[{"sku": "MAR-20", "quantity": 1}]),
+                     say("El martillo de uña de 20 oz te sale a $28.500 la unidad."),
+                     tool("buscar_productos", items=[chosen]), say(""))
+    later = run_turn(store, session, "¿y el de 20 oz cuánto vale?", planner=planner, orders=OrderBook(db))
+    reminders = [item["error"]["code"] for item in planner.seen[2]["observations"] if item.get("estado") == "aviso"]
+    assert reminders == ["PRICE_REQUIRED"]
+    assert "$32.900" in later["respuesta"] and "$28.500" not in later["respuesta"]
+    # Ni la cantidad no dicha se cotizó ni el servidor buscó por su cuenta: la búsqueda la pidió Grok tras el aviso.
+    assert not later["tool_calls"][0]["executed"] and later["tool_calls"][1]["requested_tool"] == "buscar_productos"
+    assert "reserv" not in later["respuesta"].lower() and "apart" not in later["respuesta"].lower()
+
+
+def test_a_measure_said_inside_an_unbacked_presentation_is_kept_and_the_word_is_not(tmp_path):
+    # X-14 (corrida 45): «I need 2 bags of grey cement 50 kg» y Grok, presentation="bolsa 50 kg". Se descartaba el
+    # campo entero y la respuesta preguntaba entre el bulto de 25 kg y el de 50 kg, que el cliente ya había dicho.
+    from asistendero.agente.herramientas.executor import catalog_executor
+    from asistendero.datos.seed import create_mock_db
+    from asistendero.tienda.catalogo.catalog import MockCatalog
+
+    executor = catalog_executor(MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3")))
+    sent = []
+
+    def recording(name, arguments):
+        sent.append(arguments)
+        return executor(name, arguments)
+
+    item = {"text": "cemento gris", "product": "cemento", "use": "construcción", "material": "gris",
+            "presentation": "bolsa 50 kg"}
+    result = run(recording, Script(tool("buscar_productos", items=[item]), say(""),
+                                   tool("calcular_cotizacion_informativa", lines=[{"sku": "CEM-050", "quantity": 2}]),
+                                   say("")), "I need 2 bags of grey cement 50 kg please")
+    searched = sent[0]["items"][0]
+    assert searched.get("measure") == "50kg" and "presentation" not in searched  # «bolsa» no lo dijo el cliente
+    assert result["estado"] == "quoted" and "$79.000" in result["respuesta"] and "25 kg" not in result["respuesta"]
+    # Sin una medida dicha no se inventa ninguna: «bolsa grande» no trae medida que rescatar.
+    plain = run(recording, Script(tool("buscar_productos", items=[{**item, "presentation": "bolsa grande"}]), say("")),
+                "necesito cemento gris")
+    assert "measure" not in sent[-1]["items"][0] and plain["estado"] == "clarify"

@@ -109,6 +109,13 @@ class ProductQuery:
                     grounded = bool(value_words and value_words <= message_words and value_words <= phrase_words)
                 if not grounded:
                     changes[field] = None
+        # X-14 (corrida 45): «I need 2 bags of grey cement 50 kg» y Grok, presentation="bolsa 50 kg". «bolsa» no está
+        # en el mensaje y se descartaba el campo entero, con los «50 kg» que el cliente sí dijo: salía «¿25 o 50 kg?».
+        # La medida dicha se conserva como medida; la palabra que no dijo, no.
+        if "presentation" in changes and (self.measure is None or "measure" in changes):
+            said = {atom for atom in measures(self.presentation) if not atom.isdigit()}
+            if said and said <= measures(message) and said <= measures(phrase or self.text):
+                changes["measure"] = " ".join(sorted(said))
         return replace(self, **changes)
 
 

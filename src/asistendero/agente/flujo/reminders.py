@@ -27,6 +27,11 @@ PRODUCT_TOOLS = {"buscar_productos", "consultar_disponibilidad", "calcular_cotiz
                  *ORDER_TOOLS}
 
 
+# «¿cuánto vale?», «¿a cómo está?», «¿qué precio tiene?»: piden el precio unitario, no una cotización.
+PRICE_QUESTION = re.compile(
+    r"\b(?:cuanto\s+(?:vale|valen|cuesta|cuestan|sale|salen)|a\s+(?:como|cuanto)\s+(?:esta|estan|lo|la|los|las|es|sale)"
+    r"|precio|que\s+valor)\b"
+)
 OFFER_QUESTION = re.compile(r"¿[^?¿]*\b(?:apart|reserv|llev)\w*[^?¿]*\?")
 
 
@@ -96,7 +101,15 @@ RESTOCK_REMINDER = _reminder("RESTOCK_REQUIRED",
 CATALOG_REMINDER = _reminder("CATALOG_REQUIRED",
                              "El cliente pregunta qué vende la tienda en general: llama a explorar_categoria sin "
                              "argumentos y nombra solo esas categorías. No busques productos que no nombró.")
-BASE_REMINDERS = (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER, CATALOG_REMINDER)
+# F-01 (corrida 45, foto real): tras «20 oz o 16 oz», «¿y el de 20 oz cuánto vale?» se cotizó 1 sin que el cliente lo
+# dijera; rechazada la cantidad, Grok escribió un precio que no venía de ninguna herramienta ($28.500 por $32.900) y
+# la salida del servidor solo preguntaba cuántos, sin el precio que el cliente pidió.
+PRICE_REMINDER = _reminder("PRICE_REQUIRED",
+                           "El cliente pregunta el precio del producto que eligió, sin decir cantidad: búscalo con "
+                           "buscar_productos (nombre y medida) y da su precio unitario. No cotices una cantidad que "
+                           "no dijo ni escribas un precio que no esté en las observaciones.")
+BASE_REMINDERS = (SEARCH_REMINDER, QUOTE_REMINDER, INFO_REMINDER, LIST_REMINDER, RESTOCK_REMINDER, CATALOG_REMINDER,
+                  PRICE_REMINDER)
 REMINDERS = {
     **{item["error"]["code"]: item for item in BASE_REMINDERS},
     # La clave interna lleva la herramienta que falta; Grok recibe siempre el código ORDER_REQUIRED.
@@ -204,6 +217,10 @@ def pending_reminder(
     counts = quantities - mentioned_hours(message)
     if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
         units = {remembered[0].get("sku"): f"{remembered[0].get('unidad') or ''} {remembered[0].get('variante') or ''}"}
+    quoted = any(call["requested_tool"] == "calcular_cotizacion_informativa" and call["executed"] for call in calls)
+    if ("PRICE_REQUIRED" not in sent and selected_items and not quantities and not looked_up and not quoted
+            and PRICE_QUESTION.search(normalize_text(message))):
+        return "PRICE_REQUIRED"
     if "QUOTE_REQUIRED:retry" not in sent and _retry_quote(calls, set(units), quantities):
         return "QUOTE_REQUIRED:retry"
     said = message
@@ -220,15 +237,19 @@ def pending_reminder(
 
 
 def _retry_quote(calls: list[ToolCall], known: set[str], quantities: set[int]) -> bool:
-    """La última cotización se rechazó por un SKU no identificado, pero traía otro identificado con su cantidad."""
+    """La última cotización se rechazó por un SKU no identificado, y hay uno identificado con la cantidad dicha.
+
+    P-docena-2 (corrida 45): con «12 huevos» Grok cotizó 12 de la cubeta de 30 (MCUB-30) en vez del huevo por unidad,
+    que la búsqueda sí distinguía. Sin otra oportunidad, la respuesta preguntaba la cantidad que el cliente ya dijo.
+    """
     quotes = [call for call in calls if call["requested_tool"] == "calcular_cotizacion_informativa"]
     if not quotes or any(call["executed"] for call in quotes):
         return False
     if (quotes[-1]["response"].get("error") or {}).get("code") != "SKU_NOT_GROUNDED":
         return False
     lines = (quotes[-1].get("requested_arguments") or {}).get("lines") or []
-    return any(isinstance(line, dict) and line.get("sku") in known and line.get("quantity") in quantities
-               for line in lines)
+    said = [line for line in lines if isinstance(line, dict) and line.get("quantity") in quantities]
+    return any(line.get("sku") in known for line in said) or (len(known) == 1 and bool(said))
 
 
 def _answered_question(

@@ -61,6 +61,7 @@ Mensaje del cliente
        ├── respond sin cotizar con cantidad dicha ─► vuelve a 2 una vez con el aviso QUOTE_REQUIRED
        ├── respond sobre la tienda sin consultarla ─► vuelve a 2 una vez con el aviso INFO_REQUIRED
        ├── pide «todo» y la cotización no trae la lista ─► vuelve a 2 una vez con el aviso LIST_QUOTE_REQUIRED
+       ├── pregunta el precio de la opción elegida sin buscarla ─► vuelve a 2 una vez con el aviso PRICE_REQUIRED
        │
        ▼
 5. respond ── verifica la redacción de Grok o arma la respuesta con los datos
