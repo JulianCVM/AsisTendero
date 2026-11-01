@@ -1,34 +1,4 @@
 {
- "ADH": {
-  "archivo": "foto-ADH.jpg",
-  "negocio": "ferreteria",
-  "producto": "Adaptador hembra PVC",
-  "busqueda": "PVC fitting",
-  "titulo": "File:Fitting for piping PVC 1,5\", Class C (5363882922).jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Fitting_for_piping_PVC_1,5%22,_Class_C_(5363882922).jpg",
-  "autor": "SuSanA Secretariat",
-  "licencia": "CC BY 2.0",
-  "licencia_url": "https://creativecommons.org/licenses/by/2.0",
-  "credito": "SuSanA Secretariat · CC BY 2.0 · Wikimedia Commons",
-  "huella": "4b0725b1294d4d93",
-  "ancho": 320,
-  "alto": 240
- },
- "ADM": {
-  "archivo": "foto-ADM.jpg",
-  "negocio": "ferreteria",
-  "producto": "Adaptador macho PVC",
-  "busqueda": "PVC pipe fitting",
-  "titulo": "File:UPVC pipe and fitting.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:UPVC_pipe_and_fitting.jpg",
-  "autor": "Mekalshan",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Mekalshan · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "b49bdb399bcdcfc6",
-  "ancho": 274,
-  "alto": 320
- },
  "ADO": {
   "archivo": "foto-ADO.jpg",
   "negocio": "ferreteria",
@@ -374,21 +344,6 @@
   "ancho": 320,
   "alto": 240
  },
- "CAL": {
-  "archivo": "foto-CAL.jpg",
-  "negocio": "ferreteria",
-  "producto": "Cal hidratada",
-  "busqueda": "hydrated lime",
-  "titulo": "File:Peakstone Hydrated Lime - geograph.org.uk - 3134586.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Peakstone_Hydrated_Lime_-_geograph.org.uk_-_3134586.jpg",
-  "autor": "Oast House Archive",
-  "licencia": "CC BY-SA 2.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/2.0",
-  "credito": "Oast House Archive · CC BY-SA 2.0 · Wikimedia Commons",
-  "huella": "e77a8d9d0ead7139",
-  "ancho": 320,
-  "alto": 240
- },
  "CAN": {
   "archivo": "foto-CAN.jpg",
   "negocio": "ferreteria",
@@ -494,21 +449,6 @@
   "ancho": 254,
   "alto": 320
  },
- "CHA": {
-  "archivo": "foto-CHA.jpg",
-  "negocio": "ferreteria",
-  "producto": "Chaleco reflectivo",
-  "busqueda": "elegida a ojo",
-  "titulo": "File:Mormon Helping Hands (high-visibility vest, Hungarian).jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Mormon_Helping_Hands_(high-visibility_vest,_Hungarian).jpg",
-  "autor": "Rakás",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Rakás · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "cf9ecac2d7c7c0ec",
-  "ancho": 240,
-  "alto": 320
- },
  "CHM": {
   "archivo": "foto-CHM.jpg",
   "negocio": "ferreteria",
@@ -553,21 +493,6 @@
   "huella": "337149cd4de9720e",
   "ancho": 320,
   "alto": 240
- },
- "CLV": {
-  "archivo": "foto-CLV.jpg",
-  "negocio": "ferreteria",
-  "producto": "Clavija",
-  "busqueda": "electrical plug",
-  "titulo": "File:Usb and electrical plug on trains.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Usb_and_electrical_plug_on_trains.jpg",
-  "autor": "Loscimmio",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Loscimmio · CC0 · Wikimedia Commons",
-  "huella": "e30bc6ec78e1c363",
-  "ancho": 240,
-  "alto": 320
  },
  "COD": {
   "archivo": "foto-COD.jpg",
@@ -659,36 +584,6 @@
   "ancho": 240,
   "alto": 320
  },
- "CSO": {
-  "archivo": "foto-CSO.jpg",
-  "negocio": "ferreteria",
-  "producto": "Cerradura de sobreponer",
-  "busqueda": "rim lock",
-  "titulo": "File:Rim of lock MET sf87-11-55s1.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Rim_of_lock_MET_sf87-11-55s1.jpg",
-  "autor": "Autor sin nombre en Commons",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Autor sin nombre en Commons · CC0 · Wikimedia Commons",
-  "huella": "e4e4f8d8c4ccf071",
-  "ancho": 242,
-  "alto": 320
- },
- "DES": {
-  "archivo": "foto-DES.jpg",
-  "negocio": "ferreteria",
-  "producto": "Destornillador de estrella",
-  "busqueda": "Phillips screwdriver",
-  "titulo": "File:PHILLIPS screwdriver and screw.JPG",
-  "fuente": "https://commons.wikimedia.org/wiki/File:PHILLIPS_screwdriver_and_screw.JPG",
-  "autor": "Bronzaclose",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Bronzaclose · CC0 · Wikimedia Commons",
-  "huella": "012b26cecc881703",
-  "ancho": 320,
-  "alto": 240
- },
  "DIS": {
   "archivo": "foto-DIS.jpg",
   "negocio": "ferreteria",
@@ -763,21 +658,6 @@
   "huella": "d3c9c9e191b93133",
   "ancho": 320,
   "alto": 220
- },
- "EPO": {
-  "archivo": "foto-EPO.jpg",
-  "negocio": "ferreteria",
-  "producto": "Masilla epóxica",
-  "busqueda": "epoxy putty",
-  "titulo": "File:Epoxy putty.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Epoxy_putty.jpg",
-  "autor": "Salil Kumar Mukherjee",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Salil Kumar Mukherjee · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "73eecccccccccece",
-  "ancho": 320,
-  "alto": 249
  },
  "ESC": {
   "archivo": "foto-ESC.jpg",
@@ -989,21 +869,6 @@
   "ancho": 320,
   "alto": 108
  },
- "IMP": {
-  "archivo": "foto-IMP.jpg",
-  "negocio": "ferreteria",
-  "producto": "Impermeabilizante para techos",
-  "busqueda": "elegida a ojo",
-  "titulo": "File:Roof waterproofing system application by Monotica Athens.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Roof_waterproofing_system_application_by_Monotica_Athens.jpg",
-  "autor": "Μάριος-Μητσόγλου",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Μάριος-Μητσόγλου · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "3f8c0eb7894ea335",
-  "ancho": 240,
-  "alto": 320
- },
  "INT": {
   "archivo": "foto-INT.jpg",
   "negocio": "ferreteria",
@@ -1063,36 +928,6 @@
   "huella": "b3e94d4b4bf3f370",
   "ancho": 320,
   "alto": 320
- },
- "LIJ": {
-  "archivo": "foto-LIJ.jpg",
-  "negocio": "ferreteria",
-  "producto": "Lija de agua",
-  "busqueda": "sandpaper",
-  "titulo": "File:Sandpaper closeup.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Sandpaper_closeup.jpg",
-  "autor": "No machine-readable author provided. Ranveig assumed (based on copyright claims).",
-  "licencia": "Public domain",
-  "licencia_url": "",
-  "credito": "No machine-readable author provided. Ranveig assumed (based on copyright claims). · Public domain · Wikimedia Commons",
-  "huella": "6bebe7e7e74bcb67",
-  "ancho": 320,
-  "alto": 240
- },
- "LIM": {
-  "archivo": "foto-LIM.jpg",
-  "negocio": "ferreteria",
-  "producto": "Limpiador PVC",
-  "busqueda": "PVC cement",
-  "titulo": "File:Water Ram Repair PVC Cement.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Water_Ram_Repair_PVC_Cement.jpg",
-  "autor": "Jshin722",
-  "licencia": "CC BY-SA 3.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/3.0",
-  "credito": "Jshin722 · CC BY-SA 3.0 · Wikimedia Commons",
-  "huella": "d9d9dbdbdbd8e8c9",
-  "ancho": 320,
-  "alto": 240
  },
  "LIN": {
   "archivo": "foto-LIN.jpg",
@@ -1214,21 +1049,6 @@
   "ancho": 320,
   "alto": 240
  },
- "MAC": {
-  "archivo": "foto-MAC.jpg",
-  "negocio": "ferreteria",
-  "producto": "Maceta de acero",
-  "busqueda": "elegida a ojo",
-  "titulo": "File:Various sledge hammers and an axe in hardware store in Germany.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Various_sledge_hammers_and_an_axe_in_hardware_store_in_Germany.jpg",
-  "autor": "Pittigrilli",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Pittigrilli · CC0 · Wikimedia Commons",
-  "huella": "0d8d155713313131",
-  "ancho": 320,
-  "alto": 307
- },
  "MAGT": {
   "archivo": "foto-MAGT.jpg",
   "negocio": "mercado",
@@ -1348,21 +1168,6 @@
   "huella": "030b0e978f2c6849",
   "ancho": 320,
   "alto": 198
- },
- "MATU": {
-  "archivo": "foto-MATU.jpg",
-  "negocio": "mercado",
-  "producto": "Atún en lata",
-  "busqueda": "canned tuna",
-  "titulo": "File:Canned and packaged tuna on supermarket shelves.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Canned_and_packaged_tuna_on_supermarket_shelves.jpg",
-  "autor": "Daniel Case",
-  "licencia": "CC BY-SA 3.0",
-  "licencia_url": "http://creativecommons.org/licenses/by-sa/3.0/",
-  "credito": "Daniel Case · CC BY-SA 3.0 · Wikimedia Commons",
-  "huella": "8de4878626c24b9f",
-  "ancho": 320,
-  "alto": 183
  },
  "MAVE": {
   "archivo": "foto-MAVE.jpg",
@@ -1634,21 +1439,6 @@
   "ancho": 320,
   "alto": 240
  },
- "MFEC": {
-  "archivo": "foto-MFEC.jpg",
-  "negocio": "mercado",
-  "producto": "Fécula de maíz",
-  "busqueda": "corn starch",
-  "titulo": "File:Corn Starch mixture.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Corn_Starch_mixture.jpg",
-  "autor": "Ayapici",
-  "licencia": "CC BY-SA 3.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/3.0",
-  "credito": "Ayapici · CC BY-SA 3.0 · Wikimedia Commons",
-  "huella": "a14d8f17160e0f4f",
-  "ancho": 320,
-  "alto": 240
- },
  "MFOS": {
   "archivo": "foto-MFOS.jpg",
   "negocio": "mercado",
@@ -1663,21 +1453,6 @@
   "huella": "cc4d69292bd45433",
   "ancho": 320,
   "alto": 213
- },
- "MFRI": {
-  "archivo": "foto-MFRI.jpg",
-  "negocio": "mercado",
-  "producto": "Fríjol",
-  "busqueda": "red beans",
-  "titulo": "File:Red Beans and Rice.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Red_Beans_and_Rice.jpg",
-  "autor": "Arnold Gatilao from Fremont, CA, USA",
-  "licencia": "CC BY 2.0",
-  "licencia_url": "https://creativecommons.org/licenses/by/2.0",
-  "credito": "Arnold Gatilao from Fremont, CA, USA · CC BY 2.0 · Wikimedia Commons",
-  "huella": "0fc371707074f03e",
-  "ancho": 320,
-  "alto": 240
  },
  "MGAR": {
   "archivo": "foto-MGAR.jpg",
@@ -1919,21 +1694,6 @@
   "ancho": 320,
   "alto": 213
  },
- "MLPO": {
-  "archivo": "foto-MLPO.jpg",
-  "negocio": "mercado",
-  "producto": "Leche en polvo",
-  "busqueda": "powdered milk",
-  "titulo": "File:Groundnut, sugar and powdered milk.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Groundnut,_sugar_and_powdered_milk.jpg",
-  "autor": "Edithobayaa1",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Edithobayaa1 · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "27715a3466705117",
-  "ancho": 279,
-  "alto": 320
- },
  "MLVL": {
   "archivo": "foto-MLVL.jpg",
   "negocio": "mercado",
@@ -1964,21 +1724,6 @@
   "ancho": 320,
   "alto": 263
  },
- "MMNI": {
-  "archivo": "foto-MMNI.jpg",
-  "negocio": "mercado",
-  "producto": "Maní salado",
-  "busqueda": "salted peanuts",
-  "titulo": "File:Salted peanuts.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Salted_peanuts.jpg",
-  "autor": "Shark2025",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Shark2025 · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "8657dc9e1eccd953",
-  "ancho": 240,
-  "alto": 320
- },
  "MMOR": {
   "archivo": "foto-MMOR.jpg",
   "negocio": "mercado",
@@ -2008,36 +1753,6 @@
   "huella": "b326119b39aae236",
   "ancho": 320,
   "alto": 213
- },
- "MNJ": {
-  "archivo": "foto-MNJ.jpg",
-  "negocio": "ferreteria",
-  "producto": "Manija para puerta",
-  "busqueda": "door handle",
-  "titulo": "File:Door handle of a Mazda car 01.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Door_handle_of_a_Mazda_car_01.jpg",
-  "autor": "Kritzolina",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Kritzolina · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "b8e1d4f6647dfc93",
-  "ancho": 320,
-  "alto": 213
- },
- "MOR": {
-  "archivo": "foto-MOR.jpg",
-  "negocio": "ferreteria",
-  "producto": "Mortero seco",
-  "busqueda": "mortar",
-  "titulo": "File:Three old bricks held together with mortar.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Three_old_bricks_held_together_with_mortar.jpg",
-  "autor": "Autor sin nombre en Commons",
-  "licencia": "Public domain",
-  "licencia_url": "",
-  "credito": "Autor sin nombre en Commons · Public domain · Wikimedia Commons",
-  "huella": "679996958d2b2f2f",
-  "ancho": 291,
-  "alto": 193
  },
  "MPAL": {
   "archivo": "foto-MPAL.jpg",
@@ -2279,21 +1994,6 @@
   "ancho": 320,
   "alto": 221
  },
- "MSM": {
-  "archivo": "foto-MSM.jpg",
-  "negocio": "ferreteria",
-  "producto": "Masilla para madera",
-  "busqueda": "wood filler",
-  "titulo": "File:Pinewood derby- wood fill.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Pinewood_derby-_wood_fill.jpg",
-  "autor": "woodleywonderworks",
-  "licencia": "CC BY 2.0",
-  "licencia_url": "https://creativecommons.org/licenses/by/2.0",
-  "credito": "woodleywonderworks · CC BY 2.0 · Wikimedia Commons",
-  "huella": "a7e7ce9e534dc3f3",
-  "ancho": 320,
-  "alto": 213
- },
  "MTOA": {
   "archivo": "foto-MTOA.jpg",
   "negocio": "mercado",
@@ -2444,36 +2144,6 @@
   "ancho": 195,
   "alto": 320
  },
- "PAS": {
-  "archivo": "foto-PAS.jpg",
-  "negocio": "ferreteria",
-  "producto": "Pasador de sobreponer",
-  "busqueda": "barrel bolt",
-  "titulo": "File:M16 bolt and barrel extension locking lugs TM9-1005-319-23.png",
-  "fuente": "https://commons.wikimedia.org/wiki/File:M16_bolt_and_barrel_extension_locking_lugs_TM9-1005-319-23.png",
-  "autor": "Unknown author Unknown author",
-  "licencia": "Public domain",
-  "licencia_url": "",
-  "credito": "Unknown author Unknown author · Public domain · Wikimedia Commons",
-  "huella": "303695a6eee46666",
-  "ancho": 320,
-  "alto": 91
- },
- "PAU": {
-  "archivo": "foto-PAU.jpg",
-  "negocio": "ferreteria",
-  "producto": "Protector auditivo",
-  "busqueda": "ear defenders",
-  "titulo": "File:Mallock-Armstrong ear defenders, London, England. Wellcome L0058074.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Mallock-Armstrong_ear_defenders,_London,_England._Wellcome_L0058074.jpg",
-  "autor": "Autor sin nombre en Commons",
-  "licencia": "CC BY 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by/4.0",
-  "credito": "Autor sin nombre en Commons · CC BY 4.0 · Wikimedia Commons",
-  "huella": "289f9f037392f138",
-  "ancho": 212,
-  "alto": 320
- },
  "PER": {
   "archivo": "foto-PER.jpg",
   "negocio": "ferreteria",
@@ -2548,21 +2218,6 @@
   "huella": "e07060c0986cce06",
   "ancho": 320,
   "alto": 253
- },
- "PIV": {
-  "archivo": "foto-PIV.jpg",
-  "negocio": "ferreteria",
-  "producto": "Pintura vinilo beige",
-  "busqueda": "paint can",
-  "titulo": "File:Used paint cans after renovation of a small company building in Shibuya-ku.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Used_paint_cans_after_renovation_of_a_small_company_building_in_Shibuya-ku.jpg",
-  "autor": "Syced",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Syced · CC0 · Wikimedia Commons",
-  "huella": "03072690aaecf8b8",
-  "ancho": 241,
-  "alto": 320
  },
  "PLU": {
   "archivo": "foto-PLU.jpg",
@@ -2643,16 +2298,16 @@
   "archivo": "foto-PVC.jpg",
   "negocio": "ferreteria",
   "producto": "Tubo PVC presión para agua",
-  "busqueda": "PVC pipe",
-  "titulo": "File:1 inch PVC Valve and pipe-IMG 1061.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:1_inch_PVC_Valve_and_pipe-IMG_1061.jpg",
-  "autor": "Bijay Chaurasia",
-  "licencia": "CC BY-SA 4.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/4.0",
-  "credito": "Bijay Chaurasia · CC BY-SA 4.0 · Wikimedia Commons",
-  "huella": "888c868686a68684",
-  "ancho": 213,
-  "alto": 320
+  "busqueda": "elegida a ojo",
+  "titulo": "File:PVC pipe Example.jpg",
+  "fuente": "https://commons.wikimedia.org/wiki/File:PVC_pipe_Example.jpg",
+  "autor": "Carlos6913",
+  "licencia": "CC BY-SA 3.0",
+  "licencia_url": "https://creativecommons.org/licenses/by-sa/3.0",
+  "credito": "Carlos6913 · CC BY-SA 3.0 · Wikimedia Commons",
+  "huella": "0b900c86c1616233",
+  "ancho": 320,
+  "alto": 240
  },
  "RAS": {
   "archivo": "foto-RAS.jpg",
@@ -2908,21 +2563,6 @@
   "huella": "0f3978787ceef439",
   "ancho": 320,
   "alto": 240
- },
- "TIJ": {
-  "archivo": "foto-TIJ.jpg",
-  "negocio": "ferreteria",
-  "producto": "Tijera podadora",
-  "busqueda": "pruning shears",
-  "titulo": "File:Pruning shears removableblade.JPG",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Pruning_shears_removableblade.JPG",
-  "autor": "KVDP",
-  "licencia": "Public domain",
-  "licencia_url": "",
-  "credito": "KVDP · Public domain · Wikimedia Commons",
-  "huella": "43f933d993dbdfd3",
-  "ancho": 280,
-  "alto": 320
  },
  "TIM": {
   "archivo": "foto-TIM.jpg",

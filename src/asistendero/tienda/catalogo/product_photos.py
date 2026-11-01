@@ -20,10 +20,10 @@ PHOTOS_DIR = Path(__file__).resolve().parents[2] / "datos" / "fotos"
 MANIFEST = PHOTOS_DIR / "fotos.json"
 PHOTO_ROUTE = "/fotos/"
 HASH_BITS = 64
-# Distancia de Hamming máxima entre huellas para dar por hecho que es la misma foto. Medido con las 208 fotos del
-# 31-10-2026: recomprimida o con la mitad o el doble de tamaño se reconocen las 208; con un 10 % más de brillo, 205;
+# Distancia de Hamming máxima entre huellas para dar por hecho que es la misma foto. Medido con las 184 fotos del
+# 01-11-2026: recomprimida o con la mitad o el doble de tamaño se reconocen las 184; con un 10 % más de brillo, 181;
 # ninguna se confunde con otra familia, y las dos fotos más parecidas de familias distintas están a 9. Un recorte se
-# aleja rápido (con 5 % de borde, 84 de 208): entonces no hay atajo y la foto va a Grok.
+# aleja rápido (con 5 % de borde, 81 de 184): entonces no hay atajo y la foto va a Grok.
 SAME_PHOTO_DISTANCE = 8
 
 

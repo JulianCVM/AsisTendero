@@ -116,6 +116,8 @@ TERMS = {
 # Fotos elegidas a ojo en la hoja de contacto: título exacto del archivo en Commons. Mandan sobre la búsqueda y
 # hacen que la biblioteca se pueda rehacer igual.
 ELEGIDAS: dict[str, str] = {
+    # La anterior («1 inch PVC Valve and pipe») mostraba sobre todo la válvula: la visión real la leyó como válvula.
+    "PVC": "File:PVC pipe Example.jpg",
     "ADO": "File:Stippled cement paving blocks for texture.jpg",
     "ARA": "File:Washers.agr.jpg",
     "ARE": "File:Pile of Sand for Building in Anambra State.jpg",
@@ -129,7 +131,6 @@ ELEGIDAS: dict[str, str] = {
     "CAJ": "File:Cable junction box for maintaining electrical functional integrity according to DIN 4102 Part 12.JPG",
     "CEM": "File:Portland Type 1 paper bags of Taiwan Cement on Fu 2nd Street 20180501.jpg",
     "CEN": "File:A Roll of Masking Tape (32410678777).jpg",
-    "CHA": "File:Mormon Helping Hands (high-visibility vest, Hungarian).jpg",
     "CHM": "File:Bookcase cabinet door handles made by Loach & Clarke. One lock faceplate is stamped with a royal crown and the letters VR.png",
     "CON": "File:Rigid Non-Metallic Conduit 1.jpg",
     "CPV": "File:Pipeing.jpeg",
@@ -139,10 +140,8 @@ ELEGIDAS: dict[str, str] = {
     "ESX": "File:Spray Polyurethane Foam Application.jpg",
     "FLX": "File:Measuring-tape.jpg",
     "GRV": "File:Gravel Stones.jpg",
-    "IMP": "File:Roof waterproofing system application by Monotica Athens.jpg",
     "LLT": "File:Outdoor water tap.jpg",
     "LMA": "File:Rough-Sandpaper- 28805-480x360 (4999892287).jpg",
-    "MAC": "File:Various sledge hammers and an axe in hardware store in Germany.jpg",
     "MAGT": "File:Water bottle in room.jpg",
     "MAZU": "File:Granulated White Sugar with Large Crystals, Bright Side Light.jpg",
     "MBOL": "File:Black garbage bag.jpg",
@@ -180,6 +179,9 @@ ELEGIDAS: dict[str, str] = {
 SIN_FOTO: set[str] = set((
     "AER ALA ANG ANT CBL CNC CPI ESD ESM EST FLO FUM LLV MAB MACE MAGB MBLQ MJUG MSUA PCO PEI PLN PUN SOL "
     "THI TLA TPL YES"
+    # Auditoría con la visión real de Grok (01-11-2026): estas fotos muestran otro producto o uno ambiguo (válvulas
+    # por limpiador, góndola por atún, mangos de hacha por maceta, un dibujo técnico por pasador…).
+    " ADH ADM CAL CHA CLV CSO DES EPO IMP LIJ LIM MAC MATU MFEC MFRI MLPO MMNI MNJ MOR MSM PAS PAU PIV TIJ"
 ).split())
 # Si el término no da una foto libre que lo nombre en su título, se prueba este, más general.
 FALLBACK = {
