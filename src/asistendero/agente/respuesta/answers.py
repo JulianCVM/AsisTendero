@@ -15,7 +15,8 @@ from asistendero.agente.reglas.context_resolution import (
     affirms_active_item, filter_matches_by_spec, pending_quantity_target, remembered_spec_for_item,
 )
 from asistendero.agente.reglas.validation import (
-    fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message, without_negated,
+    foreign_unit, fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message,
+    without_negated,
 )
 from asistendero.agente.respuesta.order_replies import order_allowances, order_reply, rushes_the_customer
 from asistendero.agente.respuesta.reply_text import (
@@ -155,7 +156,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     asked_raw = message if current is None else current
     asked = normalize_text(asked_raw)
     findings = search_findings(calls)
-    store = store_lines(calls)
+    store = store_lines(calls, with_listing=not findings or asks_assortment(asked))
     orders = order_reply(calls)
     quote, quote_call = latest_quote(calls)
     demo = [DEMO_NOTE] if context is None or not context.get("turnos") else []
@@ -447,6 +448,12 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     elif quote_call:
         allowed_counts |= {line["quantity"] for line in quote_call["arguments"]["lines"]}
     if not set(re.findall(r"\$[\d.,]*\d", reply)) <= allowed_amounts:
+        return False
+    # X-06 (corrida 39): el cable se vende por metro y Grok escribió «un rollo … te sale a $2.700 el metro», como si
+    # el rollo costara eso. Con la cantidad en otra unidad de venta, la respuesta determinista pregunta.
+    asked_now = message if current is None else current
+    if not quote and any(foreign_unit(asked_now, quantity, f"{product.unit} {product.variant}")
+                         for product in selected.values() for quantity in quantities_in_message(asked_now)):
         return False
     if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:
         return False

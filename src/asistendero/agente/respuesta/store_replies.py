@@ -100,8 +100,12 @@ def _schedule_text(days: dict) -> str:
     return ", ".join(parts[:-1]) + " y " + parts[-1] if len(parts) > 1 else parts[0]
 
 
-def store_lines(calls: list[ToolCall]) -> list[str]:
-    """Líneas de la respuesta determinista para información de la tienda y categorías."""
+def store_lines(calls: list[ToolCall], with_listing: bool = True) -> list[str]:
+    """Líneas de la respuesta determinista para información de la tienda y categorías.
+
+    ``with_listing=False`` deja fuera la lista completa de categorías: si el cliente nombró un producto y se buscó,
+    la lista no contesta lo que preguntó (M-20 y M-35, corrida 41).
+    """
     lines = []
     for topic, data in store_info_by_topic(calls).items():
         if topic == "horario" and isinstance(data.get("dias"), dict):
@@ -111,6 +115,8 @@ def store_lines(calls: list[ToolCall]) -> list[str]:
         elif isinstance(data.get("texto"), str):
             lines.append(data["texto"])
     for listing in category_listings(calls):
+        if "categorias" in listing and not with_listing:
+            continue
         if "categorias" in listing:
             # Una línea por categoría, tal como está en el catálogo: nada de «y más» ni familias que no existen.
             names = "\n".join(f"• {item['categoria']}" for item in listing["categorias"])

@@ -103,6 +103,7 @@ def order_reply(calls: list[ToolCall]) -> tuple[str | None, str] | None:
     if not order_calls:
         return None
     results = order_results(calls)
+    quoted = any(call["requested_tool"] == "calcular_cotizacion_informativa" and call["executed"] for call in calls)
     lines = []
     # Corrida del video (25-10): confirmar y agendar en el mismo turno daba dos textos que se contradecían (la hora
     # del apartado de confirmar ya no valía y preguntaba la hora que el cliente acababa de dar). Ese pedido se
@@ -126,6 +127,10 @@ def order_reply(calls: list[ToolCall]) -> tuple[str | None, str] | None:
                 status = status if results else "order_status"
             continue
         code = (response.get("error") or {}).get("code")
+        # Si en el turno ya se cotizó, la cotización contesta (y ofrece apartar): «¿Quieres que registre el pedido?»
+        # repetía la pregunta, y con existencias insuficientes tapaba el «solo me quedan 2» (Z-35, corrida 39).
+        if code == "PURCHASE_NOT_STATED" and quoted:
+            continue
         # Un error de negocio trae un mensaje seguro del libro de pedidos; un rechazo, la pregunta fija.
         text = REJECTION_TEXT.get(code) or (response["error"].get("message") if response.get("status") == "error" else None)
         if text and text not in lines:

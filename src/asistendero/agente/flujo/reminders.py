@@ -153,6 +153,11 @@ def pending_reminder(
     assortment = asks_assortment(normalize_text(message))
     if "CATALOG_REQUIRED" not in sent and assortment and not full_category_listing(calls):
         return "CATALOG_REQUIRED"
+    # M-20 y M-35 (corrida 41): «¿venden cerveza?» y «¿qué yogures tienen?» nombran un producto; Grok listó las
+    # categorías y la respuesta fue la lista entera, que no dice si hay ese producto. Se busca.
+    if ("SEARCH_REQUIRED" not in sent and not assortment and full_category_listing(calls)
+            and not tools & {"buscar_productos", "consultar_disponibilidad"}):
+        return "SEARCH_REQUIRED"
     if "LIST_QUOTE_REQUIRED" not in sent and missing_from_quote(message, calls, context):
         return "LIST_QUOTE_REQUIRED"
     looked_up = any(call["requested_tool"] in {"buscar_productos", "consultar_disponibilidad"}

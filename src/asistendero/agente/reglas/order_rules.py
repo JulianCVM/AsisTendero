@@ -163,7 +163,9 @@ def wants_to_buy(message: str, context: dict | None) -> bool:
     if HYPOTHETICAL.search(text):
         return False
     from asistendero.agente.reglas.choices import pending_quantity_quote
-    if pending_quantity_quote(message, context) is not None:
+    # Tras «¿cuántas unidades?», una cantidad sola («deme 5», «2») se cotiza primero; «me llevo 2» ya dice que lo
+    # lleva, como pide el prompt (A-20 y Z-35, corridas 38 a 41: se rechazaba el registro y salían dos preguntas).
+    if pending_quantity_quote(message, context) is not None and not EXPLICIT_PURCHASE.search(text):
         return False
     # Peticiones informativas de cotización o total acumulado («dame la cotización», «cuánto sería todo», «cuánto va»,
     # «con lo que llevamos hasta el momento») no expresan intención de compra a menos que haya manifestación explícita.

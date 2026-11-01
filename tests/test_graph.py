@@ -1352,3 +1352,41 @@ def test_a_reply_without_tools_never_promises_credit():
     from asistendero.agente.respuesta.answers import direct_response
     refusal = "No te lo anoto, vecino: aquí no fiamos y el pago es en el mostrador."
     assert direct_response("anóteme lo del arroz", say(refusal, intent="pedido")) == refusal
+
+
+def test_a_fraction_or_a_thousand_in_the_variant_never_erases_the_said_quantity():
+    # A-10 y P-tanque-2 (corrida 41): el «1» de «1/2 pulgada» y de «1.000 litros» se tomaba como el número que nombra
+    # la variante y borraba el «un» que dijo el cliente; no se pedía cotizar.
+    from asistendero.agente.reglas.validation import naming_numbers
+    from asistendero.tienda.catalogo.catalog import Product
+    tank = Product("TNQ-1000", "Tanque de agua plástico", "1.000 litros", "unidad", 489900, 4, "", "")
+    float_valve = Product("FLO-12", "Flotador para tanque", "1/2 pulgada", "unidad", 21900, 9, "", "")
+    cement = Product("CEM-050", "Cemento gris", "50 kg", "bulto", 39500, 9, "", "")
+    assert naming_numbers("un tanque de agua de 1000 litros y un flotador de 1/2", [tank, float_valve]) == {1000}
+    assert naming_numbers("necesito un tanque plástico de 1.000 litros", [tank]) == {1000}
+    assert naming_numbers("un flotador de 1/2", [float_valve]) == set()
+    assert naming_numbers("¿el cemento gris de 50 sirve?", [cement]) == {50}
+
+
+def test_a_named_product_is_searched_even_after_listing_every_category():
+    # M-20 y M-35 (corrida 41): «¿venden cerveza?» y «¿qué yogures tienen?» terminaban en la lista de categorías.
+    executor = FakeExecutor(PVC_SEARCH)
+    planner = Script(tool("explorar_categoria"), say("Manejamos plomería y más."), tool("buscar_productos", items=[PVC]),
+                     say("x"))
+    result = run(executor, planner, "¿venden tubo PVC de 1/2 para agua?")
+    assert [name for name, _ in executor.calls] == ["explorar_categoria", "buscar_productos"]
+    assert any("SEARCH_REQUIRED" in json.dumps(seen["observations"]) for seen in planner.seen)
+    assert "PVC" in result["respuesta"] and "categorías" not in result["respuesta"]
+    # «¿Qué venden?» sí se contesta con la lista entera, sin buscar.
+    listing = run(FakeExecutor(), Script(tool("explorar_categoria"), say("x")), "¿qué venden?")
+    assert "categorías" in listing["respuesta"]
+
+
+def test_a_roll_of_something_sold_by_the_meter_is_never_priced_by_grok():
+    # X-06 (corrida 39): «un rollo de cable» y Grok respondió «un rollo … te sale a $2.700 el metro».
+    executor = FakeExecutor({"rollo de tubo PVC de 1/2 para agua": (["PVC-050"], [])})
+    item = {**PVC, "text": "rollo de tubo PVC de 1/2 para agua"}
+    planner = Script(tool("buscar_productos", items=[item]),
+                     say("Un rollo de tubo PVC de 1/2 te sale a $8.500 el metro. Precios de demostración."))
+    result = run(executor, planner, "necesito un rollo de tubo PVC de 1/2 para agua")
+    assert "te sale" not in result["respuesta"] and "¿Cuántos metros necesitas?" in result["respuesta"]

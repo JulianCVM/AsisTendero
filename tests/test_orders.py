@@ -887,3 +887,28 @@ def test_negotiated_quantity_adds_to_shopping_list_and_accumulated_quote_never_c
     assert "$31.450" in accumulated["respuesta"]
     assert "Con lo que llevas" in accumulated["respuesta"] or "tubo PVC" in accumulated["respuesta"]
 
+
+
+SENSOR = {"text": "sensor de movimiento", "product": "sensor"}
+HAMMER = {"text": "martillo de uña de 20 oz", "product": "martillo", "measure": "20 oz"}
+
+
+def test_me_llevo_after_how_many_registers_and_a_bare_quantity_is_quoted_first(chat):
+    # A-20 y Z-35 (corridas 38 a 41): tras «¿Cuántas unidades necesitas?», «me llevo 2» se rechazaba
+    # (PURCHASE_NOT_STATED) y la respuesta juntaba «¿Quieres que te lo aparte?» con «¿Quieres que registre el pedido?».
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    turn(session, "¿tienen sensor de movimiento?", tool("buscar_productos", items=[SENSOR]), say(intent="productos"))
+    bought = turn(session, "me llevo 2", tool("registrar_pedido", lines=[{"sku": "SEN-TEC", "quantity": 2}]), say())
+    assert bought["estado"] == "order_pending" and "$69.800" in bought["respuesta"]
+    assert [order["estado"] for order in book.session_orders(session)] == ["pendiente"]
+
+    other = sessions.create()
+    turn(other, "¿tienen martillo de uña de 20 oz?", tool("buscar_productos", items=[HAMMER]), say(intent="productos"))
+    asked = turn(other, "deme 5", tool("registrar_pedido", lines=[{"sku": "MAR-20", "quantity": 5}]),
+                 say("Te aparto 5 martillos a $18.900 c/u"),
+                 tool("calcular_cotizacion_informativa", lines=[{"sku": "MAR-20", "quantity": 5}]), say())
+    # Una cantidad sola no es una compra: no hay pedido, y la respuesta dice que no alcanza, sin la pregunta repetida.
+    assert book.session_orders(other) == []
+    assert asked["estado"] == "insufficient_stock" and "no tengo 5" in asked["respuesta"]
+    assert "registre el pedido" not in asked["respuesta"] and "$18.900" not in asked["respuesta"]

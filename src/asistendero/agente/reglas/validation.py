@@ -99,10 +99,14 @@ def naming_numbers(message: str, products: list[Product]) -> set[int]:
     el nombre o la variante (Z-14 y Z-22, suite fallas). En «12 bombillos de 12» el 12 se dice dos veces y sigue
     siendo cantidad.
     """
-    text = normalize_text(message)
-    described = {number for product in products for number in re.findall(r"\d+", f"{product.name} {product.variant}")}
+    # Un número entero, no un trozo de fracción ni de miles: con «un flotador de 1/2» y «el tanque de 1.000 litros»
+    # el «1» de la variante borraba el «un» que dijo el cliente y no se cotizaba (A-10 y P-tanque-2, corrida 41).
+    whole = r"(?<![\d/.,]){}(?![\d/]|[.,]\d)"
+    text = re.sub(r"\b(\d{1,3})\.(\d{3})\b", r"\1\2", normalize_text(message))
+    described = {number.replace(".", "") for product in products
+                 for number in re.findall(whole.format(r"\d+(?:\.\d{3})*"), f"{product.name} {product.variant}")}
     return {int(number) for number in described
-            if len(re.findall(rf"\b{number}\b", text)) == 1 and re.search(rf"\bde\s+{number}\b", text)}
+            if len(re.findall(whole.format(number), text)) == 1 and re.search(r"\bde\s+" + whole.format(number), text)}
 
 
 def fractional_amount(message: str) -> int | None:

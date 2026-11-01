@@ -34,7 +34,7 @@ EXTRA_FAMILIES = [
     # Cerrajería
     ("CSO", "Cerradura de sobreponer", "unidad", "Cerrajería", "cerradura|sobreponer|puerta|seguridad|chapa", [
         ("STD", "de seguridad para puerta principal", 89900)]),
-    ("CHM", "Chapa para mueble", "unidad", "Cerrajería", "chapa|mueble|cajon|gaveta", [("22", "22 mm", 9900)]),
+    ("CHM", "Chapa para mueble", "unidad", "Cerrajería", "chapa|mueble|cajon|gaveta|escritorio|closet", [("22", "22 mm", 9900)]),
     ("MNJ", "Manija para puerta", "unidad", "Cerrajería", "manija|puerta|tirador|halador", [
         ("NIQ", "níquel satinado", 17900), ("NEG", "negra", 17900)]),
     ("MIR", "Mirilla para puerta", "unidad", "Cerrajería", "mirilla|ojo magico|puerta|visor", [("200", "200 grados", 14900)]),
