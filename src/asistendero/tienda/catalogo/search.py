@@ -116,6 +116,17 @@ class ProductQuery:
             said = {atom for atom in measures(self.presentation) if not atom.isdigit()}
             if said and said <= measures(message) and said <= measures(phrase or self.text):
                 changes["measure"] = " ".join(sorted(said))
+        # M-08 (corrida 46): «2 libras de papa criolla y una de tomate» y Grok, text="papa criolla de 2 libras". Tras
+        # «de», la búsqueda lo toma como el tamaño del producto y no lo suelta: la papa criolla por libra salió como
+        # opción cercana. Si es la cantidad lo decide lo que escribió el cliente, así que el «de» de Grok se quita.
+        text = self.text
+        for field in ("measure", "presentation"):
+            value = getattr(self, field) if field not in changes else changes[field]
+            if value and only_quantity(value, message) and not only_quantity(value, text):
+                words = r"\s+".join(map(re.escape, value.split()))
+                text = re.sub(r"\s*\bde\s+" + words + r"\b", "", text, flags=re.IGNORECASE).strip() or text
+        if text != self.text:
+            changes["text"] = text
         return replace(self, **changes)
 
 

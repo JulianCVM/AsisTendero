@@ -304,7 +304,9 @@ def validate_order_request(
     if name == "consultar_pedido":
         if not set(arguments) <= {"pedido"}:
             raise Rejected("INVALID_ARGUMENT", "consultar_pedido acepta solo pedido.")
-        return {"pedido": _order_id(arguments)} if "pedido" in arguments else {}
+        # L-02 (corrida 46): sin código, Grok mandó pedido=null y el rechazo hacía pedirle el código al cliente. null
+        # es «sin código»: la herramienta lista los pedidos de esta conversación, nunca los de otra.
+        return {"pedido": _order_id(arguments)} if arguments.get("pedido") is not None else {}
     if name == "agendar_recogida":
         return _pickup(arguments, current)
     if set(arguments) != {"pedido"}:

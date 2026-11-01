@@ -180,6 +180,10 @@ def test_the_hardware_store_still_asks_between_two_products_that_share_their_nou
     ("2 libras de papa criolla", {"text": "papa criolla", "product": "papa", "color": "criolla", "presentation": "2 libras"},
      ["MPCR-LB"]),
     ("3 libras de tomate", {"text": "tomate", "product": "tomate", "measure": "3 libras"}, ["MTOM-LB"]),
+    # M-08 (corrida 46): Grok reescribió «2 libras de papa criolla» como «papa criolla de 2 libras». Lo que decide si
+    # es la cantidad es lo que escribió el cliente, no la frase de Grok.
+    ("2 libras de papa criolla y una de tomate",
+     {"text": "papa criolla de 2 libras", "product": "papa", "use": "criolla", "presentation": "2 libras"}, ["MPCR-LB"]),
     ("deme una docena de huevos", {"text": "huevos", "product": "huevos", "presentation": "docena"}, ["MHUE-UNI"]),
     ("media docena de huevos", {"text": "media docena de huevos", "product": "huevos", "presentation": "media docena"},
      ["MHUE-UNI"]),

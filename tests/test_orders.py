@@ -371,6 +371,13 @@ def test_another_customer_cannot_confirm_or_see_my_order(chat):
     peek = turn(theirs, "qué pedidos tengo?", tool("consultar_pedido"), say())
     assert code not in peek["respuesta"] and "No tienes pedidos" in peek["respuesta"]
     assert book.get(code)["estado"] == "pendiente"
+    # L-02 (corrida 46): sin código, Grok mandó pedido=null; era INVALID_ARGUMENT y se le pedía el código al cliente.
+    # null es «sin código»: se listan los pedidos de esta conversación y nunca los de otra.
+    blank = turn(theirs, "¿cuánto me toca pagar al recoger?", tool("consultar_pedido", pedido=None), say())
+    assert blank["tool_calls"][0]["executed"] and code not in blank["respuesta"]
+    mine_now = turn(mine, "¿cuánto me toca pagar al recoger?", tool("consultar_pedido", pedido=None), say())
+    assert mine_now["tool_calls"][0]["executed"]
+    assert [order["pedido"] for order in mine_now["tool_calls"][0]["response"]["data"]["pedidos"]] == [code]
 
 
 def test_reply_with_an_invented_order_code_or_total_is_discarded(chat):
