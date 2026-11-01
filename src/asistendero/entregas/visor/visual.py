@@ -10,13 +10,16 @@ from dotenv import load_dotenv
 from asistendero.agente.conversacion.chat import run_turn
 from asistendero.agente.conversacion.order_watch import Watcher
 from asistendero.agente.conversacion.sessions import SESSION_ID, SessionError, SessionStore
+from asistendero.agente.modelo.grok import ModelError
+from asistendero.agente.vision.vision import SAMPLE_COUNTER_TEMPLATE, SCREW_SAFEGUARD_TEMPLATE
 from asistendero.entregas.estaticos import web_file
 from asistendero.observabilidad.harness_info import describe_harness
 from asistendero.observabilidad.tracing import run_traced
 from asistendero.tienda.pedidos.orders import OrderBook
 
 
-MAX_BODY_BYTES = 4096
+# Límite de 5 MB para permitir fotografías adjuntas en Base64.
+MAX_BODY_BYTES = 5 * 1024 * 1024
 
 
 class TraceHandler(BaseHTTPRequestHandler):
@@ -147,11 +150,16 @@ class TraceHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if not 1 <= length <= MAX_BODY_BYTES:
-                self._reject_post(400, "Envía una consulta de texto de máximo 2000 caracteres.")
+                self._reject_post(400, "Envía una consulta de texto de máximo 2000 caracteres o una imagen adjunta.")
                 return
             request = json.loads(self.rfile.read(length))
-            query = request["consulta"]
+            query = request.get("consulta", "")
             if not isinstance(query, str) or len(query) > 2000:
+                raise ValueError
+            image_data = request.get("image_data") or request.get("image")
+            if image_data is not None and (not isinstance(image_data, str) or len(image_data) > 5 * 1024 * 1024):
+                raise ValueError
+            if not query.strip() and not image_data:
                 raise ValueError
             in_session = request.get("sesion") is True
             session_id = request.get("session_id")
@@ -160,7 +168,7 @@ class TraceHandler(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             # Si el largo no era un número, el cuerpo quedó sin leer: la conexión se cierra.
             self.close_connection = True
-            self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres.")
+            self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres o una imagen adjunta.")
             return
 
         self._headers(200, "application/x-ndjson; charset=utf-8")
@@ -171,20 +179,33 @@ class TraceHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            if in_session:
+            if in_session or image_data:
                 store = self.server.sessions
-                run_turn(store, session_id or store.create(), query, emit, orders=self.server.orders)
+                sid = session_id or store.create()
+                if image_data:
+                    run_turn(store, sid, query, emit, orders=self.server.orders, image=image_data)
+                else:
+                    run_turn(store, sid, query, emit, orders=self.server.orders)
             else:
                 run_traced(query, emit)
+        except ModelError as exc:
+            import sys
+            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] ModelError ({exc.code}): {exc}\n")
+            emit({"type": "error", "code": exc.code, "message": str(exc)})
         except SessionError as exc:
             emit({"type": "error", "code": exc.code, "message": str(exc)})
         except (ValueError, RuntimeError, FileNotFoundError) as exc:
+            import sys, traceback
+            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] {type(exc).__name__}: {exc}\n")
+            traceback.print_exc(file=sys.stderr)
             emit({"type": "error", "message": str(exc)})
         except (BrokenPipeError, ConnectionResetError):
             return
         except Exception as exc:
-            # El SDK podría incluir datos de la solicitud en su excepción.
-            emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}). Revisa red, clave, modelo y créditos."})
+            import sys, traceback
+            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] Inesperado ({type(exc).__name__}): {exc}\n")
+            traceback.print_exc(file=sys.stderr)
+            emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}): {exc}"})
         finally:
             self.close_connection = True
 

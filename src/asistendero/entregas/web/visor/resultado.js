@@ -120,7 +120,7 @@ function reset() {
   toolList.replaceChildren();
   costLines.replaceChildren();
   renderCost(null, false);
-  for (const id of ['#metric-calls', '#metric-tokens', '#metric-cache', '#metric-duration']) {
+  for (const id of ['#metric-calls', '#metric-vision', '#metric-tokens', '#metric-cache', '#metric-duration']) {
     document.querySelector(id).textContent = '—';
   }
   copy.disabled = true;
@@ -140,10 +140,11 @@ function onEvent(event) {
     }
   }
   if (event.type === 'route' && !run.tools.length) setStep('retrieve', 'skipped');
+  if (event.type === 'vision') document.querySelector('#metric-vision').textContent = 'Confianza ' + (details.confianza || 'media');
   if (event.type === 'model_response') {
     run.costs.push({phase: details.phase, cost: details.cost});
     const line = el('div', 'cost-line');
-    line.append(el('span', '', 'Llamada ' + run.costs.length + ' · ' + (details.phase === 'resolve' ? 'resolver' : 'interpretar')),
+    line.append(el('span', '', 'Llamada ' + run.costs.length + ' · ' + ({resolve: 'resolver', vision: 'visión'}[details.phase] || 'interpretar')),
       el('span', '', details.cost ? formatUsd(details.cost.usd) : 'No disponible'));
     costLines.append(line);
     for (const value of [details.input_tokens, details.output_tokens]) {
@@ -183,6 +184,7 @@ function onFinal(final, event) {
   author.textContent = authorOf(final, run.lastDecision).text;
   if (!run.tools.length) renderTools();
   document.querySelector('#metric-calls').textContent = String(final.model_calls ?? '—');
+  if (final.vision_confidence) document.querySelector('#metric-vision').textContent = 'Confianza ' + final.vision_confidence;
   document.querySelector('#metric-duration').textContent = formatMs(final.duration_ms ?? event.elapsed_ms);
   if (!run.tokensKnown) document.querySelector('#metric-tokens').textContent = final.model_calls ? 's/d' : '0';
   if (typeof final.input_tokens === 'number' && typeof final.cached_input_tokens === 'number') {

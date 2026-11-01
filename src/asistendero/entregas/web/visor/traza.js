@@ -16,15 +16,16 @@ let rows = [];
 let activeFilter = 'all';
 
 function kindOf(event) {
-  if (event.type === 'model_request' || event.type === 'model_response') return 'model';
+  if (event.type === 'model_request' || event.type === 'model_response' || event.type === 'vision') return 'model';
   if (event.type === 'node' && event.node === 'retrieve') return 'tool';
   return 'system';
 }
 function titleOf(event) {
-  const phase = event.details?.phase === 'resolve' ? 'resolver' : 'interpretar';
+  const phase = {resolve: 'resolver', vision: 'visión'}[event.details?.phase] || 'interpretar';
   if (event.type === 'node') return NODE_LABELS[event.node] + ' · ' + (event.status === 'running' ? 'empieza' : 'termina');
   if (event.type === 'model_request') return 'Solicitud a Grok · ' + phase;
   if (event.type === 'model_response') return 'Respuesta de Grok · ' + phase;
+  if (event.type === 'vision') return 'Visión multimodal · atributos extraídos';
   return TYPE_TITLES[event.type] || event.type;
 }
 function subtitleOf(event) {
@@ -39,6 +40,7 @@ function subtitleOf(event) {
   }
   if (event.type === 'final') return details.estado;
   if (event.type === 'error') return event.code || 'sin código';
+  if (event.type === 'vision') return (details.payload?.tipo_producto || 'Producto') + ' · confianza ' + (details.confianza || 'media');
   return ({model: 'Grok', tool: 'Catálogo', system: 'Sistema'})[kindOf(event)];
 }
 

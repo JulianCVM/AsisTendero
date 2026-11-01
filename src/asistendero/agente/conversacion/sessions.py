@@ -33,6 +33,7 @@ from uuid import uuid4
 
 from asistendero.agente.herramientas.observations import latest_quote, order_results, search_findings
 from asistendero.agente.reglas.validation import grounded_products
+from asistendero.agente.vision.vision import sanitize_image_text
 
 
 DEFAULT_SESSIONS_PATH = Path(".local/sessions.sqlite3")
@@ -70,7 +71,7 @@ def _clip_to(text: str, limit: int) -> str:
 
 
 def _clip(text: str) -> str:
-    return _clip_to(text, MAX_TURN_CHARS)
+    return _clip_to(sanitize_image_text(text), MAX_TURN_CHARS)
 
 
 def _clean_assistant(text: str) -> str:

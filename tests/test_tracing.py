@@ -403,7 +403,12 @@ def test_visual_server_reuses_the_connection_only_after_reading_a_rejected_body(
         harness = connection.getresponse()
         assert harness.status == 200 and "prompt_version" in json.loads(harness.read())
         # Un cuerpo más largo que el límite no se lee: el servidor cierra la conexión en vez de reutilizarla.
-        connection.request("POST", "/api/trace", "x" * 5000, {**host, "Content-Type": "application/json"})
+        # Se declara el largo sin mandarlo entero: con fotos el límite es de megas y el cliente seguiría enviando.
+        connection.putrequest("POST", "/api/trace", skip_host=True)
+        for name, value in {**host, "Content-Type": "application/json",
+                            "Content-Length": str(visual.MAX_BODY_BYTES + 1)}.items():
+            connection.putheader(name, value)
+        connection.endheaders(b"x" * 5000)
         too_long = connection.getresponse()
         assert too_long.status == 400 and too_long.getheader("Connection") == "close"
         too_long.read()
