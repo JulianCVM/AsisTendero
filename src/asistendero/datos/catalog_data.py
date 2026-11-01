@@ -17,7 +17,7 @@ LEGACY = [
     ("PVC-075", "Tubo PVC presión para agua", "3/4 pulgada", "metro", 11500, 7, "tubo|tuberia|pvc|agua|tres cuartos", "Plomería"),
     ("TOR-025-1", "Tornillo para madera", "1/4 x 1 pulgada", "unidad", 350, 80, "tornillo|madera|tirafondo", "Tornillería y fijación"),
     ("TOR-025-2", "Tornillo para madera", "1/4 x 2 pulgadas", "unidad", 520, 0, "tornillo|madera|tirafondo", "Tornillería y fijación"),
-    ("CEM-050", "Cemento gris", "bulto de 50 kg", "bulto", 39500, 9, "cemento|gris|mezcla|bulto", "Obra gris"),
+    ("CEM-050", "Cemento gris", "bulto de 50 kg", "bulto", 39500, 9, "cemento|gris|mezcla|bulto|bolsa", "Obra gris"),
     ("PIN-BLA", "Pintura blanca vinilo", "galón", "galón", 56000, 4, "pintura|blanca|vinilo|galon", "Pinturas y acabados"),
 ]
 
@@ -60,7 +60,7 @@ FAMILIES = [
     ("DUC", "Ducha eléctrica", "unidad", "Plomería", "ducha|electrica|calentador|baño", [
         ("3T", "3 temperaturas", 69900)]),
     # Obra gris
-    ("CEM", "Cemento gris", "bulto", "Obra gris", "cemento|gris|mezcla|bulto", [("025", "bulto de 25 kg", 22500)]),
+    ("CEM", "Cemento gris", "bulto", "Obra gris", "cemento|gris|mezcla|bulto|bolsa", [("025", "bulto de 25 kg", 22500)]),
     ("CBL", "Cemento blanco", "bolsa", "Obra gris", "cemento|blanco|boquilla|bolsa", [
         ("001", "bolsa de 1 kg", 4900), ("005", "bolsa de 5 kg", 19900)]),
     ("MOR", "Mortero seco", "bulto", "Obra gris", "mortero|pega|ladrillo|bulto|mezcla", [("040", "bulto de 40 kg", 24900)]),

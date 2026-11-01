@@ -912,3 +912,42 @@ def test_me_llevo_after_how_many_registers_and_a_bare_quantity_is_quoted_first(c
     assert book.session_orders(other) == []
     assert asked["estado"] == "insufficient_stock" and "no tengo 5" in asked["respuesta"]
     assert "registre el pedido" not in asked["respuesta"] and "$18.900" not in asked["respuesta"]
+
+
+BRUSH = {"text": "brocha de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas"}
+
+
+def test_adding_to_an_active_order_gets_the_register_reminder_not_only_a_quote(chat):
+    # Q-10 (corrida 42): con el tubo pendiente, «agrégale 2 brochas de 3 pulgadas» contaba como pedir el total; el
+    # aviso solo pedía cotizar y Grok preguntó si registraba, sin registrar.
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]), say())
+    added = turn(session, "agrégale 2 brochas de 3 pulgadas", tool("buscar_productos", items=[BRUSH]),
+                 say("¿Quieres que cotice el total y te lo registre todo junto?"),
+                 tool("registrar_pedido", lines=[{"sku": "BRO-3", "quantity": 2}]), say())
+    reminder = added["planner"].seen[2]["observaciones"][-1]["error"]
+    assert reminder["code"] == "ORDER_REQUIRED" and "registrar_pedido" in reminder["message"]
+    assert added["estado"] == "order_pending" and "$13.800" in added["respuesta"]
+    assert [order["estado"] for order in book.session_orders(session)] == ["pendiente", "pendiente"]
+
+
+def test_a_registered_order_reply_that_does_not_ask_to_confirm_is_replaced(chat):
+    # H-09 (corrida 42): Grok escribió «Listo, pedido P-… apartado por 5 minutos. ¿A qué hora pasas a recogerlo?» y
+    # el cliente no supo que tenía que confirmar; el pedido vence sin su «sí».
+    turn, sessions, book, _, _ = chat
+    session = sessions.create()
+    _quote_turn(turn, session)
+    silent = turn(session, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]),
+                  lambda seen: say(f"Listo, pedido {seen[-1]['datos']['pedido']} apartado por 5 minutos. "
+                                   "¿A qué hora pasas a recogerlo?"))
+    assert silent["estado"] == "order_pending" and "confirm" in silent["respuesta"]
+    assert "¿A qué hora pasas a recogerlo?" not in silent["respuesta"]
+
+    other = sessions.create()
+    _quote_turn(turn, other)
+    asked = turn(other, "me los llevo", tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 3}]),
+                 lambda seen: say(f"Listo, registré el pedido {seen[-1]['datos']['pedido']}. ¿Me lo confirmas con un "
+                                  "«sí»? El pago es en el mostrador."))
+    assert asked["respuesta"].startswith("Listo, registré el pedido")

@@ -18,7 +18,7 @@ EXTRA_FAMILIES = [
     # Adhesivos y sellantes
     ("PEI", "Pegamento instantáneo", "unidad", "Adhesivos y sellantes", "pegamento|instantaneo|gotita|cianoacrilato", [
         ("3G", "3 g", 3500)]),
-    ("MSM", "Masilla para madera", "unidad", "Adhesivos y sellantes", "masilla|madera|resanar|huecos", [
+    ("MSM", "Masilla para madera", "unidad", "Adhesivos y sellantes", "masilla|madera|resanar|huecos|tapar", [
         ("CED", "cedro 1/4 de galón", 18900), ("PIN", "pino 1/4 de galón", 18900)]),
     ("SPU", "Sellante de poliuretano", "unidad", "Adhesivos y sellantes", "sellante|poliuretano|juntas|cartucho", [
         ("BLA", "blanco 300 ml", 24900), ("GRI", "gris 300 ml", 24900)]),

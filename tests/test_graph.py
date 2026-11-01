@@ -842,6 +842,10 @@ def test_store_policies_need_the_store_tool_in_the_same_run(policy):
     ("Apártame 2 metros de PVC de 1/2 para agua", True),
     ("¿Me fías 2 metros de PVC de 1/2 para agua?", True),
     ("Necesito 2 metros de PVC de 1/2 para agua, pago mañana", True),
+    # P-fiado-2 (corrida 42): pagar otro día también es pedir fiado; pagar al recoger no.
+    ("Anóteme 2 metros de PVC de 1/2 para agua y le pago el viernes", True),
+    ("2 metros de PVC de 1/2 para agua, se los pago en la quincena", True),
+    ("Necesito 2 metros de PVC de 1/2 para agua, ¿cómo pago?", False),
     ("Necesito 2 metros de PVC de 1/2 para agua", False),
 ])
 def test_reservation_or_credit_requests_always_get_the_informative_note(message, noted):
@@ -1390,3 +1394,20 @@ def test_a_roll_of_something_sold_by_the_meter_is_never_priced_by_grok():
                      say("Un rollo de tubo PVC de 1/2 te sale a $8.500 el metro. Precios de demostración."))
     result = run(executor, planner, "necesito un rollo de tubo PVC de 1/2 para agua")
     assert "te sale" not in result["respuesta"] and "¿Cuántos metros necesitas?" in result["respuesta"]
+
+
+@pytest.mark.parametrize(("item", "exact"), [
+    # V-17, X-14 y A-18 (corrida 42): Grok llenó un campo con una cortesía, «bolsa» por «bulto» o el uso que dijo el
+    # cliente, y la coincidencia exacta quedaba como opción cercana.
+    ({"text": "martillo de uña de 20 oz", "product": "martillo", "measure": "20 oz", "presentation": "plis"}, "MAR-20"),
+    ({"text": "cemento gris", "product": "cemento", "color": "gris", "presentation": "bolsa 50 kg"}, "CEM-050"),
+    ({"text": "masilla para tapar huecos en madera de cedro", "product": "masilla", "use": "tapar huecos",
+      "material": "madera", "color": "cedro"}, "MSM-CED"),
+    # Lo que no existe sigue siendo una opción cercana, nunca la coincidencia.
+    ({"text": "martillo de titanio", "product": "martillo", "material": "titanio"}, None),
+    ({"text": "cemento blanco", "product": "cemento", "color": "blanco", "presentation": "bolsa 50 kg"}, None),
+])
+def test_a_courtesy_or_a_common_name_for_the_package_never_turns_the_exact_product_into_a_nearby_one(tmp_path, item, exact):
+    result = _real_executor(tmp_path)("buscar_productos", {"items": [item]})["data"]["results"][0]
+    assert [match["sku"] for match in result["matches"]] == ([exact] if exact else [])
+    assert result["nearby"] or exact

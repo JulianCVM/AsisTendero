@@ -26,7 +26,10 @@ RESTOCK_SQL = (
     "AND r.store_id = products.store_id AND r.sku = products.sku), '')"
 )
 
+# Las cortesías («plis», «porfa») no describen el producto: en V-17 (corrida 42) Grok puso «plis» como presentación y
+# el martillo de 20 oz quedó como opción cercana en vez de coincidencia.
 STOPWORDS = {
+    "gracias", "please", "plis", "pls", "porfa", "porfavor", "porfis",
     "a", "al", "busco", "como", "con", "cual", "cuales", "cuanto", "cuantos",
     "cuesta", "cuestan", "de", "del", "disponible", "disponibles", "el", "en",
     "es", "esta", "estan", "este", "favor", "hay", "hola", "la", "las", "le",

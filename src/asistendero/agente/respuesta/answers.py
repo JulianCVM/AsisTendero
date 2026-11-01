@@ -43,14 +43,17 @@ FORBIDDEN_CLAIMS = re.compile(
     re.I,
 )
 
+# Pagar después es pedir fiado: «le pago el viernes» (P-fiado-2, corrida 42: Grok ofreció anotarlo sin decir que
+# no se fía), «se lo pago en la quincena».
+PAY_LATER = (r"(?:pago|pagar|pagaria)\s+(?:(?:el|la|en\s+la|a\s+fin\s+de)\s+)?(?:manana|despues|luego|otra\s+semana"
+             r"|lunes|martes|miercoles|jueves|viernes|sabado|domingo|quincena|mes|semana\s+que\s+viene)")
 # Un pedido de apartar, reservar o fiar recibe siempre esta aclaración, la redacte Grok o no.
 RESERVATION_REQUEST = re.compile(
-    r"\b(?:apart\w+|reserv\w+|separ(?:a|e|ar|ame|amelo|en)\b|fia\w*|fiar\w*|credito|"
-    r"(?:pago|pagar|pagaria)\s+(?:manana|despues|luego|la\s+otra\s+semana))"
+    r"\b(?:apart\w+|reserv\w+|separ(?:a|e|ar|ame|amelo|en)\b|fia\w*|fiar\w*|credito|" + PAY_LATER + ")"
 )
 RESERVATION_NOTE = "No es un pedido ni una reserva: por este chat no aparto productos, no fío ni recibo pagos."
 # En una sesión sí hay pedidos: lo que nunca se hace es fiar o cobrar, y sin pedido registrado no hay nada apartado.
-CREDIT_REQUEST = re.compile(r"\b(?:fia\w*|fiar\w*|credito|(?:pago|pagar|pagaria)\s+(?:manana|despues|luego|la\s+otra\s+semana))")
+CREDIT_REQUEST = re.compile(r"\b(?:fia\w*|fiar\w*|credito|" + PAY_LATER + ")")
 CREDIT_NOTE = "No fío ni recibo pagos por este chat: el pago es en el mostrador al recoger."
 NO_ORDER_NOTE = "Todavía no hay nada apartado: si lo quieres llevar, dime cuántas unidades y registro el pedido."
 
@@ -420,6 +423,11 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
         return False
     said_codes = set(re.findall(r"\bP-[0-9A-F]{6}\b", reply))
     if not said_codes <= orders["codes"] or not orders["required"] <= said_codes:
+        return False
+    # H-09 (corrida 42): Grok registró el pedido y escribió «apartado por 5 minutos. ¿A qué hora pasas?» sin pedir el
+    # «sí»; el pedido vence si no se confirma y el cliente no lo sabía.
+    if (any(tool == "registrar_pedido" and order["estado"] == "pendiente" for tool, order in order_results(calls))
+            and "confirm" not in normalized):
         return False
     for moment in orders["times"]:
         normalized = normalized.replace(moment, "")

@@ -380,7 +380,11 @@ def order_action_pending(current: str, reference: str, calls: list[ToolCall], co
     new_products = set(grounded_products(reference, calls)) - held
     # Un pedido vencido no se confirma: si el cliente aún lo quiere, se registra de nuevo (P-02, primera corrida S4).
     said = order_quantities(reference) or (listed and WHOLE_LIST.search(text))
-    if (asks_whole_list(current) or ASKS_QUOTE_OR_TOTAL.search(text)) and not EXPLICIT_PURCHASE.search(text):
+    # Con un pedido activo, «agrégale 2 brochas» suma al pedido, no pide el total (Q-10, corrida 42: el aviso solo pedía
+    # cotizar y las brochas quedaron sin registrar).
+    adds_to_order = active and ADD_TO_ORDER.search(text)
+    if ((asks_whole_list(current) or ASKS_QUOTE_OR_TOTAL.search(text)) and not EXPLICIT_PURCHASE.search(text)
+            and not adds_to_order):
         return None
     if (wants_to_buy(current, context) and said and (known or listed)
             and "registrar_pedido" not in executed and (not pending or new_products)):
