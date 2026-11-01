@@ -27,6 +27,35 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Corrida 44: los 345 casos con la suite de fotos, interrumpida (01-11-2026)
+
+Objetivo: validar el commit de la entrega S3 (`e19594f`, con la visión integrada y la suite `fotos`) sobre los 345
+casos. Mismo modelo y prompts (`s4-conversacion-v12` y `mercado-v1`), `--include-failures --concurrency 3
+--budget-usd 1.30`, árbol de trabajo limpio (`src_dirty: false`).
+
+**El equipo se quedó sin memoria y el sistema detuvo la corrida** a los 207 de 345 casos, antes de escribir el
+reporte completo. Lo que sigue sale de su bitácora parcial (`eval-20261101T172243130148Z.partial.jsonl`), que guarda
+por caso el resultado, las llamadas y el costo, pero no los motivos de un fallo.
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD |
+|---|---|---|---|---|---|
+| 44 (parcial) | `e19594f` | 207 de 345 | **205/207** | 672 | 0.776183 |
+
+- **Corridos:** `s2`, `catalogo`, `tienda`, `seguridad`, `conversacion`, `ruido`, `pedidos`, `sesion_larga`,
+  `concurrencia`, `extremos`, `flujos`, `variados`, `inyeccion` y `memoria` completas, y 12 de los 14 de `natural`.
+- **Sin correr (138):** `fallas` (38), `mercado` (33), `parafrasis` (24), `ampliacion` (20), `fotos` (11),
+  `surtido` (10) y 2 de `natural`. La suite `fotos` sigue sin corrida completa con Grok real; pasa entera con el
+  Grok guionizado y una visión falsa (`tests/test_eval_sessions.py`), y la validación de fotos con Grok real del
+  31-10 está en `docs/HARNESS.md` («Fotos»).
+- **Fallaron:** X-22, la misma variación de Grok de las corridas 39 a 43, y H-02 (pintura beige por galón en cuatro
+  turnos), que pasó en la 42. Sin el reporte completo no hay motivo registrado; queda por revisar en la próxima corrida.
+- **Costo:** 0,003750 USD por tarea en estas 207, cerca de los 0,003452 de la corrida 42 completa, que sigue siendo
+  la fuente de `evaluation/COSTOS_POR_TAREA.md`.
+- **No se relanzó:** relanzarla sin pedirlo gastaría créditos sin una decisión de Julian, y el aviso del sistema pide
+  no reiniciarla mientras falte memoria.
+- **Gasto acumulado desde la corrida 38:** 3.568553 (corridas 38 a 43) + 0.041193 (validación de fotos del 31-10) +
+  0.776183 (corrida 44) = **4.385929 USD** de los 5 USD aprobados por Julian.
+
 ## Segunda tanda y costo por operación (corridas 42 y 43, 31-10-2026 y 01-11-2026 UTC)
 
 Pedido de Julian: otra tanda de pruebas, arreglar lo que falle y presentar 30 o más casos reales con su costo por
