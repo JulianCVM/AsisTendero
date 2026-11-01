@@ -233,6 +233,7 @@ El comando de evaluación usa los [casos](evaluation/cases.json) y **solo llama 
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite seguridad conversacion   # solo esas suites
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --model grok-4.20-0309-reasoning   # otro modelo permitido
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --compare .local\eval-A.json .local\eval-B.json   # tabla, sin Grok
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.eval_costs .local\eval-A.json --out evaluation\COSTOS_POR_TAREA.md   # costo por operación, sin Grok
 # S4: conversaciones largas con pedidos, clientes a la vez y varios modelos, con tope de gasto
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite ruido pedidos sesion_larga concurrencia --budget-usd 1
 .\.venv\Scripts\python.exe -m asistendero.evaluacion --live --suite extremos flujos variados --concurrency 3 --budget-usd 1
@@ -276,7 +277,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `tienda/bodega/` | `stock_assistant.py` y `stock_proposal.py`: Grok interpreta lo que cuenta el tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
 | `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py` y `harness_flow.py` (mapa del harness atado al grafo real). |
-| `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
+| `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_costs.py` (costo por tarea, por mensaje, por llamada a Grok y por herramienta), `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
 | `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
 | `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |

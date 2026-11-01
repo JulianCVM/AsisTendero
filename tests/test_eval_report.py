@@ -47,3 +47,49 @@ def test_comparison_marks_an_old_report_without_the_metric_as_missing_not_zero()
     assert old_row.split(" | ")[position] == "—"
     assert new_row.split(" | ")[position] == "100.0 %"
     assert "0.0 %" not in old_row.split(" | ")[position]
+
+
+def _grok(phase, action, usd, cached=2432):
+    event = call(2800, cached, usd)
+    event["details"].update(phase=phase, action=action, duration_ms=1000)
+    if usd is None:
+        event["details"]["cost"] = None
+    return event
+
+
+def test_the_cost_report_adds_up_by_operation_task_and_tool_and_never_counts_a_missing_cost_as_zero():
+    from decimal import Decimal
+    from asistendero.evaluacion.eval_costs import case_rows, cost_report_markdown, operation_rows, tool_rows
+
+    search = {"requested_tool": "buscar_productos", "executed": True, "duration_ms": 12}
+    rejected = {"requested_tool": "registrar_pedido", "executed": False, "duration_ms": 0}
+    cases = [
+        case("A", suite="mercado", negocio="mercado", model_calls=2, cost={"usd": "0.0020"}, tool_calls=[search],
+             events=[_grok("interpret", "call_tool", "0.0009"), _grok("resolve", "respond", "0.0011")]),
+        case("B", suite="flujos", model_calls=2, cost={"usd": "0.0030"},
+             turns=[{"tool_calls": [search, rejected], "events": [_grok("interpret", "call_tool", "0.0012")]},
+                    {"tool_calls": [], "events": [_grok("resolve", "respond", "0.0018")]}]),
+        # Rechazado antes de Grok: cuesta cero. Una llamada sin costo informado no suma, pero se cuenta aparte.
+        case("C", suite="inyeccion", model_calls=0, cost=None),
+        case("D", suite="flujos", model_calls=1, cost=None, events=[_grok("interpret", "respond", None)]),
+    ]
+    full = report(cases)
+
+    rows = {row["id"]: row for row in case_rows(full)}
+    assert rows["B"]["mensajes"] == 2 and rows["B"]["herramientas"] == 1 and rows["B"]["usd"] == Decimal("0.0030")
+    assert rows["C"]["usd"] == 0 and rows["D"]["usd"] is None
+    operations = {group["operacion"]: group for group in operation_rows(full)}
+    assert operations["Interpretar el mensaje y pedir una herramienta"]["usd"] == Decimal("0.0021")
+    assert operations["Leer lo observado y redactar la respuesta"]["llamadas"] == 2
+    unknown = operations["Interpretar el mensaje y responder sin herramientas"]
+    assert unknown["llamadas"] == 1 and unknown["sin_costo"] == 1 and unknown["usd"] == 0
+    tools = {group["herramienta"]: group for group in tool_rows(full)}
+    assert (tools["buscar_productos"]["pedidas"], tools["registrar_pedido"]["ejecutadas"]) == (2, 0)
+
+    markdown = cost_report_markdown(full)
+    # Tres tareas con costo conocido (A, B y la C, que no llamó a Grok): 0,005 USD en total.
+    assert "| Costo total | 0.005000 USD |" in markdown and "para 3 de 4 tareas" in markdown
+    assert "| Costo medio por tarea | 0.001667 USD |" in markdown
+    assert "| Proyección a 1.000 tareas con esta mezcla | 1.666667 USD |" in markdown
+    assert "| D | flujos | ferreteria | 1 | 1 | 0 | 2800 (2432) | 40 | — |" in markdown
+    assert "| Interpretar el mensaje y responder sin herramientas | 1 | 0.000000 | — |" in markdown

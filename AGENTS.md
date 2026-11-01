@@ -106,7 +106,8 @@ propio.
      (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
    - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
    - `record` y `verdict` (`eval_checks.py`); `unbacked_prices`, `leaked_codes`, `analysis_reasons` y
-     `paraphrase_groups` (`eval_oracle.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
+     `paraphrase_groups` (`eval_oracle.py`); `case_rows`, `operation_rows`, `tool_rows` y `cost_report_markdown`
+     (`eval_costs.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
    - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `detect_injection` y `blocked_reply`
      (`injection.py`); `SessionStore` (con `ban`, `unban` y `bans`) y `remembered_products` (`sessions.py`); `run_turn` y
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
@@ -201,6 +202,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
 | La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
 | Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |
+| El reporte de costo por operación de una corrida | `eval_costs.py`, con su prueba en `tests/test_eval_report.py`; el documento, en `evaluation/COSTOS_POR_TAREA.md` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
 ## El contrato del agente
