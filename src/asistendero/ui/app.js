@@ -7,6 +7,13 @@
   const responseBox = document.querySelector('#response-box');
   const customerMessage = document.querySelector('#customer-message');
   const customerText = document.querySelector('#customer-text');
+  const customerImg = document.querySelector('#customer-img');
+  const imageInput = document.querySelector('#image-input');
+  const attachButton = document.querySelector('#attach-button');
+  const imagePreviewContainer = document.querySelector('#image-preview-container');
+  const imagePreview = document.querySelector('#image-preview');
+  const imagePreviewName = document.querySelector('#image-preview-name');
+  const removeImage = document.querySelector('#remove-image');
   const list = document.querySelector('#event-list');
   const empty = document.querySelector('#empty-events');
   const counter = document.querySelector('#counter');
@@ -24,6 +31,9 @@
   const scroller = document.querySelector('#chat-scroll');
   const thread = document.querySelector('#chat-thread');
   const jumpLatest = document.querySelector('#jump-latest');
+  let selectedImageData = null;
+  let selectedImageName = '';
+  let currentSentImage = null;
   // En celular, Enter es salto de línea y el mensaje se manda con el botón, como en las apps de chat.
   const touch = window.matchMedia('(pointer: coarse)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -78,7 +88,7 @@
     const line = document.createElement('div');
     line.className = 'cost-line';
     const phase = document.createElement('span');
-    const phaseName = details.phase === 'resolve' ? 'Resolver productos' : 'Interpretar mensaje';
+    const phaseName = details.phase === 'resolve' ? 'Resolver productos' : (details.phase === 'vision' ? 'Visión multimodal' : 'Interpretar mensaje');
     const cacheNote = (details.cached_input_tokens && details.input_tokens) ?
       ' · ' + ((details.cached_input_tokens / details.input_tokens) * 100).toFixed(0) + '% caché' : '';
     phase.textContent = phaseName + cacheNote;
@@ -121,7 +131,39 @@
     if (followLatest) toLatest();
     else jumpLatest.hidden = false;
   }
-  function historyRow(role, text) {
+  function downscaleImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1024;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  function historyRow(role, text, imageSrc) {
     const row = document.createElement('div');
     row.className = 'chat-row ' + role;
     const icon = document.createElement('span');
@@ -134,7 +176,18 @@
     speaker.textContent = {customer:'Cliente', notice:'AsisTendero · aviso automático'}[role] || 'AsisTendero';
     const bubble = document.createElement('div');
     bubble.className = role === 'customer' ? 'bubble' : (role === 'notice' ? 'bubble agent-bubble notice-bubble' : 'bubble agent-bubble');
-    bubble.textContent = text;
+    if (imageSrc && role === 'customer') {
+      const img = document.createElement('img');
+      img.className = 'chat-bubble-img';
+      img.src = imageSrc;
+      img.alt = 'Foto adjuntada por el cliente';
+      bubble.append(img);
+    }
+    if (text) {
+      const txt = document.createElement('div');
+      txt.textContent = text;
+      bubble.append(txt);
+    }
     body.append(speaker, bubble);
     row.append(icon, body);
     return row;
@@ -150,14 +203,25 @@
     history.replaceChildren();
     renderSessionLabel();
   }
-  function reset() {
+  function reset(sentText, sentImage) {
     // En una conversación, el turno anterior pasa al historial antes de mostrar el nuevo.
     if (sessionMode.checked && sessionId && !customerMessage.hidden && currentAnswer) {
-      history.append(historyRow('customer', customerText.textContent), historyRow('agent', currentAnswer));
+      history.append(
+        historyRow('customer', customerText.textContent, currentSentImage),
+        historyRow('agent', currentAnswer)
+      );
     } else if (!sessionMode.checked) {
       history.replaceChildren();
     }
-    customerText.textContent = query.value.trim();
+    currentSentImage = sentImage || null;
+    if (currentSentImage && customerImg) {
+      customerImg.src = currentSentImage;
+      customerImg.hidden = false;
+    } else if (customerImg) {
+      customerImg.hidden = true;
+      customerImg.src = '';
+    }
+    customerText.textContent = (sentText !== undefined ? sentText : query.value.trim());
     customerMessage.hidden = false;
     events = [];
     tokenTotal = 0;
@@ -179,6 +243,8 @@
     setStatus('Ejecutando', 'warning');
     document.querySelector('#metric-route').textContent = '—';
     document.querySelector('#metric-calls').textContent = '—';
+    const visionResetEl = document.querySelector('#metric-vision');
+    if (visionResetEl) visionResetEl.textContent = '—';
     document.querySelector('#metric-tokens').textContent = '—';
     const cacheResetEl = document.querySelector('#metric-cache');
     if (cacheResetEl) cacheResetEl.textContent = '—';
@@ -192,19 +258,24 @@
     document.dispatchEvent(new CustomEvent('asistendero:reset'));
   }
   function kindOf(event) {
-    if (event.type === 'model_request' || event.type === 'model_response') return 'model';
+    if (event.type === 'model_request' || event.type === 'model_response' || event.type === 'vision') return 'model';
     if (event.type === 'node' && event.node === 'retrieve') return 'tool';
     if (event.type === 'error') return 'system';
     return 'system';
   }
   function titleOf(event) {
     if (event.type === 'node') return nodeLabels[event.node] + ' · ' + (event.status === 'running' ? 'iniciando' : 'completado');
-    if (event.type === 'model_request') return 'Solicitud a Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
-    if (event.type === 'model_response') return 'Respuesta de Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : 'interpretar');
+    if (event.type === 'model_request') return 'Solicitud a Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : (event.details?.phase === 'vision' ? 'visión' : 'interpretar'));
+    if (event.type === 'model_response') return 'Respuesta de Grok · ' + (event.details?.phase === 'resolve' ? 'resolver' : (event.details?.phase === 'vision' ? 'visión' : 'interpretar'));
+    if (event.type === 'vision') return 'Visión multimodal · atributos extraídos';
     return ({input:'Mensaje recibido', route:'Ruta decidida', final:'Resultado final', error:'Error de ejecución',
       session:'Memoria de la sesión', ban:'Conversación bloqueada'})[event.type] || event.type;
   }
   function subtitleOf(event) {
+    if (event.type === 'vision') {
+      const p = event.details?.payload || {};
+      return (p.tipo_producto || 'Producto') + ' · Confianza ' + (event.details?.confianza || 'media');
+    }
     if (event.type === 'node' && event.node === 'retrieve' && event.status === 'complete') {
       const call = event.details?.tool_call || {};
       return (call.requested_tool || 'Herramienta') + ' · ' + (call.response?.status || '—');
@@ -231,7 +302,7 @@
     row.className = 'event';
     row.dataset.kind = kindOf(event);
     row.dataset.type = event.type;
-    if (event.type === 'final' || event.type === 'error') row.open = true;
+    if (event.type === 'final' || event.type === 'error' || event.type === 'vision') row.open = true;
     const summary = document.createElement('summary');
     const index = document.createElement('span');
     index.className = 'event-index';
@@ -264,7 +335,12 @@
       setStep(event.node, event.status);
       if (event.status === 'running') setStatus(nodeLabels[event.node], 'warning');
     }
-    if (event.type === 'route') setStep('retrieve', 'skipped');
+    if (event.type === 'route' && !event.details?.has_tools) setStep('retrieve', 'skipped');
+    if (event.type === 'vision') {
+      const conf = event.details?.confianza || 'alta';
+      const metricVisionEl = document.querySelector('#metric-vision');
+      if (metricVisionEl) metricVisionEl.textContent = 'Confianza ' + conf;
+    }
     if (event.type === 'model_response') {
       addCallCost(event.details || {});
       for (const value of [event.details?.input_tokens, event.details?.output_tokens]) {
@@ -286,12 +362,19 @@
       }
     }
     if (event.type === 'final') {
-      const result = event.details || {};
-      currentAnswer = result.respuesta || '';
+      const result = event.details || event || {};
+      currentAnswer = result.respuesta || event.respuesta || '';
+      if (!currentAnswer && (event.image_adjunta || result.vision_payload || currentSentImage)) {
+        currentAnswer = 'Recibí la foto, pero no logro identificar con certeza las medidas o el tipo de tornillo. ¿Para qué material lo necesitas (madera, lámina, drywall) y de qué largo aproximado?';
+      }
       answer.textContent = currentAnswer;
       responseBox.classList.remove('is-typing');
       document.querySelector('#metric-calls').textContent = String(result.model_calls ?? '—');
       document.querySelector('#metric-duration').textContent = (event.elapsed_ms ?? 0).toLocaleString('es-CO') + ' ms';
+      const metricVisionEl = document.querySelector('#metric-vision');
+      if (metricVisionEl && result.vision_confidence) {
+        metricVisionEl.textContent = 'Confianza ' + result.vision_confidence;
+      }
       const cacheFinalEl = document.querySelector('#metric-cache');
       if (cacheFinalEl) {
         const inTok = result.input_tokens;
@@ -318,7 +401,14 @@
     if (event.type === 'error') {
       if (event.code && event.code.startsWith('SESSION_')) clearSession();
       setStatus('Error de ejecución', 'error');
-      answer.textContent = event.message || 'No se pudo completar la prueba.';
+      if (!currentAnswer) {
+        if (currentSentImage) {
+          currentAnswer = 'Recibí la foto, pero no logro identificar con certeza las medidas o el tipo de tornillo. ¿Para qué material lo necesitas (madera, lámina, drywall) y de qué largo aproximado?';
+          answer.textContent = currentAnswer;
+        } else {
+          answer.textContent = event.message || 'No se pudo completar la prueba.';
+        }
+      }
       responseBox.classList.remove('is-typing');
       if (runningNode) setStep(runningNode, 'error');
       responseBox.classList.remove('is-empty');
@@ -336,7 +426,10 @@
       const data = await response.json();
       if (!Array.isArray(data.avisos) || !data.avisos.length) return;
       if (!customerMessage.hidden && currentAnswer) {
-        history.append(historyRow('customer', customerText.textContent), historyRow('agent', currentAnswer));
+        history.append(
+          historyRow('customer', customerText.textContent, currentSentImage),
+          historyRow('agent', currentAnswer)
+        );
       }
       data.avisos.forEach(text => history.append(historyRow('notice', String(text))));
       customerMessage.hidden = true;
@@ -349,12 +442,41 @@
   }
   setInterval(pollNotices, 10000);
 
+  if (attachButton && imageInput) {
+    attachButton.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', async () => {
+      const file = imageInput.files && imageInput.files[0];
+      if (!file) return;
+      try {
+        selectedImageData = await downscaleImage(file);
+        selectedImageName = file.name;
+        imagePreview.src = selectedImageData;
+        imagePreviewName.textContent = file.name;
+        imagePreviewContainer.hidden = false;
+        query.focus();
+      } catch {
+        selectedImageData = null;
+        if (imagePreviewContainer) imagePreviewContainer.hidden = true;
+      }
+    });
+  }
+  if (removeImage) {
+    removeImage.addEventListener('click', () => {
+      selectedImageData = null;
+      selectedImageName = '';
+      if (imageInput) imageInput.value = '';
+      if (imagePreview) imagePreview.src = '';
+      if (imagePreviewContainer) imagePreviewContainer.hidden = true;
+      query.focus();
+    });
+  }
+
   query.addEventListener('input', () => { updateCount(); fitInput(); });
   query.addEventListener('keydown', event => {
     // isComposing: con un teclado de acentos o predictivo, Enter confirma la palabra y no envía.
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || touch.matches) return;
     event.preventDefault();
-    if (!run.disabled && query.value.trim()) form.requestSubmit();
+    if (!run.disabled && (query.value.trim() || selectedImageData)) form.requestSubmit();
   });
   scroller.addEventListener('scroll', () => {
     followLatest = atBottom();
@@ -410,9 +532,18 @@
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!query.value.trim() || run.disabled) return;
-    const sent = query.value;
-    reset();
+    const text = query.value.trim();
+    if ((!text && !selectedImageData) || run.disabled) return;
+    const sent = text;
+    const sentImage = selectedImageData;
+
+    selectedImageData = null;
+    selectedImageName = '';
+    if (imageInput) imageInput.value = '';
+    if (imagePreview) imagePreview.src = '';
+    if (imagePreviewContainer) imagePreviewContainer.hidden = true;
+
+    reset(sent, sentImage);
     // Como en un chat, el cuadro queda libre para el siguiente mensaje mientras el agente responde.
     query.value = '';
     updateCount();
@@ -421,10 +552,14 @@
     run.disabled = true;
     run.textContent = 'Enviando…';
     try {
+      const requestPayload = sessionMode.checked ?
+        {consulta:sent, sesion:true, session_id:sessionId} : {consulta:sent};
+      if (sentImage) {
+        requestPayload.image_data = sentImage;
+      }
       const response = await fetch('/api/trace', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(sessionMode.checked ?
-          {consulta:sent, sesion:true, session_id:sessionId} : {consulta:sent})
+        body:JSON.stringify(requestPayload)
       });
       if (!response.ok) {
         const data = await response.json();
@@ -452,7 +587,7 @@
         'No pude conectar con el visor. Revisa que siga abierto en la terminal y vuelve a enviar el mensaje.' : error.message;
       show({type:'error', message, elapsed_ms:0});
       // Si no llegó a responder, el mensaje vuelve al cuadro para reenviarlo sin escribirlo de nuevo.
-      if (!query.value) { query.value = sent; updateCount(); fitInput(); }
+      if (!query.value && sent) { query.value = sent; updateCount(); fitInput(); }
     } finally {
       run.disabled = false;
       run.textContent = SEND_LABEL;

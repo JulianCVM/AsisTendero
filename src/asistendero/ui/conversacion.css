@@ -164,6 +164,11 @@ button:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-vis
   background: white; color: #233F48; font-size: .9rem; line-height: 1.55;
   box-shadow: 0 3px 12px rgba(58, 47, 27, .05);
 }
+.chat-bubble-img {
+  display: block; max-width: 220px; max-height: 220px; width: auto; height: auto;
+  border-radius: 10px; margin-bottom: 8px; object-fit: cover;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+}
 .chat-row.agent .bubble { border-bottom-left-radius: 5px; }
 .chat-row.customer .bubble { border-bottom-right-radius: 5px; }
 .customer .bubble { background: var(--mint); border-color: #D4E7DB; }
@@ -181,7 +186,36 @@ button:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-vis
 .composer-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .composer-heading label { margin: 0; font-size: .88rem; font-weight: 900; }
 .input-meta { color: var(--muted); font: .67rem var(--font-mono); white-space: nowrap; }
+.image-preview-bar {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-bottom: 2px;
+  padding: 6px 10px; background: #F8F5EE; border: 1px solid #E5DEC9; border-radius: 12px;
+}
+.image-preview-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px;
+  background: white; border: 1px solid #D9D0BE; border-radius: 8px;
+  font-size: .75rem; font-weight: 750; color: var(--ink);
+}
+.image-preview-thumb {
+  width: 34px; height: 34px; border-radius: 6px; object-fit: cover; display: block;
+}
+.image-preview-name {
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.remove-image-button {
+  display: flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border: none; border-radius: 50%; background: #EFE8DA; color: #6E5C44;
+  font-size: .8rem; font-weight: 900; cursor: pointer; padding: 0; line-height: 1;
+}
+.remove-image-button:hover { background: #DFD3BE; color: var(--danger); }
 .composer-row { display: flex; align-items: end; gap: 10px; margin-top: 9px; }
+.attach-button {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 48px; height: 48px; min-height: 48px; padding: 0;
+  border: 1px solid #D9D6C9; border-radius: 14px; background: #FFFDF8;
+  color: var(--ink); cursor: pointer; transition: background .15s, border-color .15s;
+}
+.attach-button:hover { background: var(--paper); border-color: var(--ink); }
+.attach-button:focus-visible { outline: 3px solid var(--amber); outline-offset: 1px; }
 /* Crece con el texto (app.js) hasta un tope y desde ahí se desplaza por dentro. */
 textarea {
   display: block; flex: 1; width: 100%; min-height: 48px; max-height: 180px; padding: 12px 14px; resize: none;

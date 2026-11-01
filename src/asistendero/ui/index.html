@@ -65,7 +65,13 @@
               <div id="chat-history" class="chat-history"></div>
               <div id="customer-message" class="chat-row customer" hidden>
                 <span class="chat-icon" aria-hidden="true">C</span>
-                <div><span class="speaker">Cliente</span><div class="bubble" id="customer-text"></div></div>
+                <div>
+                  <span class="speaker">Cliente</span>
+                  <div class="bubble">
+                    <img id="customer-img" class="chat-bubble-img" alt="Foto adjuntada por el cliente" hidden>
+                    <div id="customer-text"></div>
+                  </div>
+                </div>
               </div>
               <div class="chat-row agent">
                 <span class="chat-icon" aria-hidden="true">AT</span>
@@ -83,9 +89,23 @@
         </div>
         <div class="chat-composer">
           <form id="form">
+            <div id="image-preview-container" class="image-preview-bar" hidden>
+              <div class="image-preview-chip">
+                <img id="image-preview" src="" alt="Vista previa de foto" class="image-preview-thumb">
+                <span id="image-preview-name" class="image-preview-name">foto.jpg</span>
+                <button type="button" id="remove-image" class="remove-image-button" aria-label="Quitar foto seleccionada">✕</button>
+              </div>
+            </div>
             <div class="composer-heading"><label for="query">Tu mensaje</label><span id="char-count" class="input-meta">0 / 2000</span></div>
             <div class="composer-row">
-              <textarea id="query" rows="1" maxlength="2000" spellcheck="true" aria-describedby="send-hint" placeholder="Ej.: Busco tubo PVC de 1/2 y cemento gris de 50 kg" required></textarea>
+              <input type="file" id="image-input" accept="image/*" style="display: none;">
+              <button type="button" id="attach-button" class="secondary icon-button attach-button" aria-label="Adjuntar foto de producto" title="Adjuntar foto de producto">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </button>
+              <textarea id="query" rows="1" maxlength="2000" spellcheck="true" aria-describedby="send-hint" placeholder="Ej.: Busco tubo PVC de 1/2 o adjunta una foto"></textarea>
               <button id="run" type="submit" class="primary send-button">Enviar ↗</button>
             </div>
             <p id="send-hint" class="send-hint"><span class="hint-keys"><kbd>Enter</kbd> envía · <kbd>Shift</kbd> + <kbd>Enter</kbd> hace un salto de línea</span><span class="hint-touch">Toca «Enviar» para mandar el mensaje</span></p>
@@ -127,6 +147,7 @@
           <dl class="summary-metrics">
             <div class="summary-metric"><dt>Ruta</dt><dd id="metric-route">—</dd></div>
             <div class="summary-metric"><dt>Grok</dt><dd id="metric-calls">—</dd></div>
+            <div class="summary-metric"><dt>Visión</dt><dd id="metric-vision">—</dd></div>
             <div class="summary-metric"><dt>Tokens</dt><dd id="metric-tokens">—</dd></div>
             <div class="summary-metric"><dt>Caché</dt><dd id="metric-cache">—</dd></div>
             <div class="summary-metric"><dt>Duración</dt><dd id="metric-duration">—</dd></div>
