@@ -104,3 +104,30 @@ def test_the_vision_call_of_a_photo_is_its_own_operation_and_not_another_call():
     operations = {group["operacion"]: group for group in operation_rows(full)}
     assert operations["Mirar la foto del cliente (visión)"]["llamadas"] == 1
     assert "Otra llamada" not in operations
+
+
+def test_batches_of_one_run_add_up_and_never_mix_commits_dirty_trees_or_repeated_cases():
+    import pytest
+    from asistendero.evaluacion.eval_costs import cost_report_markdown, merged_report
+
+    def batch(cases, **fields):
+        return {**report(cases), "commit": "abc1234", "model": "grok-4.20-0309-non-reasoning", "src_dirty": False,
+                "created_at": "2026-11-01T20:00:00", "prompt_versions": ["s4-conversacion-v12"],
+                "passed": sum(item["passed"] for item in cases), "total": len(cases), **fields}
+
+    first = batch([case("A", cost={"usd": "0.0020"}), case("B", cost={"usd": "0.0010"}, passed=False)])
+    second = batch([case("M", negocio="mercado", cost={"usd": "0.0030"})], created_at="2026-11-01T19:00:00",
+                   prompt_versions=["mercado-v1"])
+    merged = merged_report([first, second])
+    assert (merged["total"], merged["passed"], [item["id"] for item in merged["cases"]]) == (3, 2, ["A", "B", "M"])
+    assert merged["created_at"] == "2026-11-01T19:00:00"
+    assert merged["prompt_versions"] == ["mercado-v1", "s4-conversacion-v12"]
+    assert "| Costo total | 0.006000 USD |" in cost_report_markdown(merged)
+
+    # Lo que no es la misma corrida no se suma: otro commit, cambios sin commit o un caso medido dos veces.
+    with pytest.raises(ValueError, match="commit"):
+        merged_report([first, batch([case("M")], commit="def5678")])
+    with pytest.raises(ValueError, match="cambios sin commit"):
+        merged_report([first, batch([case("M")], src_dirty=True)])
+    with pytest.raises(ValueError, match="repetidos.*A"):
+        merged_report([first, batch([case("A")])])

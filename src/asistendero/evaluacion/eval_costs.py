@@ -5,6 +5,9 @@ llamada es el que informó la API (``api_reported``); una llamada sin costo info
 cero. Las herramientas corren en el servidor sobre SQLite: no tienen costo de API, solo latencia.
 
     python -m asistendero.evaluacion.eval_costs .local/eval-AAAAMMDDTHHMMSS.json --out evaluation/COSTOS_POR_TAREA.md
+
+Una corrida hecha por tandas (``--suite``) se junta pasando todos sus reportes: deben ser del mismo commit y modelo,
+con el árbol limpio y sin un caso repetido. Así un corte del equipo a mitad de corrida no obliga a repetir lo ya medido.
 """
 
 import argparse
@@ -105,6 +108,28 @@ def _group_table(rows: list[dict], key: str, title: str) -> list[str]:
     return lines
 
 
+def merged_report(reports: list[dict]) -> dict:
+    """Une las tandas de una misma corrida; rechaza mezclar commits, modelos, árboles con cambios o casos repetidos."""
+    if len(reports) == 1:
+        return reports[0]
+    for key in ("commit", "model"):
+        if len({report.get(key) for report in reports}) != 1:
+            raise ValueError(f"Las tandas no comparten {key}: no son la misma corrida")
+    if any(report.get("src_dirty") for report in reports):
+        raise ValueError("Una tanda se corrió con cambios sin commit: no se puede atribuir a un commit")
+    ids = [record["id"] for report in reports for record in report["cases"]]
+    repeated = sorted({case_id for case_id in ids if ids.count(case_id) > 1})
+    if repeated:
+        raise ValueError(f"Casos repetidos entre tandas: {', '.join(repeated)}")
+    versions = sorted({version for report in reports
+                       for version in report.get("prompt_versions") or [report.get("prompt_version")] if version})
+    return {**reports[0], "created_at": min(report.get("created_at") or "" for report in reports),
+            "prompt_versions": versions, "cases": [record for report in reports for record in report["cases"]],
+            "passed": sum(report.get("passed", 0) for report in reports),
+            "total": sum(report.get("total", len(report["cases"])) for report in reports),
+            "controlled_failures": [item for report in reports for item in report.get("controlled_failures") or []]}
+
+
 def cost_report_markdown(report: dict) -> str:
     rows = case_rows(report)
     known = [row["usd"] for row in rows if row["usd"] is not None]
@@ -166,10 +191,12 @@ def cost_report_markdown(report: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reporte de costo por operación de una corrida; no llama a Grok")
-    parser.add_argument("reporte", type=Path, help="Reporte JSON del evaluador (.local/eval-*.json)")
+    parser.add_argument("reporte", type=Path, nargs="+",
+                        help="Reporte JSON del evaluador (.local/eval-*.json); varios si la corrida se hizo por tandas")
     parser.add_argument("--out", type=Path, help="Archivo Markdown de salida; sin él se imprime")
     args = parser.parse_args()
-    markdown = cost_report_markdown(json.loads(args.reporte.read_text(encoding="utf-8")))
+    reports = [json.loads(path.read_text(encoding="utf-8")) for path in args.reporte]
+    markdown = cost_report_markdown(merged_report(reports))
     if args.out:
         args.out.write_text(markdown, encoding="utf-8")
     else:
