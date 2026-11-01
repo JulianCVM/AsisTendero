@@ -106,6 +106,25 @@ def test_the_demo_conversation_quotes_the_tube_and_the_hose_together(chat):
     assert "Total: $13.800" in third["respuesta"] and "¿Qué medida" not in third["respuesta"]
 
 
+def test_a_new_item_with_its_quantity_enters_the_total_the_customer_asked_for(chat):
+    # H-02 (corridas 44 y 47 con Grok real): con 3 galones de pintura en la lista, «y una brocha de 4 pulgadas,
+    # cuanto me queda todo?» se cotizó solo la pintura y se preguntó cuántas brochas, aunque dijo «una».
+    turn, sessions, _ = chat
+    session = sessions.create()
+    paint = {"text": "pintura vinilo beige", "product": "pintura", "color": "beige", "presentation": "galón"}
+    turn(session, "necesito 3 galones de pintura vinilo beige",
+         tool("buscar_productos", items=[paint]), quote(("PIV-BEI-G", 3)), say())
+    brush = {"text": "brocha de 4 pulgadas", "product": "brocha", "measure": "4 pulgadas"}
+    result = turn(session, "y una brocha de 4 pulgadas, cuanto me queda todo?",
+                  quote(("PIV-BEI-G", 3), ("BRO-4", 1)), tool("buscar_productos", items=[brush]),
+                  quote(("PIV-BEI-G", 3)), say("¿Cuántas brochas quieres?"),
+                  quote(("PIV-BEI-G", 3), ("BRO-4", 1)), say())
+    assert result["avisos_enviados"] == ["LIST_QUOTE_REQUIRED"]
+    assert result["estado"] == "quoted" and "$185.600" in result["respuesta"]
+    assert "¿Cuántas brochas" not in result["respuesta"]
+    assert _listed(sessions, session) == [("PIV-BEI-G", 3), ("BRO-4", 1)]
+
+
 def test_a_quantity_said_many_turns_ago_is_quoted_from_the_list(chat):
     turn, sessions, _ = chat
     session = sessions.create()

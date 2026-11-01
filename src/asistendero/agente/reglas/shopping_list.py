@@ -21,7 +21,7 @@ from asistendero.agente.modelo.grok import MAX_ITEMS
 from asistendero.agente.herramientas.observations import latest_quote, order_results, search_findings, ToolCall
 from asistendero.agente.reglas.choices import chosen_options
 from asistendero.agente.reglas.context_resolution import RESTART
-from asistendero.agente.reglas.validation import quantities_in_message
+from asistendero.agente.reglas.validation import grounded_products, quantities_in_message
 from asistendero.tienda.catalogo.catalog import tokens
 from asistendero.tienda.vocabulario import normalize_text
 
@@ -117,7 +117,8 @@ def updated_list(previous: list[dict], message: str, calls: list[ToolCall]) -> l
 def missing_from_quote(message: str, calls: list[ToolCall], context: dict | None) -> list[str]:
     """SKU que faltan en la cotización del turno; [] si no aplica.
 
-    Faltan las líneas de la lista cuando el cliente pidió el total, y la opción que eligió por su orden cuando dio
+    Faltan las líneas de la lista cuando el cliente pidió el total (también lo que el turno encontró y el mensaje
+    distingue con su cantidad), y la opción que eligió por su orden cuando dio
     cantidad o pidió el total: con «dame de esa manguera la segunda, unas 3, ¿cuánto queda todo?» Grok cotizó solo
     el tubo (visor, 23-10). No aplica a la lista si el cliente quitó algo o empezó de nuevo, ni si el turno movió
     un pedido o la cotización falló (por existencias, se le dice cuánto hay en vez de insistir).
@@ -126,6 +127,10 @@ def missing_from_quote(message: str, calls: list[ToolCall], context: dict | None
     whole = asks_whole_list(message)
     listed = [] if not whole or REMOVES.search(text) or RESTART.search(text) else list(list_lines(context))
     chosen = [item["sku"] for item in chosen_options(message, context)] if whole or quantities_in_message(message) else []
+    # H-02 (corridas 44 y 47): «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura de la lista
+    # y preguntó cuántas brochas. Lo que el turno encontró y el mensaje distingue, dicho con cantidad, va en el total.
+    added = list(grounded_products(message, calls)) if whole and quantities_in_message(message) else []
+    listed += [sku for sku in added if sku not in listed]
     if not listed + chosen or order_results(calls):
         return []
     findings = search_findings(calls)
