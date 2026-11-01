@@ -2294,21 +2294,6 @@
   "ancho": 320,
   "alto": 91
  },
- "PVC": {
-  "archivo": "foto-PVC.jpg",
-  "negocio": "ferreteria",
-  "producto": "Tubo PVC presión para agua",
-  "busqueda": "elegida a ojo",
-  "titulo": "File:PVC pipe Example.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:PVC_pipe_Example.jpg",
-  "autor": "Carlos6913",
-  "licencia": "CC BY-SA 3.0",
-  "licencia_url": "https://creativecommons.org/licenses/by-sa/3.0",
-  "credito": "Carlos6913 · CC BY-SA 3.0 · Wikimedia Commons",
-  "huella": "0b900c86c1616233",
-  "ancho": 320,
-  "alto": 240
- },
  "RAS": {
   "archivo": "foto-RAS.jpg",
   "negocio": "ferreteria",
@@ -2404,15 +2389,15 @@
   "negocio": "ferreteria",
   "producto": "Tubo PVC sanitario",
   "busqueda": "elegida a ojo",
-  "titulo": "File:Fernco PVC Drain Trap J-Bend.jpg",
-  "fuente": "https://commons.wikimedia.org/wiki/File:Fernco_PVC_Drain_Trap_J-Bend.jpg",
-  "autor": "Steven Pavlov",
-  "licencia": "CC0",
-  "licencia_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
-  "credito": "Steven Pavlov · CC0 · Wikimedia Commons",
-  "huella": "90c8848c9898e022",
-  "ancho": 240,
-  "alto": 320
+  "titulo": "File:PVC pipe Example.jpg",
+  "fuente": "https://commons.wikimedia.org/wiki/File:PVC_pipe_Example.jpg",
+  "autor": "Carlos6913",
+  "licencia": "CC BY-SA 3.0",
+  "licencia_url": "https://creativecommons.org/licenses/by-sa/3.0",
+  "credito": "Carlos6913 · CC BY-SA 3.0 · Wikimedia Commons",
+  "huella": "0b900c86c1616233",
+  "ancho": 320,
+  "alto": 240
  },
  "SEG": {
   "archivo": "foto-SEG.jpg",

@@ -20,7 +20,7 @@ from PIL import Image, ImageOps
 from asistendero.tienda.catalogo.product_photos import PHOTOS_DIR, manifest
 
 # Lo que se recorta de cada borde en una foto «del cliente»: basta para que la huella no la reconozca (medido: con
-# 5 % ya se pierden 103 de 184) y deja el producto entero en el cuadro.
+# 5 % ya se pierden 102 de 183) y deja el producto entero en el cuadro.
 CUSTOMER_CROP = 0.10
 
 

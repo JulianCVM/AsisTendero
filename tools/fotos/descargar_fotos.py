@@ -116,8 +116,6 @@ TERMS = {
 # Fotos elegidas a ojo en la hoja de contacto: título exacto del archivo en Commons. Mandan sobre la búsqueda y
 # hacen que la biblioteca se pueda rehacer igual.
 ELEGIDAS: dict[str, str] = {
-    # La anterior («1 inch PVC Valve and pipe») mostraba sobre todo la válvula: la visión real la leyó como válvula.
-    "PVC": "File:PVC pipe Example.jpg",
     "ADO": "File:Stippled cement paving blocks for texture.jpg",
     "ARA": "File:Washers.agr.jpg",
     "ARE": "File:Pile of Sand for Building in Anambra State.jpg",
@@ -165,7 +163,10 @@ ELEGIDAS: dict[str, str] = {
     "PAL": "File:Shovel 2.jpg",
     "PIS": "File:Caulking.jpg",
     "PMA": "File:Wood glue.jpg",
-    "SAN": "File:Fernco PVC Drain Trap J-Bend.jpg",
+    # Un tubo ancho de desagüe con su tapa. La visión real lo leyó como tubería PVC sanitaria (corrida 46); estaba en
+    # PVC (presión, de 1/2 en adelante) y el «del de 1/2» siguiente terminaba en otra familia. La anterior de SAN era
+    # una trampa en J, no un tubo.
+    "SAN": "File:PVC pipe Example.jpg",
     "SEN": "File:Ranex Smartwares 6000.293 - board - motion sensor and photoresistor-5608.jpg",
     "SER": "File:Swedish hand saw No 315 by AB Stridsberg and Bioerck second half of 20th century.jpg",
     "TAB": "File:Pine plank fence 2019 G1.jpg",
@@ -182,6 +183,8 @@ SIN_FOTO: set[str] = set((
     # Auditoría con la visión real de Grok (01-11-2026): estas fotos muestran otro producto o uno ambiguo (válvulas
     # por limpiador, góndola por atún, mangos de hacha por maceta, un dibujo técnico por pasador…).
     " ADH ADM CAL CHA CLV CSO DES EPO IMP LIJ LIM MAC MATU MFEC MFRI MLPO MMNI MNJ MOR MSM PAS PAU PIV TIJ"
+    # El tubo de presión de 1/2 en Commons sale gris (igual al conduit), azul de acueducto o transparente.
+    " PVC"
 ).split())
 # Si el término no da una foto libre que lo nombre en su título, se prueba este, más general.
 FALLBACK = {

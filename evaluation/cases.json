@@ -6008,7 +6008,7 @@
       {
         "query": "¿tienen de este tubo?",
         "foto": {
-          "catalogo": "PVC",
+          "catalogo": "SAN",
           "como_cliente": true
         },
         "expected_status": [
@@ -6021,11 +6021,11 @@
         "max_model_calls": 1
       },
       {
-        "query": "dame 3 metros del de 1/2",
+        "query": "dame 3 metros del de 2 pulgadas",
         "expected_status": "quoted",
-        "expected_sku": "PVC-050",
+        "expected_sku": "SAN-2",
         "must_include": [
-          "$25.500"
+          "$29.400"
         ]
       }
     ]

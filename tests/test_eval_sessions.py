@@ -568,7 +568,8 @@ SCRIPTS = {
     # Turnos de texto que siguen a una foto (suite «fotos»).
     "¿y el de 20 oz cuánto vale?": [search("martillo de uña 20 oz", product="martillo de uña", measure="20 oz"),
                                     finish()],
-    "dame 3 metros del de 1/2": [search("tubo PVC de 1/2 para agua", **PVC), quote(("PVC-050", 3)), finish()],
+    "dame 3 metros del de 2 pulgadas": [search("tubo PVC sanitario de 2 pulgadas", product="tubo", material="PVC",
+                                               use="sanitario", measure="2 pulgadas"), quote(("SAN-2", 3)), finish()],
 }
 
 
@@ -702,7 +703,8 @@ def test_cli_rejects_models_outside_the_challenge_and_too_many_threads(monkeypat
 
 # ---------------------------------------------------------------- suite «fotos»
 
-# Lo que «ve» la visión falsa en cada foto del cliente: lo que la visión real devolvió el 31-10-2026 con esas fotos.
+# Lo que «ve» la visión falsa en cada foto del cliente: lo que la visión real devolvió el 31-10-2026 con esas fotos
+# (el tubo sanitario, en la corrida 46 del 01-11-2026).
 # El martillo trae lo que Grok supone (acero, uña): el caso exige que eso no lo vuelva una opción cercana.
 SEEN = {
     "MAR": {"tipo_producto": "martillo", "material": "acero", "presentacion_uso": "uña para extraer clavos",
@@ -711,7 +713,8 @@ SEEN = {
             "confianza_visual": "alta"},
     "TDR": {"tipo_producto": "tornillo drywall", "confianza_visual": "alta"},
     "MHUE": {"tipo_producto": "huevo", "color_acabado": "rojo", "confianza_visual": "alta"},
-    "PVC": {"tipo_producto": "tubo pvc", "presentacion_uso": "agua", "confianza_visual": "media"},
+    "SAN": {"tipo_producto": "tubería", "material": "pvc", "presentacion_uso": "sanitario", "color_acabado": "blanco",
+            "confianza_visual": "alta"},
 }
 
 
@@ -750,7 +753,7 @@ def test_every_photo_case_passes_with_a_scripted_grok_and_a_fake_vision(catalog,
     # La foto del catálogo, el enlace y la inyección no llaman a la visión; cada foto «del cliente», una vez.
     assert by_id["F-01"]["turns"][0]["model_calls"] == 0
     assert by_id["F-06"]["model_calls"] == 0 and by_id["F-07"]["model_calls"] == 0
-    assert sorted(fake_vision) == sorted(["MAR", "CEM", "TDR", "otra", "MHUE", "MAR", "PVC", "MHUE"])
+    assert sorted(fake_vision) == sorted(["MAR", "CEM", "TDR", "otra", "MHUE", "MAR", "SAN", "MHUE"])
     # Ninguna respuesta con foto lleva un precio que no saliera del catálogo (lo revisa el oráculo en cada turno).
     assert all("precio sin respaldo" not in reason for record in report["cases"] for reason in record["fail_reasons"])
 
