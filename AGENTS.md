@@ -22,7 +22,7 @@ agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidi
 ampliar el panel: ventas con **registro manual** del cobro (sin pasarela ni verificación bancaria, ver
 `docs/PAGOS.md`), abastecimiento con proveedores, categorías y alertas, asistente de bodega (Grok interpreta, el
 tendero confirma), supervisión de chats con atención humana, tienda de demostración (`--demo`) y página pública
-(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
+(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Ese mismo día pidió integrar la rama de visión de Camila: fotos del cliente en el chat, con atributos extraídos por Grok y búsqueda en el catálogo hecha por el servidor, y fotos de referencia libres de Wikimedia Commons en las respuestas (`docs/HARNESS.md`, «Fotos»). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
 datos reales de un piloto, cobros por el chat, fiados y domicilios.
 
 **Marca:** el producto se llama **PulsoTienda** (panel del tendero y página pública) y el agente que atiende el chat, **AsisTendero** (visor, mensajes del chat y menciones al asistente). El paquete sigue siendo `asistendero`.
@@ -121,6 +121,9 @@ propio.
      y `validate_interpretation` (`stock_assistant.py`), `identify` y `find_supplier` (`stock_matching.py`).
    - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
      (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
+   - `read_photo` y `PhotoRejected` (`photo.py`), `look_at` (`look.py`), `ImageAttributePayload`,
+     `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner` y `fixed_reply` (`photo_planner.py`);
+     `dhash`, `closest_family`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
      `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
      (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
@@ -184,6 +187,8 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Qué entiende el asistente de bodega o cómo arma su propuesta | `stock_assistant.py` (prompt y versión) y `stock_proposal.py`, con su prueba en `tests/test_stock_assistant.py` |
 | Cuándo pasa una conversación al tendero o qué puede hacer él | `handoff.py` y `supervision.py`, con su prueba en `tests/test_supervision.py` |
 | La imagen de un producto | `product_art.py` (reglas) y `product_art_shapes.py`/`product_art_tools.py` (dibujos), con su prueba en `tests/test_product_art.py` |
+| La foto que manda el cliente (límites, huella, llamada de visión, qué se busca con ella) | `agente/vision/` (`photo.py`, `look.py`, `attributes.py`, `photo_planner.py`), con su prueba en `tests/test_photos.py` o `tests/test_vision_attributes.py` |
+| Las fotos de referencia del catálogo o las que acompañan una respuesta | `product_photos.py` y `reply_photos.py`; la biblioteca, con `tools/fotos/descargar_fotos.py` (solo licencias libres, créditos en `datos/fotos/CREDITOS.md`); prueba en `tests/test_photos.py` |
 | Qué arranca el comando único y con qué tienda | `launcher.py` (lo llama `cli.py` sin mensaje), con su prueba en `tests/test_launcher.py` |
 | La página pública `/inicio` o los casos de su demo | `entregas/web/pagina/` (`inicio.html`, `inicio*.css` e `inicio*.js`) (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
 | Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/harness-map.js` y `harness-map.css` |

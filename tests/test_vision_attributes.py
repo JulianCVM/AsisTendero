@@ -26,18 +26,14 @@ from asistendero.tienda.catalogo.search import ProductQuery
 from asistendero.datos.seed import DEFAULT_DB_PATH, create_mock_db
 from asistendero.agente.conversacion.sessions import SessionStore
 from asistendero.agente.reglas.validation import Rejected, validate_request
-from asistendero.agente.vision.vision import (
-    MAX_VISION_CLARIFICATIONS,
+from asistendero.agente.vision.attributes import (
     SAMPLE_COUNTER_TEMPLATE,
     SCREW_SAFEGUARD_TEMPLATE,
-    VISION_EXTRACTOR_OVERRIDE,
     ImageAttributePayload,
-    extract_vision_attributes,
-    handle_vision_turn,
     payload_to_product_query,
     sanitize_image_text,
-    search_catalog_with_vision,
 )
+from asistendero.agente.vision.look import look_at
 
 
 @pytest.fixture
@@ -143,14 +139,11 @@ def test_simulated_vision_extraction():
         color_acabado="gris",
         confianza_visual="alta",
     )
-    token = VISION_EXTRACTOR_OVERRIDE.set(lambda _: simulated)
-    try:
-        extracted = extract_vision_attributes("dummy_base64_data")
-        assert extracted == simulated
-        # El payload de visión NO contiene SKUs ni interactúa con la base de datos
-        assert not hasattr(extracted, "sku")
-    finally:
-        VISION_EXTRACTOR_OVERRIDE.reset(token)
+    # Unos atributos ya vistos pasan tal cual, sin llamar a Grok.
+    extracted = look_at(simulated).payload
+    assert extracted == simulated
+    # El payload de visión NO contiene SKUs ni interactúa con la base de datos
+    assert not hasattr(extracted, "sku")
 
 
 # -------------------------------------------------------------------------
@@ -172,7 +165,7 @@ def test_vision_search_mapping_to_sqlite(catalog):
     assert query.material == "pvc"
     assert query.measure == "1/2 pulgada"
 
-    search_res = search_catalog_with_vision(catalog, payload)
+    search_res = catalog.search(payload_to_product_query(payload))
     assert len(search_res.matches) >= 1
     skus = [p.sku for p in search_res.matches]
     assert "PVC-050" in skus
@@ -205,9 +198,10 @@ def test_deterministic_quote_jump_single_match_with_quantity(session_store, orde
     # Verificación de salto determinista: sin quemar llamadas al modelo Grok
     assert result["model_called"] is False
     assert result["model_calls"] == 0
-    assert result["estado"] == "answered"
-    assert "5 metro" in result["respuesta"] or "5" in result["respuesta"]
-    assert "COP" in result["respuesta"]
+    assert result["estado"] == "quoted"
+    assert "5 metros" in result["respuesta"] and "$" in result["respuesta"]
+    # Nunca afirma un apartado ni un pago: la cotización es informativa.
+    assert "apartado" not in result["respuesta"].lower() and "pagado" not in result["respuesta"].lower()
 
     # Se ejecutó búsqueda y cotización informativa en tool_calls
     tools_called = [c["requested_tool"] for c in result["tool_calls"]]
@@ -249,7 +243,8 @@ def test_respects_quantity_not_grounded(session_store, orders):
     assert result["model_calls"] == 0
     tools_called = [c["requested_tool"] for c in result["tool_calls"]]
     assert "calcular_cotizacion_informativa" not in tools_called
-    assert "¿Cuántas unidades" in result["respuesta"] or "necesitas" in result["respuesta"]
+    assert "?" in result["respuesta"]
+    assert "Me quedan" not in result["respuesta"] and "disponibles" not in result["respuesta"]
 
     # Si se intentara forzar calcular_cotizacion_informativa sin cantidad dicha, se rechaza
     with pytest.raises(Rejected) as exc_info:
@@ -293,9 +288,9 @@ def test_respects_sku_not_grounded_on_ambiguity(session_store, orders):
     # Abre desambiguación guiada sin adivinar el SKU
     assert result["model_called"] is False
     assert result["model_calls"] == 0
-    assert "1." in result["respuesta"]
-    assert "2." in result["respuesta"]
-    assert "¿Cuál de estas medidas" in result["respuesta"]
+    assert result["respuesta"].count("• ") >= 2
+    assert "¿Cuál te sirve?" in result["respuesta"]
+    assert result["estado"] == "clarify"
 
     # El servidor guardó las opciones en session_options
     ctx = session_store.context(session_id)
@@ -339,7 +334,8 @@ def test_clarification_cap_and_counter_failsafe(session_store, orders):
         orders=orders,
         image=ambiguous_payload,
     )
-    assert "¿Cuál de estas" in turn1["respuesta"]
+    assert "calcular_cotizacion_informativa" not in [c["requested_tool"] for c in turn1["tool_calls"]]
+    assert turn1["respuesta"] != SAMPLE_COUNTER_TEMPLATE
 
     # Intento 2 de aclaración
     turn2 = run_turn(
@@ -349,7 +345,7 @@ def test_clarification_cap_and_counter_failsafe(session_store, orders):
         orders=orders,
         image=ambiguous_payload,
     )
-    assert "¿Cuál de estas" in turn2["respuesta"]
+    assert turn2["respuesta"] != SAMPLE_COUNTER_TEMPLATE
 
     # Intento 3: Supera el tope de 2 aclaraciones -> Fallo seguro R2 al mostrador
     turn3 = run_turn(
@@ -411,17 +407,19 @@ def test_session_remembers_confirmed_specs_without_reprocessing_image(session_st
         orders=orders,
         image=turn1_payload,
     )
-    assert "¿Cuál de estas" in res1["respuesta"]
+    assert "¿Qué medida" in res1["respuesta"] and res1["estado"] == "clarify"
 
     # Verificar que las especificaciones fijadas quedaron guardadas en sesión
     ctx = session_store.context(session_id)
     assert "tubo" in ctx["especificaciones"]
-    assert ctx["especificaciones"]["tubo"]["material"] == "pvc"
+    assert ctx["especificaciones"]["tubo"]["material"].lower() == "pvc"
 
     # Turno 2: el usuario responde solo texto «el de 1/2 pulgada, cotízame 4»
     # NO se envía imagen; el bot debe recordar que hablaban de tubo PVC
     script = Script(
         tool("buscar_productos", items=[{"text": "tubo de 1/2 pulgada", "product": "tubo", "measure": "1/2 pulgada"}]),
+        # Grok elige el tubo que la sesión ya fijó (PVC para agua) y lo cotiza; el servidor valida la línea.
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 4}]),
         say("Te cotizo 4 metros de tubo PVC de 1/2 pulgada para agua."),
     )
     res2 = run_turn(
@@ -431,8 +429,8 @@ def test_session_remembers_confirmed_specs_without_reprocessing_image(session_st
         orders=orders,
         planner=script,
     )
-    assert res2["estado"] in ("quoted", "answered")
-    assert "4 metro" in res2["respuesta"] or "PVC-050" in [line.get("sku") for line in (session_store.context(session_id).get("lista") or [])]
+    assert res2["estado"] == "quoted"
+    assert "4 metros" in res2["respuesta"]
 
 
 # -------------------------------------------------------------------------
@@ -540,9 +538,10 @@ def test_visual_server_handles_image_payload_and_emits_vision_events(monkeypatch
         assert vision_event["details"]["confianza"] == "alta"
 
         final_event = next(e for e in events if e["type"] == "final")
-        assert final_event["vision_confidence"] == "alta"
-        assert final_event["estado"] == "answered"
-        assert "Tubo PVC" in final_event["respuesta"]
+        assert final_event["details"]["estado"] == "quoted"
+        assert "tubo PVC" in final_event["details"]["respuesta"]
+        # La foto vino en el cuerpo, pero ni la traza ni la respuesta la repiten.
+        assert all("abc123mockdata" not in json.dumps(event) for event in events)
     finally:
         server.shutdown()
         server.server_close()
@@ -586,8 +585,8 @@ def test_visual_server_allows_sending_image_without_accompanying_text(monkeypatc
         connection.close()
 
         final_event = next(e for e in events if e["type"] == "final")
-        assert final_event["estado"] == "answered"
-        assert "codo" in final_event["respuesta"].lower()
+        assert final_event["details"]["estado"] == "clarify"
+        assert "codo" in final_event["details"]["respuesta"].lower()
     finally:
         server.shutdown()
         server.server_close()
@@ -643,19 +642,22 @@ def test_vision_trace_emits_all_langgraph_nodes_and_final_details(session_store,
     assert "respond" in completed_nodes
 
     # Validar que el nodo interpret incluye el payload de visión estructurado
+    # Lo visto en la foto va en su propio evento; interpret lo decide el servidor, sin llamar a Grok.
+    vision_event = next(e for e in events if e.get("type") == "vision")
+    assert vision_event["details"]["payload"]["tipo_producto"] == "tubo"
     interpret_event = next(e for e in events if e.get("node") == "interpret" and e.get("status") == "complete")
-    assert "vision_payload" in interpret_event["details"]
-    assert interpret_event["details"]["vision_payload"]["tipo_producto"] == "tubo"
+    assert interpret_event["details"]["decision"]["tool"] == "buscar_productos"
+    assert not any(e.get("type") == "model_request" for e in events)
 
     # Validar evento final con campo details poblado y respuesta no vacía
     final_event = next(e for e in events if e.get("type") == "final")
     assert "details" in final_event
     assert final_event["details"]["respuesta"] == result["respuesta"]
     assert len(final_event["details"]["respuesta"].strip()) > 0
-    assert final_event["details"]["estado"] == "answered"
+    assert final_event["details"]["estado"] in {"quoted", "clarify"}
 
-    # Verificar que no hay evento route que fuerce a omitir retrieve cuando hay herramientas
-    assert not any(e.get("type") == "route" for e in events)
+    # Ningún nodo se omite: la búsqueda (y la cotización automática, si la hubo) pasan por retrieve
+    assert not any(e.get("status") == "skipped" for e in events)
 
 
 def test_visual_server_emits_visible_error_on_exception(monkeypatch, session_store, orders):
@@ -703,7 +705,8 @@ def test_vision_propagates_usage_tokens_cost_and_model_calls(session_store, orde
         "output_tokens": 50,
         "cached_input_tokens": 0,
         "duration_ms": 1200,
-        "cost": {"usd": "0.0015000000", "basis": "xai_public_estimate", "calls": 1},
+        # La pasarela informa el costo en ticks (10^-10 USD): 15.000.000 ticks = 0,0015 USD.
+        "reported_cost_usd_ticks": 15_000_000,
     }
     payload_with_usage = ImageAttributePayload(
         tipo_producto="tubo",
@@ -726,9 +729,6 @@ def test_vision_propagates_usage_tokens_cost_and_model_calls(session_store, orde
 
     assert res["model_called"] is True
     assert res["model_calls"] == 1
-    assert res["input_tokens"] == 1100
-    assert res["output_tokens"] == 50
-    assert res["total_tokens"] == 1150
     assert res["cost"]["usd"] == "0.0015000000"
 
     model_resp_event = next(
@@ -740,6 +740,8 @@ def test_vision_propagates_usage_tokens_cost_and_model_calls(session_store, orde
     final_event = next(e for e in events if e.get("type") == "final")
     assert final_event["details"]["model_calls"] == 1
     assert final_event["details"]["input_tokens"] == 1100
+    assert final_event["details"]["output_tokens"] == 50
+    assert final_event["details"]["total_tokens"] == 1150
     assert final_event["details"]["cost"]["usd"] == "0.0015000000"
 
 

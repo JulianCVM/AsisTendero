@@ -4,6 +4,7 @@ const form = document.querySelector('#form');
 const query = document.querySelector('#query');
 const run = document.querySelector('#run');
 const answer = document.querySelector('#answer');
+const answerPhotos = document.querySelector('#answer-photos');
 const responseBox = document.querySelector('#response-box');
 const customerMessage = document.querySelector('#customer-message');
 const customerText = document.querySelector('#customer-text');
@@ -35,6 +36,7 @@ let currentAnswer = '';
 let finished = false;
 let selectedImageData = null;
 let currentSentImage = null;
+let currentPhotos = [];
 
 function updateCount() {
   document.querySelector('#char-count').textContent = query.value.length + ' / 2000';
@@ -92,7 +94,29 @@ function clearSelectedImage() {
   imagePreview.removeAttribute('src');
   imagePreviewContainer.hidden = true;
 }
-function historyRow(role, text, imageSrc) {
+// Fotos del catálogo que acompañan la respuesta: el servidor manda {sku, nombre, url, credito}, nunca los bytes.
+function photoFigures(photos) {
+  return (Array.isArray(photos) ? photos : [])
+    .filter(photo => typeof photo?.url === 'string' && photo.url.startsWith('/fotos/'))
+    .map(photo => {
+      const figure = document.createElement('figure');
+      figure.className = 'answer-photo';
+      const img = document.createElement('img');
+      img.src = photo.url;
+      img.alt = String(photo.nombre || 'Foto del producto');
+      img.loading = 'lazy';
+      const caption = document.createElement('figcaption');
+      caption.textContent = String(photo.credito || '');
+      figure.append(img, caption);
+      return figure;
+    });
+}
+function renderPhotos(photos) {
+  currentPhotos = Array.isArray(photos) ? photos : [];
+  answerPhotos.replaceChildren(...photoFigures(currentPhotos));
+  answerPhotos.hidden = !answerPhotos.childElementCount;
+}
+function historyRow(role, text, imageSrc, photos) {
   const row = document.createElement('div');
   row.className = 'chat-row ' + role;
   const icon = document.createElement('span');
@@ -117,6 +141,13 @@ function historyRow(role, text, imageSrc) {
     line.textContent = text;
     bubble.append(line);
   }
+  const figures = role === 'agent' ? photoFigures(photos) : [];
+  if (figures.length) {
+    const strip = document.createElement('div');
+    strip.className = 'answer-photos';
+    strip.append(...figures);
+    bubble.append(strip);
+  }
   body.append(speaker, bubble);
   row.append(icon, body);
   return row;
@@ -135,7 +166,8 @@ function clearSession() {
 function reset(sentText, sentImage) {
   // En una conversación, el turno anterior pasa al historial antes de mostrar el nuevo.
   if (sessionMode.checked && sessionId && !customerMessage.hidden && currentAnswer) {
-    history.append(historyRow('customer', customerText.textContent, currentSentImage), historyRow('agent', currentAnswer));
+    history.append(historyRow('customer', customerText.textContent, currentSentImage),
+      historyRow('agent', currentAnswer, null, currentPhotos));
   } else if (!sessionMode.checked) {
     history.replaceChildren();
   }
@@ -146,6 +178,7 @@ function reset(sentText, sentImage) {
   customerText.textContent = sentText;
   customerMessage.hidden = false;
   currentAnswer = '';
+  renderPhotos([]);
   finished = false;
   answer.textContent = 'Estoy revisando tu consulta…';
   responseBox.classList.remove('is-empty');
@@ -162,6 +195,7 @@ function show(event) {
   if (event.type === 'session') {
     sessionId = event.session_id;
     turnNumber = event.turno;
+    renderPhotos(event.imagenes);
     renderSessionLabel();
   }
   if (event.type === 'error') {
@@ -182,8 +216,10 @@ async function pollNotices() {
     const data = await response.json();
     if (!Array.isArray(data.avisos) || !data.avisos.length) return;
     if (!customerMessage.hidden && currentAnswer) {
-      history.append(historyRow('customer', customerText.textContent, currentSentImage), historyRow('agent', currentAnswer));
+      history.append(historyRow('customer', customerText.textContent, currentSentImage),
+        historyRow('agent', currentAnswer, null, currentPhotos));
     }
+    renderPhotos([]);
     data.avisos.forEach(text => history.append(historyRow('notice', String(text))));
     customerMessage.hidden = true;
     currentAnswer = '';

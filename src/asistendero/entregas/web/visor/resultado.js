@@ -184,7 +184,6 @@ function onFinal(final, event) {
   author.textContent = authorOf(final, run.lastDecision).text;
   if (!run.tools.length) renderTools();
   document.querySelector('#metric-calls').textContent = String(final.model_calls ?? '—');
-  if (final.vision_confidence) document.querySelector('#metric-vision').textContent = 'Confianza ' + final.vision_confidence;
   document.querySelector('#metric-duration').textContent = formatMs(final.duration_ms ?? event.elapsed_ms);
   if (!run.tokensKnown) document.querySelector('#metric-tokens').textContent = final.model_calls ? 's/d' : '0';
   if (typeof final.input_tokens === 'number' && typeof final.cached_input_tokens === 'number') {

@@ -33,7 +33,7 @@ from uuid import uuid4
 
 from asistendero.agente.herramientas.observations import latest_quote, order_results, search_findings
 from asistendero.agente.reglas.validation import grounded_products
-from asistendero.agente.vision.vision import sanitize_image_text
+from asistendero.agente.vision.attributes import sanitize_image_text
 
 
 DEFAULT_SESSIONS_PATH = Path(".local/sessions.sqlite3")

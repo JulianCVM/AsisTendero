@@ -85,15 +85,20 @@ def conversation_key(session_id: str | None) -> str | None:
 
 
 def _complete(
-    system: str, payload: dict, conversation: str | None = None,
+    system: str, payload: dict | None, conversation: str | None = None, *,
+    user_content: list[dict] | None = None, max_tokens: int = MAX_OUTPUT_TOKENS, model: str | None = None,
 ) -> tuple[str, str, int | None, int | None, int | None, int | None]:
-    """Envía un prefijo ``system`` 100 % estático (para aciertos de Prompt Caching) y los datos dinámicos en ``user``."""
+    """Envía un prefijo ``system`` 100 % estático (para aciertos de Prompt Caching) y los datos dinámicos en ``user``.
+
+    ``user_content`` reemplaza el JSON de ``payload`` por partes (texto e imagen): lo usa la visión, con el mismo
+    cliente, los mismos errores con código y el mismo control de modelo permitido.
+    """
     if not isinstance(system, str) or not system:
         raise ValueError("El bloque system debe ser un texto estático no vacío.")
     api_key = os.getenv("GROK_API_KEY", "").strip()
     if not api_key:
         raise ModelError("MODEL_NOT_CONFIGURED", "Falta GROK_API_KEY. Configúrala en .env o en el entorno.")
-    model = current_model()
+    model = model or current_model()
     if not model.startswith(ALLOWED_MODEL_FAMILIES):
         raise ModelError("MODEL_NOT_ALLOWED", "El reto solo permite Grok 4.7, 4.6, 4.5 o 4.20.")
     client = OpenAI(
@@ -105,11 +110,12 @@ def _complete(
     create_kwargs: dict = {
         "model": model,
         "temperature": TEMPERATURE,
-        "max_tokens": MAX_OUTPUT_TOKENS,
+        "max_tokens": max_tokens,
         "response_format": RESPONSE_FORMAT,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
+            {"role": "user", "content": user_content if user_content is not None
+             else json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
         ],
     }
     if conversation:

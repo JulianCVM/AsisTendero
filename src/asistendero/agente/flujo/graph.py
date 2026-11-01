@@ -272,8 +272,11 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
 
     def interpret(state: AgentState) -> dict:
         calls = state["tool_calls"]
-        model_calls = state["model_calls"] + 1
-        update: dict = {"model_called": True, "model_calls": model_calls}
+        # Un planificador del servidor (el turno con foto ya vista) decide sin llamar a Grok: no cuenta como llamada.
+        if getattr(planner, "without_model", False):
+            update: dict = {"model_called": state.get("model_called", False), "model_calls": state["model_calls"]}
+        else:
+            update = {"model_called": True, "model_calls": state["model_calls"] + 1}
         avisos = state.get("avisos", [])
         # Solo se vuelve aquí tras un «respond» cuando next_node detectó un aviso pendiente.
         if state["decisiones"] and state["decisiones"][-1].action == "respond":

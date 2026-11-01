@@ -6,7 +6,6 @@ hablar con una persona, el turno se responde con un texto fijo y no se llama a G
 
 from collections.abc import Callable
 from datetime import datetime, timezone
-import os
 from time import perf_counter
 from uuid import uuid4
 
@@ -21,17 +20,17 @@ from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, Planner
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.herramientas.observations import ToolExecutor
 from asistendero.agente.modelo.grok import ModelError, decide_with_grok
-from asistendero.agente.modelo.prompt import PROMPT_VERSION, active_prompt
+from asistendero.agente.modelo.prompt import BUSINESS_KIND, active_prompt
 from asistendero.agente.reglas.choices import chosen_options, coherent_option_turn, shown_options
 from asistendero.agente.reglas.context_resolution import affirms_active_item, updated_specs
 from asistendero.agente.reglas.shopping_list import updated_list
-from asistendero.agente.vision.vision import (
-    BASE64_DATA_URI, SAMPLE_COUNTER_TEMPLATE, SCREW_SAFEGUARD_TEMPLATE,
-    ImageAttributePayload, extract_vision_attributes,
-    handle_vision_turn, sanitize_image_text,
-)
-from asistendero.observabilidad.pricing import run_cost
+from asistendero.agente.respuesta.reply_photos import reply_photos
+from asistendero.agente.vision.attributes import BASE64_DATA_URI, ImageAttributePayload, sanitize_image_text
+from asistendero.agente.vision.look import look_at
+from asistendero.agente.vision.photo import PhotoRejected
+from asistendero.agente.vision.photo_planner import PhotoPlanner, fixed_reply
 from asistendero.observabilidad.tracing import run_traced
+from asistendero.datos.seed import BUSINESSES
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.pedidos.orders import OrderBook
 from asistendero.tienda.reloj import WEEKDAYS
@@ -100,6 +99,38 @@ def _human_turn(store: SessionStore, session_id: str, message: str, context: dic
     return None
 
 
+PHOTO_UNAVAILABLE_REPLY = ("No pude revisar la foto en este momento. Escríbeme el nombre del producto y la medida, "
+                           "o tráela al mostrador, y te ayudo.")
+
+
+def _look(store: SessionStore, session_id: str, message: str, image: ImageAttributePayload | str, context: dict,
+          orders: OrderBook | None, emit: Callable[[dict], None]) -> dict | tuple | None:
+    """Mira la foto antes del grafo.
+
+    Devuelve el turno ya respondido si la foto no sirve o Grok falla; None si el texto intenta una inyección (el
+    grafo lo bloquea y banea sin gastar en la foto), o (mensaje con la referencia, planificador, visión) si sigue.
+    """
+    turns = context.get("turnos") or []
+    if detect_injection(message, turns[-1]["cliente"] if turns else ""):
+        return None
+    business = BUSINESS_KIND.get() if orders is None else (
+        "mercado" if orders.business_id == BUSINESSES["mercado"] else "ferreteria")
+    shown = message.strip() or "[foto]"
+    try:
+        seen = look_at(image, business)
+    except PhotoRejected as exc:
+        return _without_grok(store, session_id, shown, "refused", str(exc), f"Foto rechazada ({exc.code}).", emit)
+    except ModelError as exc:
+        return _without_grok(store, session_id, shown, "model_error", PHOTO_UNAVAILABLE_REPLY,
+                             f"Grok no pudo revisar la foto ({exc.code}).", emit)
+    payload = seen.payload
+    summary = payload.semantic_summary()
+    vision = {"atributos": {key: value for key, value in payload.to_dict().items() if key != "usage"},
+              "resumen": summary, "huella": seen.huella, "llamada": seen.llamada}
+    planner = PhotoPlanner(payload, fixed_reply(payload, message, context))
+    return f"{message.strip()} {summary}".strip(), planner, vision
+
+
 def run_turn(
     store: SessionStore,
     session_id: str,
@@ -108,7 +139,7 @@ def run_turn(
     tool_executor: ToolExecutor | None = None,
     planner: Planner = decide_with_grok,
     orders: OrderBook | None = None,
-    image: ImageAttributePayload | dict | str | None = None,
+    image: ImageAttributePayload | str | None = None,
 ) -> dict:
     """Ejecuta un mensaje dentro de una sesión y guarda el turno filtrado; lanza SessionError si no existe.
 
@@ -117,17 +148,18 @@ def run_turn(
     Con ``orders`` el turno puede registrar, confirmar, agendar o cancelar pedidos de esta sesión; sin
     ``tool_executor`` se usa el catálogo del mismo archivo que el libro de pedidos.
 
-    Si se proporciona una imagen o datos en base64, se realiza extracción estructurada de atributos (visión)
-    una sola vez, ejecutando la búsqueda en SQLite local y saltos deterministas sin quemar llamadas a Grok.
+    ``image`` es la foto del cliente (``data:image/...;base64,...``): se mira una vez (``look_at``) y el turno sigue
+    por el mismo grafo con lo que se vio escrito como ``[Foto: …]`` y un planificador del servidor, sin otra llamada
+    a Grok. La foto nunca se guarda: la sesión solo recuerda esa referencia corta.
 
     Si el tendero tomó la conversación o el cliente pide hablar con una persona, responde un texto fijo sin Grok
     (``handoff.py``); dos turnos seguidos en fallo le piden ayuda al tendero.
     """
-    if image is None and ("data:image/" in message or ";base64," in message):
-        data_match = BASE64_DATA_URI.search(message)
-        if data_match:
-            image = data_match.group(0)
-            message = BASE64_DATA_URI.sub("", message).strip()
+    if image is None and BASE64_DATA_URI.search(message):
+        image = BASE64_DATA_URI.search(message).group(0)
+        message = BASE64_DATA_URI.sub(" ", message)
+    if image is not None:
+        message = sanitize_image_text(message)
 
     context = session_context(store, session_id, orders)
     human = _human_turn(store, session_id, message, context, emit)
@@ -137,257 +169,14 @@ def run_turn(
     if tool_executor is None:
         catalog = MockCatalog(orders.path, orders.business_id, orders.store_id) if orders is not None else MockCatalog()
         tool_executor = catalog_executor(catalog, orders, session_id)
-    else:
-        catalog = MockCatalog(orders.path, orders.business_id, orders.store_id) if orders is not None else MockCatalog()
-
+    vision = None
     if image is not None:
-        run_id, started = uuid4().hex[:12], perf_counter()
-        now_iso = lambda: datetime.now(timezone.utc).isoformat()
-        elapsed_now = lambda: round((perf_counter() - started) * 1000)
-
-        clean_msg = sanitize_image_text(message)
-        initial_customer_turn = clean_msg if clean_msg else "[foto adjunta]"
-
-        # 1. Notificar entrada del cliente
-        emit({
-            "run_id": run_id, "type": "input", "at": now_iso(),
-            "elapsed_ms": 0, "details": {
-                "run_id": run_id, "consulta": redact_personal_data(initial_customer_turn)[0],
-                "prompt_version": PROMPT_VERSION, "sesion": True, "imagen_adjunta": True,
-            },
-        })
-
-        # Notificar llamada a Grok Visión
-        vision_model = (
-            os.getenv("GROK_VISION_MODEL")
-            or os.getenv("GROK_MODEL")
-            or "grok-4.20-0309-non-reasoning"
-        )
-        if vision_model in ("grok-2-vision-1212", "grok-vision"):
-            vision_model = "grok-4.20-0309-non-reasoning"
-
-        emit({
-            "run_id": run_id, "type": "model_request", "at": now_iso(),
-            "elapsed_ms": elapsed_now(), "details": {
-                "run_id": run_id,
-                "phase": "vision",
-                "step": 1,
-                "model": vision_model,
-                "api_key": "[omitida]",
-            },
-        })
-
-        try:
-            payload = extract_vision_attributes(image)
-        except Exception as exc:
-            call_ms = elapsed_now()
-            emit({
-                "run_id": run_id, "type": "model_response", "at": now_iso(),
-                "elapsed_ms": call_ms, "details": {
-                    "run_id": run_id, "phase": "vision", "step": 1,
-                    "duration_ms": call_ms,
-                    "error": {"code": "VISION_API_ERROR", "message": str(exc)},
-                    "cost": None,
-                },
-            })
-            emit({
-                "run_id": run_id, "type": "error", "at": now_iso(),
-                "code": "VISION_API_ERROR",
-                "message": f"Fallo en Grok Visión ({type(exc).__name__}): {exc}",
-            })
-            raise ModelError("VISION_API_ERROR", f"Fallo en Grok Visión ({type(exc).__name__}): {exc}")
-
-        # Extraer métricas de la llamada multimodal
-        usage = payload.usage or {}
-        has_model_call = bool(usage)
-        in_tokens = usage.get("input_tokens")
-        out_tokens = usage.get("output_tokens")
-        cached_tokens = usage.get("cached_input_tokens") or 0
-        call_cost_data = usage.get("cost")
-        duration_ms = usage.get("duration_ms", elapsed_now())
-
-        if has_model_call:
-            emit({
-                "run_id": run_id, "type": "model_response", "at": now_iso(),
-                "elapsed_ms": elapsed_now(), "details": {
-                    "run_id": run_id,
-                    "phase": "vision",
-                    "step": 1,
-                    "model": usage.get("model", vision_model),
-                    "input_tokens": in_tokens,
-                    "output_tokens": out_tokens,
-                    "cached_input_tokens": cached_tokens,
-                    "duration_ms": duration_ms,
-                    "cost": call_cost_data,
-                },
-            })
-
-        summary = payload.semantic_summary()
-        customer_turn = f"{clean_msg} {summary}".strip() if clean_msg else summary
-
-        # 2. Notificar atributos de visión estructurados
-        emit({
-            "run_id": run_id, "type": "vision", "at": now_iso(),
-            "elapsed_ms": elapsed_now(), "details": {
-                "payload": payload.to_dict(),
-                "resumen": summary,
-                "confianza": payload.confianza_visual,
-                "tipo_producto": payload.tipo_producto,
-                "material": payload.material,
-                "medidas_visibles": payload.medidas_visibles,
-                "presentacion_uso": payload.presentacion_uso,
-                "color_acabado": payload.color_acabado,
-            },
-        })
-
-        # 3. Etapa 1: Validar
-        emit({
-            "run_id": run_id, "type": "node", "node": "validate", "status": "running",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"run_id": run_id},
-        })
-        emit({
-            "run_id": run_id, "type": "node", "node": "validate", "status": "complete",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"longitud": len(customer_turn), "inyeccion": None},
-        })
-
-        # 4. Etapa 2: Interpretar
-        emit({
-            "run_id": run_id, "type": "node", "node": "interpret", "status": "running",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"run_id": run_id},
-        })
-
-        vision_res = handle_vision_turn(
-            payload, clean_msg, catalog, tool_executor, context=context, session_id=session_id,
-        )
-
-        # Salvaguarda: la respuesta nunca debe ser vacía ni None
-        if not vision_res.get("respuesta"):
-            is_screw = "tornillo" in customer_turn.lower()
-            vision_res["respuesta"] = SCREW_SAFEGUARD_TEMPLATE if is_screw else SAMPLE_COUNTER_TEMPLATE
-
-        tool_calls = vision_res.get("tool_calls", [])
-        if tool_calls:
-            first_tool = tool_calls[0]
-            decision_dict = {
-                "action": "call_tool",
-                "tool": first_tool.get("requested_tool"),
-                "arguments": first_tool.get("arguments", {}),
-                "reply": "",
-            }
-        else:
-            decision_dict = {
-                "action": "respond",
-                "tool": None,
-                "arguments": None,
-                "reply": vision_res["respuesta"],
-            }
-
-        emit({
-            "run_id": run_id, "type": "node", "node": "interpret", "status": "complete",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"decision": decision_dict, "vision_payload": payload.to_dict()},
-        })
-
-        # 5. Etapa 4: Ejecución de herramientas (retrieve)
-        if tool_calls:
-            for call in tool_calls:
-                emit({
-                    "run_id": run_id, "type": "node", "node": "retrieve", "status": "running",
-                    "at": now_iso(), "elapsed_ms": elapsed_now(),
-                    "details": {"run_id": run_id, "tool": call.get("requested_tool")},
-                })
-                emit({
-                    "run_id": run_id, "type": "node", "node": "retrieve", "status": "complete",
-                    "at": now_iso(), "elapsed_ms": elapsed_now(),
-                    "details": {"tool_call": call},
-                })
-        else:
-            emit({
-                "run_id": run_id, "type": "node", "node": "retrieve", "status": "skipped",
-                "at": now_iso(), "elapsed_ms": elapsed_now(),
-                "details": {"motivo": "visión multimodal directa sin consultas de catálogo"},
-            })
-
-        # 6. Etapa 5: Responder (respond)
-        emit({
-            "run_id": run_id, "type": "node", "node": "respond", "status": "running",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"run_id": run_id},
-        })
-        emit({
-            "run_id": run_id, "type": "node", "node": "respond", "status": "complete",
-            "at": now_iso(), "elapsed_ms": elapsed_now(),
-            "details": {"run_id": run_id},
-        })
-
-        turn = store.record(
-            session_id, customer_turn, vision_res["respuesta"], vision_res["estado"],
-            vision_res["products"],
-            shopping=vision_res["shopping"] if vision_res.get("shopping") else None,
-            options=vision_res["options"] if vision_res.get("options") else None,
-            specs=vision_res["specs"],
-        )
-        elapsed = elapsed_now()
-
-        costs_list = [call_cost_data] if call_cost_data else []
-        final_cost = run_cost(costs_list) if costs_list else None
-        model_calls = 1 if has_model_call else 0
-        total_tokens = (in_tokens + out_tokens) if (isinstance(in_tokens, int) and isinstance(out_tokens, int)) else None
-        cache_hit_pct = ((cached_tokens / in_tokens) * 100) if (isinstance(in_tokens, int) and in_tokens > 0) else 0.0
-
-        final_details = {
-            "run_id": run_id,
-            "prompt_version": PROMPT_VERSION,
-            "estado": vision_res["estado"],
-            "respuesta": vision_res["respuesta"],
-            "error": None,
-            "model_called": has_model_call,
-            "model_calls": model_calls,
-            "barreras": [],
-            "inyeccion": None,
-            "tool_calls": len(tool_calls),
-            "tools_requested": [c["requested_tool"] for c in tool_calls],
-            "tools_executed": [c["requested_tool"] for c in tool_calls if c.get("executed")],
-            "input_tokens": in_tokens,
-            "output_tokens": out_tokens,
-            "cached_input_tokens": cached_tokens,
-            "cache_hit_percent": cache_hit_pct,
-            "total_tokens": total_tokens,
-            "duration_ms": elapsed,
-            "cost": final_cost,
-            "vision_confidence": payload.confianza_visual,
-            "vision_payload": payload.to_dict(),
-        }
-
-        emit({
-            "run_id": run_id,
-            "type": "final",
-            "at": now_iso(),
-            "elapsed_ms": elapsed,
-            "details": final_details,
-            **final_details,
-        })
-        emit({
-            "type": "session", "run_id": run_id, "session_id": session_id, "turno": turn,
-            "productos_recordados": [item["sku"] for item in vision_res["products"]],
-            "lista": [{"sku": item["sku"], "cantidad": item["cantidad"]} for item in vision_res.get("shopping", [])],
-            "bloqueada": False, "atencion": attention(store, session_id),
-        })
-
-        return {
-            "run_id": run_id, "consulta": customer_turn, "respuesta": vision_res["respuesta"],
-            "estado": vision_res["estado"], "error": None, "model_called": has_model_call, "model_calls": model_calls,
-            "tool_calls": tool_calls, "referencia": customer_turn,
-            "prompt_version": PROMPT_VERSION, "duration_ms": elapsed, "cost": final_cost,
-            "session_id": session_id, "turno": turn, "vision_payload": payload.to_dict(),
-            "input_tokens": in_tokens, "output_tokens": out_tokens, "cached_input_tokens": cached_tokens,
-            "total_tokens": total_tokens,
-        }
-
-    result = run_traced(message, emit, tool_executor, planner, context=context)
+        seen = _look(store, session_id, message, image, context, orders, emit)
+        if isinstance(seen, dict):
+            return seen
+        if seen is not None:
+            message, planner, vision = seen
+    result = run_traced(message, emit, tool_executor, planner, context=context, vision=vision)
     consulta = result["consulta"]
     coherent = bool(consulta) and coherent_option_turn(consulta, context)
     products = remembered_products(result.get("referencia", ""), result.get("tool_calls", []))
@@ -410,9 +199,10 @@ def run_turn(
               "details": {**injection, "pedidos_cancelados": cancelled}})
     else:
         escalate_after_failures(store, session_id, previous, result["estado"], coherent=coherent)
+    photos = [] if injection else reply_photos(result.get("tool_calls", []))
     emit({"type": "session", "run_id": result["run_id"], "session_id": session_id, "turno": turn,
           "productos_recordados": [item["sku"] for item in products],
           "lista": [{"sku": item["sku"], "cantidad": item["cantidad"]} for item in shopping],
-          "bloqueada": bool(injection), "atencion": attention(store, session_id)})
-    result.update(session_id=session_id, turno=turn)
+          "bloqueada": bool(injection), "atencion": attention(store, session_id), "imagenes": photos})
+    result.update(session_id=session_id, turno=turn, imagenes=photos)
     return result

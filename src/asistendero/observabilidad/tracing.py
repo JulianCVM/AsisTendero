@@ -33,14 +33,46 @@ def _sum_tokens(decisions: list[Decision], field: str) -> int | None:
     return sum(known)
 
 
+def _push_vision(push: Callable[..., None], run_id: str, vision: dict | None,
+                 call_costs: list[dict | None]) -> Decision | None:
+    """Emite lo visto en la foto y, si se llamó a Grok, su respuesta con costo; devuelve esa llamada para sumarla."""
+    if not vision:
+        return None
+    attributes = vision["atributos"]
+    push("vision", details={"payload": attributes, "resumen": vision["resumen"], "huella": vision.get("huella"),
+                            "confianza": attributes.get("confianza_visual"), "tipo_producto": attributes.get("tipo_producto")})
+    usage = vision.get("llamada")
+    if not usage:
+        return None
+    call = Decision(action="respond", intent="productos", tool=None, arguments=None, reply="", model=usage["model"],
+                    input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens"),
+                    cached_input_tokens=usage.get("cached_input_tokens"),
+                    reported_cost_usd_ticks=usage.get("reported_cost_usd_ticks"))
+    cost = call_cost(call.model, call.input_tokens, call.output_tokens, call.cached_input_tokens,
+                     call.reported_cost_usd_ticks)
+    call_costs.append(cost)
+    push("model_response", details={"run_id": run_id, "step": 0, "phase": "vision", "model": call.model,
+                                    "input_tokens": call.input_tokens, "output_tokens": call.output_tokens,
+                                    "cached_input_tokens": call.cached_input_tokens,
+                                    "duration_ms": usage.get("duration_ms"), "error": usage.get("error"),
+                                    "cost": cost})
+    return call
+
+
 def run_traced(
     query: str,
     emit: Callable[[dict], None],
     tool_executor: ToolExecutor | None = None,
     planner: Planner = decide_with_grok,
     context: dict | None = None,
+    vision: dict | None = None,
 ) -> dict:
-    """Ejecuta el grafo y emite cada evento; ``context`` es la conversación previa de una sesión."""
+    """Ejecuta el grafo y emite cada evento; ``context`` es la conversación previa de una sesión.
+
+    ``vision`` es lo que se vio en la foto del turno antes del grafo (``atributos``, ``resumen``, ``huella`` y
+    ``llamada``, el uso de Grok o None si bastó la huella): su llamada se cuenta en el costo, los tokens y las
+    llamadas del turno.
+    """
     tool_executor = tool_executor or catalog_executor(MockCatalog())
     run_id = uuid4().hex[:12]
     started = perf_counter()
@@ -112,9 +144,12 @@ def run_traced(
 
     # Los datos personales no quedan en la traza ni en los reportes del evaluador.
     push("input", details={"run_id": run_id, "consulta": redact_personal_data(query)[0],
-                           "prompt_version": active_prompt()[0], "sesion": bool(context)})
+                           "prompt_version": active_prompt()[0], "sesion": bool(context), "foto": bool(vision)})
+    vision_call = _push_vision(push, run_id, vision, call_costs)
+    # El planificador del servidor (turno con foto) no es Grok: sin model_request ni costo.
+    graph_planner = planner if getattr(planner, "without_model", False) else traced_planner
     start_node("validate")
-    graph = build_graph(tool_executor, traced_planner)
+    graph = build_graph(tool_executor, graph_planner)
     for chunk in graph.stream({"consulta": query, "contexto": context}, stream_mode="updates"):
         for node, update in chunk.items():
             previous_calls = len(state.get("tool_calls", []))
@@ -193,7 +228,7 @@ def run_traced(
                     })
                 start_node(following)
 
-    decisions = state.get("decisiones", [])
+    decisions = [*state.get("decisiones", []), *([vision_call] if vision_call else [])]
     tool_calls = state.get("tool_calls", [])
     input_tokens = _sum_tokens(decisions, "input_tokens")
     output_tokens = _sum_tokens(decisions, "output_tokens")
@@ -217,8 +252,8 @@ def run_traced(
         "estado": state["estado"],
         "respuesta": state["respuesta"],
         "error": state.get("error"),
-        "model_called": state["model_called"],
-        "model_calls": state["model_calls"],
+        "model_called": state["model_called"] or vision_call is not None,
+        "model_calls": state["model_calls"] + (vision_call is not None),
         "barreras": (state.get("filtro") or {}).get("codes", []),
         "inyeccion": state.get("inyeccion"),
         "tool_calls": len(tool_calls),
@@ -232,6 +267,7 @@ def run_traced(
         "duration_ms": duration_ms,
         "cost": total_cost,
     }
-    state.update(run_id=run_id, duration_ms=duration_ms, cost=total_cost)
+    state.update(run_id=run_id, duration_ms=duration_ms, cost=total_cost, model_called=final_details["model_called"],
+                 model_calls=final_details["model_calls"])
     push("final", details=final_details)
     return state

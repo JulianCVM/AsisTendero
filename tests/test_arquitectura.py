@@ -24,9 +24,6 @@ KNOWN_CROSSINGS = {
     ("stock_assistant", "pricing"): "costo de la llamada a Grok",
     # Un comprobante de pago se guarda con la misma barrera de datos personales que el chat.
     ("payments", "guardrails"): "borrado de datos personales en el comprobante",
-    # Rama de visión de Camila tal como llegó: el costo de la llamada de visión se calcula dentro del agente.
-    ("chat", "pricing"): "costo de la llamada de visión (se corta al limpiar la visión)",
-    ("vision", "pricing"): "costo de la llamada de visión (se corta al limpiar la visión)",
 }
 
 

@@ -11,15 +11,18 @@ from asistendero.agente.conversacion.chat import run_turn
 from asistendero.agente.conversacion.order_watch import Watcher
 from asistendero.agente.conversacion.sessions import SESSION_ID, SessionError, SessionStore
 from asistendero.agente.modelo.grok import ModelError
-from asistendero.agente.vision.vision import SAMPLE_COUNTER_TEMPLATE, SCREW_SAFEGUARD_TEMPLATE
+from asistendero.agente.vision.photo import MAX_PHOTO_CHARS
 from asistendero.entregas.estaticos import web_file
 from asistendero.observabilidad.harness_info import describe_harness
 from asistendero.observabilidad.tracing import run_traced
+from asistendero.tienda.catalogo.product_photos import PHOTO_ROUTE, photo_file
 from asistendero.tienda.pedidos.orders import OrderBook
 
 
-# Límite de 5 MB para permitir fotografías adjuntas en Base64.
-MAX_BODY_BYTES = 5 * 1024 * 1024
+MAX_QUERY_CHARS = 2000
+# El texto y una foto en base64 (el navegador la reduce a 1024 px antes de mandarla), con margen para el JSON.
+MAX_BODY_BYTES = MAX_PHOTO_CHARS + 4096
+BAD_REQUEST = "Envía una consulta de texto de máximo 2000 caracteres o una foto de menos de 1,5 MB."
 
 
 class TraceHandler(BaseHTTPRequestHandler):
@@ -110,6 +113,17 @@ class TraceHandler(BaseHTTPRequestHandler):
             self.close_connection = False
             return
         url = urlsplit(self.path)
+        if url.path.startswith(PHOTO_ROUTE):
+            # Solo los archivos del manifiesto: el nombre se busca en una lista, nunca se arma una ruta con él.
+            photo = photo_file(url.path.removeprefix(PHOTO_ROUTE))
+            if photo is None:
+                self._json_error(404, "Foto no encontrada.")
+            else:
+                body = photo.read_bytes()
+                self._headers(200, "image/jpeg", len(body))
+                self.wfile.write(body)
+            self.close_connection = False
+            return
         if url.path == "/api/avisos":
             # Avisos del servidor para una conversación (pedido por vencer o vencido); se entregan una vez.
             if not self._is_local_host():
@@ -150,14 +164,14 @@ class TraceHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if not 1 <= length <= MAX_BODY_BYTES:
-                self._reject_post(400, "Envía una consulta de texto de máximo 2000 caracteres o una imagen adjunta.")
+                self._reject_post(400, BAD_REQUEST)
                 return
             request = json.loads(self.rfile.read(length))
             query = request.get("consulta", "")
-            if not isinstance(query, str) or len(query) > 2000:
+            if not isinstance(query, str) or len(query) > MAX_QUERY_CHARS:
                 raise ValueError
-            image_data = request.get("image_data") or request.get("image")
-            if image_data is not None and (not isinstance(image_data, str) or len(image_data) > 5 * 1024 * 1024):
+            image_data = request.get("image_data")
+            if image_data is not None and (not isinstance(image_data, str) or len(image_data) > MAX_PHOTO_CHARS):
                 raise ValueError
             if not query.strip() and not image_data:
                 raise ValueError
@@ -168,7 +182,7 @@ class TraceHandler(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             # Si el largo no era un número, el cuerpo quedó sin leer: la conexión se cierra.
             self.close_connection = True
-            self._json_error(400, "Envía una consulta de texto de máximo 2000 caracteres o una imagen adjunta.")
+            self._json_error(400, BAD_REQUEST)
             return
 
         self._headers(200, "application/x-ndjson; charset=utf-8")
@@ -179,33 +193,23 @@ class TraceHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
+            # Una foto siempre va en una conversación: la sesión recuerda qué se vio para el turno siguiente.
             if in_session or image_data:
                 store = self.server.sessions
-                sid = session_id or store.create()
-                if image_data:
-                    run_turn(store, sid, query, emit, orders=self.server.orders, image=image_data)
-                else:
-                    run_turn(store, sid, query, emit, orders=self.server.orders)
+                photo = {"image": image_data} if image_data else {}
+                run_turn(store, session_id or store.create(), query, emit, orders=self.server.orders, **photo)
             else:
                 run_traced(query, emit)
-        except ModelError as exc:
-            import sys
-            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] ModelError ({exc.code}): {exc}\n")
-            emit({"type": "error", "code": exc.code, "message": str(exc)})
-        except SessionError as exc:
+        except (SessionError, ModelError) as exc:
+            # Los dos traen un código estable y un mensaje propio, nunca el texto del SDK.
             emit({"type": "error", "code": exc.code, "message": str(exc)})
         except (ValueError, RuntimeError, FileNotFoundError) as exc:
-            import sys, traceback
-            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] {type(exc).__name__}: {exc}\n")
-            traceback.print_exc(file=sys.stderr)
             emit({"type": "error", "message": str(exc)})
         except (BrokenPipeError, ConnectionResetError):
             return
         except Exception as exc:
-            import sys, traceback
-            sys.stderr.write(f"\n[ERROR EN VISOR / TRACE] Inesperado ({type(exc).__name__}): {exc}\n")
-            traceback.print_exc(file=sys.stderr)
-            emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}): {exc}"})
+            # El SDK podría incluir datos de la solicitud en su excepción.
+            emit({"type": "error", "message": f"Fallo en Grok o en el flujo ({type(exc).__name__}). Revisa red, clave, modelo y créditos."})
         finally:
             self.close_connection = True
 
