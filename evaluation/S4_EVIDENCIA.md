@@ -27,6 +27,21 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Corrida 48 y resolución determinista del caso X-22 (`bef4913`)
+
+En la corrida 48 sobre `bef4913` (**344/345** casos aprobados), el único caso fallido fue **X-22** (suite `extremos`,
+tienda `ferreteria`):
+
+- **ID del caso:** `X-22` (`suite`: `extremos`, `negocio`: `ferreteria`)
+- **Commit de falla:** `bef4913` (Corrida 48: 344/345)
+- **Mensaje del cliente:** `"necesito 2 brochas de 3 pulgadas y un taladro"`
+- **Expectativa del caso:** `expected_status`: `["partial", "quoted"]`, `expected_sku`: `"BRO-3"`, `must_include`: `["$13.800"]` (subtotal de 2 brochas de 3" a $6.900 c/u)
+- **Causa raíz del fallo:** Grok intentó cotizar ambos productos en una sola llamada a `calcular_cotizacion_informativa` generando un SKU alucinado (`TALADRO-1`) para el taladro (inexistente en el catálogo). La validación del servidor (`validate_request`) rechazó toda la llamada con `SKU_NOT_GROUNDED`. El fallback determinista informó la ausencia del taladro y el precio unitario de la brocha ($6.900 c/u), pero omitió calcular el subtotal y total de la línea ($13.800 por las 2 brochas), incumpliendo el criterio `must_include`.
+- **Solución técnica (partición determinista y auto-cotización parcial en servidor):**
+  1. En `validation.py` (`validate_request`), `order_rules.py` (`_lines`) y `tools.py` (`_calculate_quote`), al recibir una solicitud de `calcular_cotizacion_informativa` o `registrar_pedido` con múltiples ítems donde hubo búsquedas sin coincidencias en el catálogo (`not_found`), se particiona la lista en `valid_items` (SKUs respaldados en catálogo/grounding) e `invalid_items` (SKUs inexistentes o alucinados). Si existe al menos un ítem válido, no se aborta la operación completa: se procesa determinísticamente la cotización del subconjunto válido (`BRO-3`, 2 unidades = `$13.800`) y el flujo salta directo a `respond` sin reenviar el turno a Grok.
+  2. En `graph.py` (`_partial_auto_quote_lines` y `_auto_quote_call`), cuando `buscar_productos` consulta varios artículos y combina ítems distinguidos unívocamente con cantidad entera en su cláusula (`item_clause`) junto a ítems inexistentes (`not_found`), el servidor auto-cotiza en `retrieve` el subconjunto válido sin requerir otra vuelta a Grok.
+  3. En `answers.py` (`render_answer`), se ensambla la respuesta con estado `partial`, incluyendo la observación controlada para los artículos inexistentes («Uy, un taladro no lo manejo por ahora…») y el bloque completo de cotización con subtotales y total consolidado (`$13.800`).
+
 ## Corrida 44: los 345 casos con la suite de fotos, interrumpida (01-11-2026)
 
 Objetivo: validar el commit de la entrega S3 (`e19594f`, con la visión integrada y la suite `fotos`) sobre los 345

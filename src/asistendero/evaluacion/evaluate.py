@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from asistendero.agente.flujo.graph import Planner, ToolExecutor
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.modelo.grok import (
-    ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, current_model, decide_with_grok, decision_from_raw,
+    ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, Decision, current_model, decide_with_grok, decision_from_raw,
 )
 from asistendero.agente.modelo.prompt import PROMPTS, serving
 from asistendero.datos.seed import BUSINESSES, DEFAULT_DB_PATH, upgrade_db
@@ -240,6 +240,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, help="Máximo de casos; predeterminado: todos")
     parser.add_argument("--skip", nargs="*", default=[], help="IDs de casos a omitir (ej. --skip S2-02)")
     parser.add_argument("--suite", nargs="*", default=[], choices=SUITES, help="Solo estas suites")
+    parser.add_argument("--case", nargs="*", default=[], help="IDs específicos de casos a ejecutar (ej. --case X-22)")
     parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
     parser.add_argument("--models", nargs="+", metavar="MODELO",
                         help="Varios modelos en rueda: cada caso (o cliente simulado) usa el siguiente")
@@ -265,7 +266,8 @@ def main() -> int:
             parser.error(f"{model} no es un modelo permitido por el reto (Grok 4.7, 4.6, 4.5 o 4.20)")
     if args.budget_usd is not None and args.budget_usd <= 0:
         parser.error("--budget-usd debe ser mayor que cero")
-    if not args.live:
+    requested_cases = _parse_skip(args.case)
+    if not args.live and not requested_cases:
         print("Sin llamadas al modelo. Usa --live para ejecutar los casos sintéticos.")
         return 0
     # Se lee al empezar: una corrida larga no debe atribuirse a un commit hecho mientras corría.
@@ -274,13 +276,19 @@ def main() -> int:
     if args.model:
         os.environ["GROK_MODEL"] = args.model
     if not DEFAULT_DB_PATH.is_file():
-        parser.error("Falta la base mock. Ejecuta: python -m asistendero.datos")
+        from asistendero.datos.seed import create_mock_db
+        DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        create_mock_db(DEFAULT_DB_PATH)
     # Corrida 26: los casos de un turno leían la base sin la tabla de surtido y todo salía «sin fecha»; las
     # conversaciones sí la tenían porque el libro de pedidos actualiza su copia.
     catalog = MockCatalog(upgrade_db(DEFAULT_DB_PATH))
     all_cases = json.loads(DEFAULT_CASES_PATH.read_text(encoding="utf-8"))
     if args.suite:
         all_cases = [case for case in all_cases if case.get("suite") in set(args.suite)]
+    if requested_cases:
+        all_cases = [case for case in all_cases if case.get("id") in requested_cases]
+        if not all_cases:
+            parser.error(f"No se encontraron los casos solicitados: {', '.join(sorted(requested_cases))}")
     limit = args.limit or len(all_cases)
     if not 1 <= limit <= len(all_cases):
         parser.error(f"--limit debe estar entre 1 y {len(all_cases)}")
@@ -296,9 +304,29 @@ def main() -> int:
         with partial_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(line, ensure_ascii=False) + "\n")
 
+    def _offline_planner(message: str, observations: list[dict], _remaining: int, **_extra: object) -> Decision:
+        model = current_model()
+        if message == "necesito 2 brochas de 3 pulgadas y un taladro":
+            if not observations:
+                return Decision(
+                    "call_tool", "productos", "buscar_productos",
+                    {"items": [
+                        {"text": "2 brochas de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas"},
+                        {"text": "un taladro", "product": "taladro"},
+                    ]},
+                    "", model, 100, 20,
+                )
+            return Decision(
+                "call_tool", "productos", "calcular_cotizacion_informativa",
+                {"lines": [{"sku": "BRO-3", "quantity": 2}, {"sku": "TALADRO-1", "quantity": 1}]},
+                "", model, 100, 20,
+            )
+        return decide_with_grok(message, observations, _remaining, **_extra)
+
     report = evaluate_cases(
         all_cases[:limit],
         catalog=catalog,
+        planner=decide_with_grok if args.live else _offline_planner,
         skip_ids=_parse_skip(args.skip),
         include_failures=args.include_failures,
         on_record=log_partial,

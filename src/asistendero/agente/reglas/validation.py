@@ -419,7 +419,14 @@ def validate_request(
     if set(arguments) != {"lines"} or not isinstance(lines, list) or not 1 <= len(lines) <= MAX_ITEMS:
         raise Rejected("INVALID_ARGUMENT", f"Se requieren de 1 a {MAX_ITEMS} líneas.")
     allowed_quantities = quantities_in_message(message) if quantities is None else quantities
+    findings = search_findings(calls)
+    missing_search = any(not finding["matches"] and not finding["nearby"] for finding in findings)
+    known_skus = {product.sku for finding in findings for product in finding["matches"] + finding["nearby"]}
+    known_skus |= set(remembered) | set(listed or {}) | {item.get("sku") for item in (picked or []) if item.get("sku")}
+    for turn_group in (context or {}).get("opciones") or []:
+        known_skus |= {opt.get("sku") for opt in (turn_group.get("opciones") or []) if isinstance(opt, dict) and opt.get("sku")}
     clean_lines = []
+    ungrounded_skus: list[str] = []
     for line in lines:
         if not isinstance(line, dict) or set(line) != {"sku", "quantity"}:
             raise Rejected("INVALID_ARGUMENT", "Cada línea lleva solo sku y quantity.")
@@ -435,9 +442,12 @@ def validate_request(
             continue
         # Un producto que la sesión ya identificó se cotiza sin volver a buscar, como en los pedidos: el precio
         # lo relee la herramienta del catálogo (M-01, segunda corrida S4: «dame 3 metros de ese» se rechazaba).
-        # X-22 (corrida 29): Grok cotizó BRO-3 y un «TALADRO» inventado y, con el rechazo genérico, no volvió a
-        # cotizar las brochas; el mensaje dice cuál SKU sobra.
+        # X-22 (corrida 48): si Grok cotiza ítems respaldados junto a un SKU alucinado para un artículo sin
+        # resultados en el catálogo, se particiona y cotiza determinísticamente el subconjunto válido.
         if sku not in grounded and sku not in remembered:
+            if len(lines) > 1 and missing_search and not listed and sku not in known_skus:
+                ungrounded_skus.append(sku)
+                continue
             raise Rejected("SKU_NOT_GROUNDED", f"{sku} no es una coincidencia que el mensaje distinga: quítalo y "
                                                "cotiza solo lo identificado, o pregunta al cliente.")
         if quantity not in allowed_quantities:
@@ -453,4 +463,8 @@ def validate_request(
         if any(previous["sku"] == sku for previous in clean_lines):
             raise Rejected("INVALID_ARGUMENT", "SKU repetido en la cotización.")
         clean_lines.append({"sku": sku, "quantity": quantity})
+    if not clean_lines and ungrounded_skus:
+        sku = ungrounded_skus[0]
+        raise Rejected("SKU_NOT_GROUNDED", f"{sku} no es una coincidencia que el mensaje distinga: quítalo y "
+                                           "cotiza solo lo identificado, o pregunta al cliente.")
     return {"lines": clean_lines}

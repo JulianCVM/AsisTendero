@@ -217,7 +217,15 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
     allowed = order_quantities(reference) | added_quantities(current, context)
     # «me llevo todo»: las líneas de la lista ya las dijo el cliente, con su cantidad.
     listed = list_lines(context)
+    from asistendero.agente.herramientas.observations import search_findings
+    findings = search_findings(calls)
+    missing_search = any(not finding["matches"] and not finding["nearby"] for finding in findings)
+    known_skus = {product.sku for finding in findings for product in finding["matches"] + finding["nearby"]}
+    known_skus |= grounded | set(listed)
+    for turn_group in (context or {}).get("opciones") or []:
+        known_skus |= {opt.get("sku") for opt in (turn_group.get("opciones") or []) if isinstance(opt, dict) and opt.get("sku")}
     clean = []
+    ungrounded_skus: list[str] = []
     for line in lines:
         if not isinstance(line, dict) or set(line) != {"sku", "quantity"}:
             raise Rejected("INVALID_ARGUMENT", "Cada línea lleva solo sku y quantity.")
@@ -232,6 +240,9 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
             clean.append({"sku": sku, "quantity": quantity})
             continue
         if sku not in grounded:
+            if len(lines) > 1 and missing_search and not listed and sku not in known_skus:
+                ungrounded_skus.append(sku)
+                continue
             raise Rejected("SKU_NOT_GROUNDED", "Ese SKU no lo identificó el cliente; búscalo o pregunta cuál quiere.")
         if quantity not in allowed:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no dijo esa cantidad; pregúntala.")
@@ -240,6 +251,8 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
         if any(previous["sku"] == sku for previous in clean):
             raise Rejected("INVALID_ARGUMENT", "SKU repetido en el pedido.")
         clean.append({"sku": sku, "quantity": quantity})
+    if not clean and ungrounded_skus:
+        raise Rejected("SKU_NOT_GROUNDED", "Ese SKU no lo identificó el cliente; búscalo o pregunta cuál quiere.")
     return clean
 
 

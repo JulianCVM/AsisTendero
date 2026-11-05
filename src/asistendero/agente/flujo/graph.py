@@ -42,7 +42,7 @@ from asistendero.agente.respuesta.answers import (
 from asistendero.agente.respuesta.store_replies import full_category_listing
 from asistendero.tienda.catalogo.measures import measures
 from asistendero.tienda.catalogo.product_fit import is_distinguished
-from asistendero.tienda.catalogo.search import without_quantities
+from asistendero.tienda.catalogo.search import CLAUSE_BREAK, item_clause, without_quantities
 from asistendero.tienda.vocabulario import normalize_text
 
 
@@ -116,6 +116,8 @@ def _deterministic_complete(state: AgentState) -> bool:
     tool = last["requested_tool"]
     if is_pending_qty:
         return True
+    if tool in {"calcular_cotizacion_informativa", "registrar_pedido"} and last["requested_arguments"] != last["arguments"]:
+        return True
     if tool == "explorar_categoria":
         return full_category_listing(calls) or (
             not search_findings(calls) and not order_results(calls) and not quantities_in_message(state["consulta"])
@@ -146,11 +148,54 @@ def after_retrieve(state: AgentState) -> str:
     return "respond" if _deterministic_complete(state) else "interpret"
 
 
+def _partial_auto_quote_lines(consulta: str, said_ref: str, raw_findings: list, picked: list[dict]) -> list[dict] | None:
+    """Extrae las líneas cotizables cuando una búsqueda múltiple combina ítems distinguidos con ítems no encontrados."""
+    from asistendero.tienda.catalogo.catalog import tokens as catalog_tokens
+
+    findings = [without_negated(consulta, f) for f in raw_findings]
+    if not any(not f["matches"] and not f["nearby"] for f in findings):
+        return None
+    valid_lines: list[dict] = []
+    seen_skus: set[str] = set()
+    for finding in findings:
+        if not finding["matches"] and not finding["nearby"]:
+            continue
+        if len(finding["matches"]) != 1:
+            return None
+        match = finding["matches"][0]
+        described = " ".join([finding["query"], *map(str, finding["request"].values())])
+        ref_msg = (without_quantities(normalize_text(said_ref))
+                   if normalize_text(match.unit) in sale_units(said_ref) else said_ref)
+        if not is_distinguished(heard_as(ref_msg, described), described, match, finding["matches"]):
+            return None
+        if grounded_selection(said_ref, finding) != match or fractional_amount(consulta) is not None:
+            return None
+        clause = item_clause(without_chosen_measures(consulta, picked), finding["query"], catalog_tokens)
+        clause_quantities = (
+            quantities_in_message(clause)
+            - naming_numbers(clause, finding["matches"] + finding["nearby"])
+            - mentioned_hours(clause)
+        )
+        valid_q = [q for q in clause_quantities if 1 <= q <= MAX_QUANTITY]
+        if len(valid_q) != 1:
+            return None
+        quantity = valid_q[0]
+        if (
+            foreign_unit(clause, quantity, f"{match.unit} {match.variant}")
+            or quantity_of_other(clause, quantity, f"{match.name} {match.variant} {match.unit}")
+            or match.sku in seen_skus
+        ):
+            return None
+        seen_skus.add(match.sku)
+        valid_lines.append({"sku": match.sku, "quantity": quantity})
+    return valid_lines or None
+
+
 def _auto_quote_call(
     state: AgentState, calls: list[ToolCall], picked: list[dict], quantities: set[int],
     remembered: dict[str, str], listed: dict[str, int], tool_executor: ToolExecutor,
 ) -> ToolCall | None:
-    """Auto-cotiza en retrieve cuando buscar_productos retorna 1 match unívoco y hay cantidad entera explícita."""
+    """Auto-cotiza en retrieve cuando buscar_productos retorna matches unívocos y hay cantidad entera explícita."""
     search_call = calls[-1]
     if (
         search_call["requested_tool"] != "buscar_productos" or not search_call["executed"]
@@ -162,7 +207,7 @@ def _auto_quote_call(
     context = state.get("contexto")
     consulta = state["consulta"]
     if (
-        len(items) != 1 or listed or list_lines(context)
+        not items or listed or list_lines(context)
         or pagination_group(consulta, context) is not None
         or (bool(context) and wants_to_buy(consulta, context))
     ):
@@ -170,37 +215,45 @@ def _auto_quote_call(
     if order_action_pending(consulta, state["referencia"], calls, context) is not None:
         return None
     raw_findings = search_findings([search_call])
-    if len(raw_findings) != 1 or len(raw_findings[0]["matches"]) != 1:
-        return None
-    finding = without_negated(consulta, raw_findings[0])
-    if len(finding["matches"]) != 1:
-        return None
-    match = finding["matches"][0]
-    described = " ".join([finding["query"], *map(str, finding["request"].values())])
     said_ref = state["referencia"]
-    ref_msg = (without_quantities(normalize_text(said_ref))
-               if normalize_text(match.unit) in sale_units(said_ref) else said_ref)
-    if not is_distinguished(heard_as(ref_msg, described), described, match, finding["matches"]):
-        return None
-    if grounded_selection(said_ref, finding) != match or fractional_amount(consulta) is not None:
-        return None
-    turn_quantities = (
-        quantities_in_message(without_chosen_measures(consulta, picked))
-        - naming_numbers(consulta, finding["matches"] + finding["nearby"])
-        - mentioned_hours(consulta)
-    )
-    valid_quantities = [q for q in turn_quantities if 1 <= q <= MAX_QUANTITY]
-    if len(valid_quantities) != 1:
-        return None
-    quantity = valid_quantities[0]
-    if (
-        foreign_unit(consulta, quantity, f"{match.unit} {match.variant}")
-        or quantity_of_other(consulta, quantity, f"{match.name} {match.variant} {match.unit}")
-    ):
-        return None
+    if len(items) > 1:
+        if len(raw_findings) != len(items):
+            return None
+        lines_to_quote = _partial_auto_quote_lines(consulta, said_ref, raw_findings, picked)
+        if not lines_to_quote:
+            return None
+    else:
+        if len(raw_findings) != 1 or len(raw_findings[0]["matches"]) != 1:
+            return None
+        finding = without_negated(consulta, raw_findings[0])
+        if len(finding["matches"]) != 1:
+            return None
+        match = finding["matches"][0]
+        described = " ".join([finding["query"], *map(str, finding["request"].values())])
+        ref_msg = (without_quantities(normalize_text(said_ref))
+                   if normalize_text(match.unit) in sale_units(said_ref) else said_ref)
+        if not is_distinguished(heard_as(ref_msg, described), described, match, finding["matches"]):
+            return None
+        if grounded_selection(said_ref, finding) != match or fractional_amount(consulta) is not None:
+            return None
+        turn_quantities = (
+            quantities_in_message(without_chosen_measures(consulta, picked))
+            - naming_numbers(consulta, finding["matches"] + finding["nearby"])
+            - mentioned_hours(consulta)
+        )
+        valid_quantities = [q for q in turn_quantities if 1 <= q <= MAX_QUANTITY]
+        if len(valid_quantities) != 1:
+            return None
+        quantity = valid_quantities[0]
+        if (
+            foreign_unit(consulta, quantity, f"{match.unit} {match.variant}")
+            or quantity_of_other(consulta, quantity, f"{match.name} {match.variant} {match.unit}")
+        ):
+            return None
+        lines_to_quote = [{"sku": match.sku, "quantity": quantity}]
     try:
         quote_args = validate_request(
-            "calcular_cotizacion_informativa", {"lines": [{"sku": match.sku, "quantity": quantity}]},
+            "calcular_cotizacion_informativa", {"lines": lines_to_quote},
             said_ref, calls, quantities, remembered, listed, consulta,
         )
     except Rejected:
@@ -350,8 +403,13 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
                     effective_tool, effective_args, state["referencia"], calls, quantities,
                     remembered, listed, state["consulta"], context=context, picked=picked,
                 )
-            if any(previous["executed"] and previous["requested_tool"] == effective_tool
-                   and previous["arguments"] == arguments for previous in calls):
+            if any(
+                previous["executed"]
+                and previous["requested_tool"] == effective_tool
+                and previous["arguments"] == arguments
+                and (effective_args == arguments or previous["requested_arguments"] == effective_args)
+                for previous in calls
+            ):
                 raise Rejected("DUPLICATE_CALL", "Esa llamada ya se ejecutó; usa su observación.")
         except Rejected as exc:
             message = str(exc)
