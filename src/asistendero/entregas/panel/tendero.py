@@ -86,6 +86,8 @@ READS = {
 
 
 class TenderoHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def _local(self) -> bool:
         return self.headers.get("Host") == f"127.0.0.1:{self.server.server_port}"
 

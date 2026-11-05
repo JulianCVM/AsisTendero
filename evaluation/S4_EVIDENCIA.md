@@ -526,6 +526,7 @@ Cada falla se reprodujo en una prueba con la decisión real de Grok, que falla s
 | W-03 | **El cliente quedó sin pedido** al cambiar a cascos blancos | El aviso de cambio pidió registrar y Grok volvió a registrar los amarillos | `37431f0`: `ORDER_UNCHANGED` y el aviso pide buscar el producto nuevo |
 | W-02 | Volvió a preguntar los metros ya dichos | La cantidad estaba en el turno anterior | `37431f0`: si el turno solo contesta qué producto era, se cotiza lo ya dicho |
 | X-14 | No encontró «grey cement» | Grok buscó en inglés | `d9c6990`: `s4-pedidos-v5` pide buscar en español |
+| X-22 | Dio el precio unitario de la brocha ($6.900) sin el subtotal ($13.800) al pedir «2 brochas de 3 pulgadas y un taladro» | Grok inventó un SKU para el taladro inexistente y `validate_request` rechazó toda la cotización con `SKU_NOT_GROUNDED` | Partición determinista (`valid_items`/`invalid_items`) y auto-cotización parcial en servidor sin llamadas extra a Grok |
 
 La suite `variados` destapó otros defectos con el Grok guionizado, antes de gastar créditos (`13c72b1`): «ladrillos»,
 «rodillo de 9 pulgadas» o «tees de 1/2» preguntaban la presentación porque la búsqueda traía otro producto de nombre
