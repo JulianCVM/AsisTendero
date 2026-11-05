@@ -5,17 +5,19 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.chat import run_turn
-from asistendero.executor import catalog_executor
-from asistendero.graph import build_graph
-from asistendero.grok import Decision
-from asistendero.inventory import Inventory, InventoryError
-from asistendero.orders import BOGOTA, OrderBook
-from asistendero.restock import asks_restock, plan_of, restock_reply_ok, restock_sentence, valid_plan
-from asistendero.seed import create_mock_db, upgrade_db
-from asistendero.sessions import SessionStore
-from asistendero.validation import normalize_text
+from asistendero.agente.conversacion.chat import run_turn
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.agente.flujo.graph import build_graph
+from asistendero.agente.herramientas.executor import catalog_executor
+from asistendero.agente.modelo.grok import Decision
+from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence
+from asistendero.datos.seed import create_mock_db, upgrade_db
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.inventario.inventory import Inventory, InventoryError
+from asistendero.tienda.inventario.surtido import plan_of, valid_plan
+from asistendero.tienda.pedidos.orders import OrderBook
+from asistendero.tienda.reloj import BOGOTA
+from asistendero.tienda.vocabulario import normalize_text
 
 
 HAMMER = {"text": "martillo de uña de 16 oz", "product": "martillo", "measure": "16 oz"}
@@ -226,7 +228,8 @@ def _old_base(tmp_path):
 def test_the_cli_and_the_evaluator_upgrade_an_old_base(tmp_path, monkeypatch, capsys):
     # Corrida 26 con Grok real: los casos de un turno decían «no tengo fecha» del martillo que llega los martes; la
     # base compartida era de antes del surtido y solo el libro de pedidos la actualizaba.
-    from asistendero import cli, evaluate
+    from asistendero.entregas import cli
+    from asistendero.evaluacion import evaluate
 
     db = _old_base(tmp_path)
     monkeypatch.setattr(cli, "DEFAULT_DB_PATH", db)
@@ -265,6 +268,6 @@ def test_the_restock_question_is_about_the_product_it_names(db):
                  tool("buscar_productos", items=[lock, HAMMER]), say())
     assert "martillo de uña de 16 oz está agotado por ahora, pero me llega los martes" in result["respuesta"]
     assert "no tengo fecha" not in result["respuesta"].casefold()
-    from asistendero.restock import restock_subjects
+    from asistendero.agente.respuesta.restock import restock_subjects
     # Sin producto en la parte que pregunta, vale para todos.
     assert restock_subjects("¿y cuando le llegan mas?", ["candado", "martillo"]) == {0, 1}

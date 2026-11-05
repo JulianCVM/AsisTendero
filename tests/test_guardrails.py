@@ -2,9 +2,9 @@
 
 import pytest
 
-from asistendero.graph import build_graph
-from asistendero.grok import AGENT_PROMPT, Decision
-from asistendero.guardrails import leaks, redact_personal_data, screen_message
+from asistendero.agente.entrada.guardrails import leaks, redact_personal_data, screen_message
+from asistendero.agente.flujo.graph import build_graph
+from asistendero.agente.modelo.grok import AGENT_PROMPT, Decision
 
 
 def say(reply, intent="productos"):
@@ -120,11 +120,11 @@ def test_prompt_or_key_leaks_replace_grok_wording(monkeypatch):
 def test_fixed_server_texts_never_look_like_a_prompt_leak():
     # La respuesta fija del servidor pasa por el mismo detector: si compartiera siete palabras con el prompt,
     # también se descartaría la redacción correcta de Grok que dice lo mismo (lo encontró test_chaos).
-    from asistendero.answers import CREDIT_NOTE, NO_ORDER_NOTE, RESERVATION_NOTE
-    from asistendero.graph import PERSONAL_DATA_NOTE, REFUSAL_CLOSING
-    from asistendero.guardrails import SENSITIVE_TOPICS
-    from asistendero.order_replies import REJECTION_TEXT, notice_text
-    from asistendero.orders import PAYMENT
+    from asistendero.agente.entrada.guardrails import SENSITIVE_TOPICS
+    from asistendero.agente.flujo.graph import PERSONAL_DATA_NOTE, REFUSAL_CLOSING
+    from asistendero.agente.respuesta.answers import CREDIT_NOTE, NO_ORDER_NOTE, RESERVATION_NOTE
+    from asistendero.agente.respuesta.order_replies import REJECTION_TEXT, notice_text
+    from asistendero.tienda.pedidos.orders import PAYMENT
 
     texts = [CREDIT_NOTE, NO_ORDER_NOTE, RESERVATION_NOTE, PERSONAL_DATA_NOTE, REFUSAL_CLOSING, PAYMENT,
              *REJECTION_TEXT.values(), *(reply for _, reply in SENSITIVE_TOPICS.values())]

@@ -11,14 +11,21 @@ El prototipo de AsisTendero para el Agent Challenge de Platica: un agente para f
 mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor necesita y responde con precio y
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
 reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
-por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero`), visor local
-(`asistendero-visual`) y evaluador (`python -m asistendero.evaluate`); el panel del tendero (`asistendero-tendero`)
-administra inventario y pedidos sobre la misma base. Código, comentarios, documentación, commits y PR en **español**.
+por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero` con un mensaje o `--chat`),
+visor local (`asistendero-visual`) y evaluador (`python -m asistendero.evaluacion`); el panel del tendero
+(`asistendero-tendero`) administra inventario y pedidos sobre la misma base. `python -m asistendero` sin mensaje
+arranca el visor y el panel juntos sobre la misma tienda (`launcher.py`). Código, comentarios, documentación, commits
+y PR en **español**.
 
 Desde el 22-10-2026 el plan S4 incluye **pedidos para recoger** dentro de una conversación (registrar, confirmar,
-agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. Siguen fuera de
-alcance mientras no lo pida el plan del corte: WhatsApp, Wompi, Supabase, datos reales de un piloto, pagos, fiados y
-domicilios.
+agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidió Julian en el chat. El 26-10-2026 Julian pidió
+ampliar el panel: ventas con **registro manual** del cobro (sin pasarela ni verificación bancaria, ver
+`docs/PAGOS.md`), abastecimiento con proveedores, categorías y alertas, asistente de bodega (Grok interpreta, el
+tendero confirma), supervisión de chats con atención humana, tienda de demostración (`--demo`) y página pública
+(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Ese mismo día pidió integrar la rama de visión de Camila: fotos del cliente en el chat, con atributos extraídos por Grok y búsqueda en el catálogo hecha por el servidor, y fotos de referencia libres de Wikimedia Commons en las respuestas (`docs/HARNESS.md`, «Fotos»). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
+datos reales de un piloto, cobros por el chat, fiados y domicilios.
+
+**Marca:** el producto se llama **PulsoTienda** (panel del tendero y página pública) y el agente que atiende el chat, **AsisTendero** (visor, mensajes del chat y menciones al asistente). El paquete sigue siendo `asistendero`.
 
 ## Reglas del reto (reglamento externo)
 
@@ -73,30 +80,54 @@ propio.
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
    - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
-   - `normalize_text`, `is_distinguished`, `grounded_products`, `quantities_in_message` y `foreign_unit`
-     (`validation.py`); `closest_named` (`product_fit.py`).
+   - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
+     (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
+   - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
+     `is_distinguished` (`product_fit.py`).
    - `search_findings`, `latest_quote` y `observation_for_model` (`observations.py`).
-   - `reply_is_grounded` (`answers.py`); `format_cop`, `found_sentence`, `item_line`, `quote_block` y
+   - `reply_is_grounded` (`answers.py`); `found_sentence`, `item_line`, `quote_block` y
      `short_stock_text` (`reply_text.py`); `next_node` (`graph.py`).
    - `list_lines`, `usable_lines`, `updated_list`, `removed_now` y `missing_from_quote` (`shopping_list.py`);
      `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount` y `without_negated`
      (`validation.py`); `without_quantities` y `negated_words` (`search.py`).
-   - `shown_options`, `chosen_options`, `ambiguous_reference` y `check_reference` (`choices.py`); `asks_stock`,
+   - `shown_options`, `chosen_options`, `ambiguous_reference`, `check_reference`, `pagination_group`,
+     `pending_quantity_quote` y `coherent_option_turn` (`choices.py`); `is_elliptical_turn`,
+     `enrich_elliptical_text`, `updated_specs`, `remembered_spec_for_item`, `filter_matches_by_spec`,
+     `affirms_active_item` y `pending_quantity_target` (`context_resolution.py`); `asks_stock`,
      `stock_note`, `gender_of`, `of_the`, `asks_suitability` y `whole_units_question` (`reply_text.py`);
      `rushes_the_customer` (`order_replies.py`).
-   - `valid_plan`, `plan_of`, `asks_restock`, `restock_sentence`, `restock_subjects` y `restock_reply_ok`
-     (`restock.py`).
-   - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`) y `create_mock_db` (`seed.py`).
+   - `valid_plan` y `plan_of` (`surtido.py`); `asks_restock`, `restock_sentence`, `restock_subjects` y
+     `restock_reply_ok` (`restock.py`).
+   - `call_cost` y `run_cost` (`pricing.py`), `catalog_executor` (`executor.py`), `create_mock_db` y `BUSINESSES`
+     (`seed.py`); `active_prompt` y `serving` (`prompt.py`, el negocio que atiende el hilo); `sole_head`
+     (`validation.py`).
    - `OrderBook` (`orders.py`), `validate_order_request`, `order_action_pending`, `added_quantities`, `cancels` y
      `changes_order` (`order_rules.py`), `order_reply`
      (`order_replies.py`), `sweep` (`order_watch.py`) y `session_context` (`chat.py`).
    - `heard_as` (`spelling.py`); `Inventory` (`inventory.py`), `order_board` y `day_summary` (`sales.py`).
-   - `record` y `verdict` (`eval_checks.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
+   - `record` y `verdict` (`eval_checks.py`); `unbacked_prices`, `leaked_codes`, `analysis_reasons` y
+     `paraphrase_groups` (`eval_oracle.py`); `case_rows`, `operation_rows`, `tool_rows` y `cost_report_markdown`
+     (`eval_costs.py`); `Conversation`, `run_conversation` y `run_clients` (`eval_sessions.py`).
    - `screen_message`, `redact_personal_data` y `leaks` (`guardrails.py`); `detect_injection` y `blocked_reply`
      (`injection.py`); `SessionStore` (con `ban`, `unban` y `bans`) y `remembered_products` (`sessions.py`); `run_turn` y
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
+   - `asks_assortment` y `full_category_listing` (`store_replies.py`).
+   - `Payments` y `check_payment` (`payments.py`); `sales_history` y `sales_summary` (`sales_history.py`);
+     `review_reasons` (`sales.py`).
+   - `Purchasing` (`purchasing.py`); `receive_stock` y `set_restock` (`inventory.py`); `CatalogAdmin`
+     (`catalog_admin.py`) y sus umbrales (`stock_thresholds.py`); `StockAssistant` (`stock_proposal.py`), `interpret_text`
+     y `validate_interpretation` (`stock_assistant.py`), `identify` y `find_supplier` (`stock_matching.py`).
+   - `asks_for_human`, `request_human`, `take_over`, `release`, `finish`, `staff_reply`, `ban_manually` y `actions`
+     (`handoff.py`); `conversations` y `conversation` (`supervision.py`).
+   - `read_photo` y `PhotoRejected` (`photo.py`), `look_at` (`look.py`), `ImageAttributePayload`,
+     `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner`, `backed_payload` y `fixed_reply` (`photo_planner.py`);
+     `dhash`, `closest_family`, `fingerprint_report`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`); `describe_photo_flow` (`photo_flow.py`, el diagrama de la foto del visor) y `photo_for` (`eval_photos.py`, la foto de un caso de evaluación).
+   - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
+     `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
+     (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
+     (`launcher.py`).
 
    Duplicar es un error aunque funcione.
 3. **Haz solo lo que pide la tarea.** Nada de refactors, renombres ni reformateos fuera del alcance. Si ves algo mal,
@@ -122,6 +153,14 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 ## Dónde va cada cosa
 
+El paquete se divide por función (`docs/ARQUITECTURA.md`): `agente/` (AsisTendero y su harness), `tienda/` (lo que
+administra el tendero), `datos/` (catálogo ficticio y esquema), `observabilidad/`, `evaluacion/` y `entregas/`
+(terminal, comando único, visor, panel, tienda de demostración y los archivos de las pantallas en
+`entregas/web/`). Cada nombre de módulo es
+único, por eso la tabla los nombra sin ruta; el subpaquete de cada uno está en el README. Un módulo nuevo va en el
+paquete de su función y solo importa los de abajo (`entregas → evaluacion → observabilidad → agente → tienda →
+datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda evitar se anota ahí con su motivo.
+
 | Necesito… | Va en |
 |---|---|
 | Cambiar qué decide Grok o su formato de salida | `grok.py` (`AGENT_PROMPT`, `parse_decision`), subiendo `PROMPT_VERSION` |
@@ -131,6 +170,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Cambiar el texto de la respuesta (frases, líneas de cotización, opciones) | `reply_text.py` |
 | Qué recuerda la conversación de lo cotizado y cuándo se exige cotizar «todo» | `shopping_list.py`, con su prueba en `tests/test_shopping_list.py` |
 | Qué opciones se le mostraron al cliente y cómo se elige una por su orden o su atributo | `choices.py` (la tabla, en `sessions.py`), con su prueba en `tests/test_shopping_list.py` |
+| Un turno breve que se apoya en el anterior («de concreto», «sí, esa», «2 metros») o lo que el cliente ya fijó de un producto (medida, material) | `context_resolution.py` (la tabla `session_specs`, en `sessions.py`), con su prueba en `tests/test_shopping_list.py` |
 | Cuándo vuelve a llegar un producto o si ya no se trae, y qué puede decir Grok de eso | `restock.py` (la tabla, en `seed.py`; la edición, en `inventory.py`), con su prueba en `tests/test_restock.py` |
 | Un nodo o una ruta del flujo | `graph.py` (la traza usa `next_node`) |
 | Un aviso del servidor cuando Grok responde sin un paso que el mensaje exige | `reminders.py` (`pending_reminder`), con su prueba en `tests/test_graph.py` |
@@ -138,7 +178,24 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Una regla antes de registrar, confirmar, agendar o cancelar un pedido | `validate_order_request` de `order_rules.py`, con su prueba en `tests/test_orders.py` |
 | Un estado, plazo o límite del pedido | `orders.py` (`OrderBook`); la herramienta, en `order_tools.py` |
 | Cómo se redacta un pedido o un aviso de vencimiento | `order_replies.py`; el barrido, en `order_watch.py` |
-| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `tendero.py` y `ui/tendero.*` |
+| Cambiar precio o existencias, o ver las ventas | `inventory.py` y `sales.py`; la pantalla, en `entregas/panel/` y `entregas/web/panel/` |
+| Qué entra en la bandeja «Por hacer» de Hoy y en qué orden | `work_queue` de `bandeja.py` (lo pide `PanelViews.summary`), con su prueba en `tests/test_tendero.py` |
+| Una ruta del panel del tendero | Lectura en `tendero_views.py` y `READS` de `tendero.py`; cambios en `ROUTES` de `tendero_actions.py`, con su prueba en `tests/test_tendero.py` |
+| Una regla del cobro (método, estado, quién confirma) | `payments.py`, con su prueba en `tests/test_payments.py`; el historial, en `sales_history.py` |
+| Proveedores, pedidos al proveedor o llegadas de mercancía | `purchasing.py` (reglas en `purchasing_rules.py`), con su prueba en `tests/test_purchasing.py` |
+| Categorías o alertas de stock bajo | `catalog_admin.py` y `stock_thresholds.py`, con su prueba en `tests/test_catalog_admin.py` |
+| Qué entiende el asistente de bodega o cómo arma su propuesta | `stock_assistant.py` (prompt y versión) y `stock_proposal.py`, con su prueba en `tests/test_stock_assistant.py` |
+| Cuándo pasa una conversación al tendero o qué puede hacer él | `handoff.py` y `supervision.py`, con su prueba en `tests/test_supervision.py` |
+| La imagen de un producto | `product_art.py` (reglas) y `product_art_shapes.py`/`product_art_tools.py` (dibujos), con su prueba en `tests/test_product_art.py` |
+| La foto que manda el cliente (límites, huella, llamada de visión, qué se busca con ella) | `agente/vision/` (`photo.py`, `look.py`, `attributes.py`, `photo_planner.py`), con su prueba en `tests/test_photos.py` o `tests/test_vision_attributes.py` |
+| Las fotos de referencia del catálogo o las que acompañan una respuesta | `product_photos.py` y `reply_photos.py`; la biblioteca, con `tools/fotos/descargar_fotos.py` (solo licencias libres, créditos en `datos/fotos/CREDITOS.md`); prueba en `tests/test_photos.py` |
+| Qué arranca el comando único y con qué tienda | `launcher.py` (lo llama `cli.py` sin mensaje), con su prueba en `tests/test_launcher.py` |
+| La página pública `/inicio` o los casos de su demo | `entregas/web/pagina/` (`inicio.html`, `inicio*.css` e `inicio*.js`) (escena de «Cómo funciona» generada con `node tools/mostrador/build.mjs`, ejemplos por sector en `inicio-sectores.js`, casos fijos de la demo en `inicio-escenas.js`, Confianza en `inicio-cierre.js`; módulos en `LANDING_MODULES` y hojas en `ASSETS` de `tendero.py`), con su prueba en `tests/test_tendero.py`. La página es comercial: nada de comandos, funciones, JSON ni cifras de pruebas; eso va en el README («Lo que respalda la página pública»), cuya prueba lo compara con el código |
+| Un nodo o una conexión del mapa de decisión del visor | `harness_flow.py` (atado a `build_graph`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/harness-map.js` y `harness-map.css` |
+| Una etapa del diagrama de la foto del visor | `photo_flow.py` (atado a las funciones de `agente/vision/`), con su prueba en `tests/test_harness_info.py`; el dibujo, en `entregas/web/visor/foto-flujo.js` y `foto-flujo.css` |
+| Cómo se lee un evento de la traza o el resultado de una prueba en el visor | `traza.js`, `traza-lectura.js` y `resultado.js` de `entregas/web/visor/` (piezas comunes en `visor-comun.js`); cada archivo se registra en `TraceHandler._assets` de `visual.py` |
+| La apariencia (claro, oscuro o la del sistema) de la página pública, el panel y el visor | `entregas/web/comun/tendero-theme.js` (se carga en `<head>`; guarda la elección en una cookie común a los dos puertos) y `tendero-theme.css`, con su prueba en `tests/test_tendero.py` |
+| Datos de la tienda de demostración | `demo.py` (siempre ficticios y con los módulos reales), con su prueba en `tests/test_tendero.py` |
 | Entender mejor un mensaje mal escrito | `spelling.py` (`heard_as`), con su prueba en `tests/test_spelling.py` |
 | Leer el catálogo | Un método de `MockCatalog` en `catalog.py`, en solo lectura y filtrado por negocio y sede |
 | Conectar el ejecutor real en un punto de entrada | `executor.catalog_executor(catalog)` |
@@ -147,8 +204,11 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 | Una forma de inyección que bloquear y banear | `PATTERNS` o `_variants` de `injection.py`, con sus ataques y sus frases legítimas parecidas en `tests/test_injection.py` |
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
-| Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas o varios clientes: ver `eval_sessions.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
-| Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` (nunca datos reales); `seed.py` arma `PRODUCTS` |
+| Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas, varios clientes o fotos: ver `eval_sessions.py` y `eval_photos.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
+| Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
+| La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
+| Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |
+| El reporte de costo por operación de una corrida | `eval_costs.py`, con su prueba en `tests/test_eval_report.py`; el documento, en `evaluation/COSTOS_POR_TAREA.md` |
 | Una variable de configuración | Leída con `os.getenv` y documentada con un valor vacío o falso en `.env.example` |
 
 ## El contrato del agente
@@ -178,7 +238,7 @@ mínimo, se explica en el PR y la dueña decide si lo reescribe.
 
 - Los dos escuchan solo en `127.0.0.1` y rechazan otro `Host` u `Origin`. No se exponen a la red.
 - Los datos se pintan con `textContent`, nunca con `innerHTML`. Nada de `alert()`, `confirm()`, `prompt()` ni
-  JavaScript inline: listeners en `ui/app.js`.
+  JavaScript inline: listeners en los módulos de `entregas/web/`.
 - Celular primero: se revisa a 390 px de ancho, sin desplazamiento horizontal. Cada botón de solo ícono lleva
   `aria-label` y un estado nunca se indica solo con color. El estilo sigue `DESIGN.md`.
 
@@ -221,7 +281,7 @@ Una tarea no está terminada hasta que esto pase sin errores (en Windows, `.venv
 
 - Si cambiaste algo que se ve en el visor o en el panel del tendero, **ábrelo en el navegador** (escritorio y 390 px)
   y recorre el flujo.
-- Las corridas reales (`asistendero`, el visor o `python -m asistendero.evaluate --live`) **consumen créditos del
+- Las corridas reales (`asistendero`, el visor o `python -m asistendero.evaluacion --live`) **consumen créditos del
   reto**. Solo se hacen cuando la persona lo pide y con un objetivo de evaluación. Su resultado se registra en
   bitácora con commit, fecha, `PROMPT_VERSION` y costo, aunque falle.
 - Si algo falla, dilo con la salida; nunca digas «listo» con algo en rojo. Lo que no se probó con Grok real se dice así.

@@ -1,0 +1,38 @@
+/* Selector de apariencia común (tendero-theme.js): sol y luna como opciones principales y «Sistema» con texto.
+   Usa los tokens del panel; el visor, con otra paleta, redefine las variables --switch-* en su hoja. */
+.theme-switch {
+  --switch-track: var(--sunk, #F3EDE0);
+  --switch-line: var(--line, #E7DFCF);
+  --switch-text: var(--muted, #5B6F72);
+  --switch-on: var(--surface-2, #FFFFFF);
+  --switch-on-text: var(--text, #173B4A);
+  --switch-mark: var(--amber, #E9A23B);
+  display: inline-flex; align-items: center; gap: 2px; flex: none; padding: 3px; border-radius: 999px;
+  background: var(--switch-track); border: 1px solid var(--switch-line);
+}
+.theme-switch button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 36px; height: 34px;
+  padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--switch-text);
+  font-size: .82rem; font-weight: 700; line-height: 1; transition: background .2s, color .2s, box-shadow .2s;
+}
+.theme-switch button:hover { color: var(--switch-on-text); }
+.theme-switch button[aria-pressed="true"] {
+  background: var(--switch-on); color: var(--switch-on-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12), inset 0 -2px 0 var(--switch-mark);
+}
+.theme-switch .icon { width: 18px; height: 18px; }
+/* En una lista (menú del celular) el selector ocupa el ancho y «Sistema» dice su nombre completo. */
+.theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.theme-row-label { font-weight: 700; font-size: .9rem; }
+
+/* El tema nuevo se abre en círculo desde el botón tocado (View Transitions); sin soporte, el cambio es directo. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { animation: theme-reveal .6s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes theme-reveal {
+  from { clip-path: circle(0 at var(--vt-x, 100%) var(--vt-y, 0)); }
+  to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 100%) var(--vt-y, 0)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) { animation: none; }
+  .theme-switch button { transition: none; }
+}

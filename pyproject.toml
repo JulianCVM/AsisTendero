@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = [
     "langgraph>=1.0,<2.0",
     "openai>=2.0,<3.0",
+    # Fotos: abrir y validar la del cliente, quitarle el EXIF, reducirla y sacar su huella (licencia MIT-CMU).
+    "Pillow>=10.1,<13",
     "python-dotenv>=1.0,<2.0",
 ]
 
@@ -17,15 +19,16 @@ dependencies = [
 dev = ["pytest>=8,<10"]
 
 [project.scripts]
-asistendero = "asistendero.cli:main"
-asistendero-visual = "asistendero.visual:main"
-asistendero-tendero = "asistendero.tendero:main"
+asistendero = "asistendero.entregas.cli:main"
+asistendero-visual = "asistendero.entregas.visor.visual:main"
+asistendero-tendero = "asistendero.entregas.panel.tendero:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-asistendero = ["ui/*.html", "ui/*.css", "ui/*.js", "ui/*.png", "ui/*.ttf", "ui/*-OFL.txt"]
+"asistendero.entregas" = ["web/*/*.html", "web/*/*.css", "web/*/*.js", "web/*/*.png", "web/*/*.ttf", "web/*/*-OFL.txt"]
+"asistendero.datos" = ["fotos/*.jpg", "fotos/fotos.json", "fotos/CREDITOS.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -27,6 +27,200 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Corridas 45 a 48: los 345 casos con Grok real hasta el commit de la entrega (01-11-2026)
+
+Objetivo: que todo lo que se entrega (resultado, costo por tarea y reporte técnico) salga de una corrida real
+completa sobre el commit final, y arreglar lo que esas corridas destaparan. Modelo
+`grok-4.20-0309-non-reasoning`, prompts `s4-conversacion-v12` y `mercado-v1`, `--concurrency 3`. Desde la 45 el set
+se corre en **cinco tandas de suites**, cada una en su propio proceso y con su tope de gasto (la primera con
+`--include-failures`): la 44 se perdió por falta de memoria del equipo. Cada tanda se lanzó con el árbol limpio
+(`src_dirty: false`) y `eval_costs` solo las une si comparten commit y modelo y no repiten casos.
+
+| Corrida | Commit | Resultado | Fallos controlados | Llamadas | USD | USD por tarea |
+|---|---|---|---|---|---|---|
+| 45 | `df6ef33` | 340/345 | 3/3 | 1029 | 1.183481 | 0.003430 |
+| 46 | `3f74387` | 341/345 | 3/3 | 1036 | 1.107960 | 0.003212 |
+| 47 | `b552a2a` | 343/345 | 3/3 | 1037 | 0.953063 | 0.002763 |
+| **48 (final)** | **`bef4913`** | **344/345** | **3/3** | 1033 | **0.967176** | **0.002803** |
+
+Lo que destapó cada una y se arregló antes de la siguiente, cada arreglo con una prueba que falla sin él:
+
+- **45:** F-10, la foto de referencia del tubo PVC era sobre todo una válvula (la visión real dijo «válvula»). Se
+  auditaron las 208 fotos con la visión real, como las mandaría un cliente: 208 llamadas, **0.088889 USD**; 24
+  mostraban otro producto o uno ambiguo y quedaron sin foto (`docs/HARNESS.md`, «Fotos»). F-01, «¿y el de 20 oz cuánto
+  vale?» terminaba sin precio: aviso `PRICE_REQUIRED`. X-14, se perdían los «50 kg» de una presentación sin respaldo.
+  P-docena-2, con «12 huevos» Grok cotizó la cubeta de 30: segundo aviso de cotización con un solo producto.
+- **46:** F-10 otra vez por la foto: la nueva era un tubo de desagüe y la visión real dijo «sanitario». Pasó al tubo
+  sanitario (SAN) y el de presión quedó sin foto; el caso se ajustó al producto que muestra la foto, con el mismo
+  flujo y las mismas comprobaciones. M-08, Grok escribió «papa criolla de 2 libras» y la cantidad se leía como tamaño.
+  L-02, `consultar_pedido` con `pedido=null` se rechazaba.
+- **47:** H-02, con pintura en la lista, «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura
+  sin aviso del servidor (también había fallado en la 44).
+- **48:** solo X-22 («2 brochas de 3 pulgadas y un taladro»), que falla en todas: Grok inventa un SKU para el taladro,
+  la validación lo rechaza y la respuesta, segura, da el precio unitario de la brocha sin el total. Queda abierto como
+  variación de Grok.
+
+**Corrida 48 (la del entregable):** 344/345 y 3/3; ferretería 297/298 y mercado 47/47; la suite `fotos` 11/11 con 8
+llamadas de visión real (0.002672 USD). 0.002803 USD por tarea, mediana 0.001699, 2,99 llamadas por tarea y 46 tareas
+sin llamar a Grok. Reportes: `eval-20261101T203838787427Z`, `…204047172772Z`, `…204320123688Z`, `…204515745940Z` y
+`…204655840615Z` (`.local/`). El costo por tarea y por operación sale de esos cinco:
+[`COSTOS_POR_TAREA.md`](COSTOS_POR_TAREA.md).
+
+**Gasto acumulado desde la corrida 38:** 4.385929 (hasta la 44) + 1.183481 (45) + 0.088889 (auditoría de fotos) +
+1.107960 (46) + 0.953063 (47) + 0.967176 (48) = **8.686498 USD**, más unos 0,0001 de una llamada de visión para
+revisar una foto, de los 10 USD aprobados por Julian el 01-11-2026.
+
+## Corrida 44: los 345 casos con la suite de fotos, interrumpida (01-11-2026)
+
+Objetivo: validar el commit de la entrega S3 (`e19594f`, con la visión integrada y la suite `fotos`) sobre los 345
+casos. Mismo modelo y prompts (`s4-conversacion-v12` y `mercado-v1`), `--include-failures --concurrency 3
+--budget-usd 1.30`, árbol de trabajo limpio (`src_dirty: false`).
+
+**El equipo se quedó sin memoria y el sistema detuvo la corrida** a los 207 de 345 casos, antes de escribir el
+reporte completo. Lo que sigue sale de su bitácora parcial (`eval-20261101T172243130148Z.partial.jsonl`), que guarda
+por caso el resultado, las llamadas y el costo, pero no los motivos de un fallo.
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD |
+|---|---|---|---|---|---|
+| 44 (parcial) | `e19594f` | 207 de 345 | **205/207** | 672 | 0.776183 |
+
+- **Corridos:** `s2`, `catalogo`, `tienda`, `seguridad`, `conversacion`, `ruido`, `pedidos`, `sesion_larga`,
+  `concurrencia`, `extremos`, `flujos`, `variados`, `inyeccion` y `memoria` completas, y 12 de los 14 de `natural`.
+- **Sin correr (138):** `fallas` (38), `mercado` (33), `parafrasis` (24), `ampliacion` (20), `fotos` (11),
+  `surtido` (10) y 2 de `natural`. La suite `fotos` sigue sin corrida completa con Grok real; pasa entera con el
+  Grok guionizado y una visión falsa (`tests/test_eval_sessions.py`), y la validación de fotos con Grok real del
+  31-10 está en `docs/HARNESS.md` («Fotos»).
+- **Fallaron:** X-22, la misma variación de Grok de las corridas 39 a 43, y H-02 (pintura beige por galón en cuatro
+  turnos), que pasó en la 42. Sin el reporte completo no hay motivo registrado; queda por revisar en la próxima corrida.
+- **Costo:** 0,003750 USD por tarea en estas 207, cerca de los 0,003452 de la corrida 42 completa. Desde las
+  corridas 45 a 48 (arriba), `evaluation/COSTOS_POR_TAREA.md` sale de la 48.
+- **No se relanzó:** relanzarla sin pedirlo gastaría créditos sin una decisión de Julian, y el aviso del sistema pide
+  no reiniciarla mientras falte memoria.
+- **Gasto acumulado desde la corrida 38:** 3.568553 (corridas 38 a 43) + 0.041193 (validación de fotos del 31-10) +
+  0.776183 (corrida 44) = **4.385929 USD** de los 5 USD aprobados por Julian.
+
+## Segunda tanda y costo por operación (corridas 42 y 43, 31-10-2026 y 01-11-2026 UTC)
+
+Pedido de Julian: otra tanda de pruebas, arreglar lo que falle y presentar 30 o más casos reales con su costo por
+ejecución y por operación. Mismo modelo y prompts que las corridas 38 a 41 (`s4-conversacion-v12` y `mercado-v1`),
+`GROK_CONV_ID` apagada, `--concurrency 3`, desde un árbol de trabajo limpio en el commit indicado.
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 42 | `c77dd48` | los 334 casos y 3 fallos controlados | **327/334** y 3/3 | 1005 | 1.153100 | `eval-20261101T015603746928Z` |
+| 43 | `e1e0b12` | los 7 que fallaron en la 42 | 6/7 | 31 | 0.030435 | `eval-20261101T021405970554Z` |
+
+- **Corrida 42.** Arregló 17 casos que fallaban en la 39 (A-04, A-10, A-20, M-06, M-08, M-09, M-20, M-29, M-33, M-35,
+  M-36, P-docena-1, P-docena-2, P-tanque-2, X-06, Z-30 y Z-35; los arreglos están en `67503f8`). `mercado` queda en
+  33/33 y paráfrasis, en 7 de 8 grupos coherentes. Z-30 cambió en el caso, no en el agente: «La lija de agua grano 80
+  está agotada por ahora» es la conducta correcta y el caso ahora acepta `insufficient_stock`; sigue exigiendo que
+  diga que está agotada y que no invente fecha.
+- **Oráculo sobre la corrida 42** (sin llamar a Grok): de 487 turnos, 290 respuestas traían cifras en pesos y
+  **ninguna** sin respaldo en las herramientas del turno. **Ninguna** muestra un SKU.
+- **Los 7 que fallaron en la 42** y su arreglo (`e1e0b12`, con una prueba que falla sin él):
+  - V-17, X-14 y A-18: Grok llenó un campo con «plis», «bolsa 50 kg» o «tapar huecos», y el producto exacto quedó
+    como opción cercana. Las cortesías pasan a palabras vacías; el cemento gris suma «bolsa» y la masilla, «tapar».
+  - P-fiado-2 «anótemelo y le pago el viernes»: no decía que no se fía. Pagar otro día ahora cuenta como pedir fiado.
+  - Q-10 «agrégale 2 brochas» con un pedido activo: el aviso solo pedía cotizar. Ahora pide registrar.
+  - H-09: Grok registró el pedido y escribió «apartado por 5 minutos» sin pedir el «sí». Esa redacción se reemplaza.
+  - X-22 «2 brochas de 3 pulgadas y un taladro»: Grok inventó el SKU «TALADRO-1» al cotizar y la validación lo
+    rechazó. La respuesta quedó segura (precio unitario real, sin taladro), pero sin el total de las brochas. Pasó
+    en la 38 y falló en la 39 a la 43: es variación de Grok y queda abierto. Cotizar solo lo identificado en un
+    mensaje de varios productos exige asignar cada cantidad a su producto, y no se cambió a la carrera.
+- **Corrida 43** (verificación): pasan los seis arreglados; X-22 sigue igual.
+- **Costo por operación:** `evaluation/COSTOS_POR_TAREA.md`, generado con `eval_costs.py` desde el reporte de la
+  corrida 42 (334 tareas reales, 487 mensajes del cliente). En resumen: 0,003452 USD por tarea, mediana de
+  0,001872, 3,01 llamadas a Grok por tarea, 0,001147 USD por llamada y 94,7 % de llamadas con el prompt fijo en
+  caché. Las herramientas no tienen costo de API.
+- **Gasto de las corridas 38 a 43:** 3.568553 USD (presupuesto aprobado por Julian: 5 USD).
+
+## Línea base, catálogo ampliado, tienda de mercado y paráfrasis (corridas 38 a 41, 31-10-2026)
+
+Pedido de Julian: correr el set completo, ampliar el catálogo y agregar una tienda de barrio de mercado diario para
+evaluar situaciones domésticas. Prompt `s4-conversacion-v12` (ferretería) y `mercado-v1` (tienda de mercado),
+modelo `grok-4.20-0309-non-reasoning`, `--concurrency 3`, `GROK_CONV_ID` apagada salvo en la 41. Cada corrida se lanzó desde un
+árbol de trabajo limpio en el commit indicado (`src_dirty=false`).
+
+| Corrida | Commit | Casos | Resultado | Llamadas | USD | Reporte |
+|---|---|---|---|---|---|---|
+| 38 | `4c9b784` | los 257 casos y 3 fallos controlados | **252/257** y 3/3 | 808 | 0.898194 | `eval-20261031T222520788586Z` |
+| 39 | `3cd54c8` | los 334 casos y 3 fallos controlados | **315/334** y 3/3 | 1003 | 1.147633 | `eval-20261031T230413912972Z` |
+| 40 | `58be938` | `ampliacion`, `mercado` y `parafrasis` (77) | 69/77 | 193 | 0.178020 | `eval-20261031T232209473053Z` |
+| 41 | `a64826c`, `GROK_CONV_ID=1` | las mismas 77 | **71/77** | 192 | 0.161171 | `eval-20261031T232729595787Z` |
+
+- **Corrida 38 (línea base).** Por suite: `fallas` 35/38, `flujos` 14/15, `ruido` 11/12 y el resto completo.
+  0.003495 USD por tarea y 3,14 llamadas a Grok por tarea. El **96,9 %** de las 808 llamadas reutilizó el prompt fijo
+  desde la caché (86,3 % en la corrida v10 del 24-10), el 87,2 % de los tokens de entrada salió de la caché y la
+  llamada costó 0,001112 USD (0,001385 en v10). Fallaron:
+  - R-12 «quiero comprar algo pero no se que»: respondió «quiero comprar algo no lo manejo».
+  - Q-10 «agrégale 2 brochas de 3 pulgadas» tras un pedido: volvió a preguntar cuántas.
+  - Z-14 «¿cuál sale más barato, el codo de 90 o el de 45?»: mostró las opciones sin precio.
+  - Z-30: respondió bien («agotada») con un estado (`insufficient_stock`) que el caso no acepta; es el caso el que
+    está estrecho, y no se cambió.
+  - Z-35 «deme 5» tras preguntar por el martillo: rechazó el registro (`PURCHASE_NOT_STATED`) y preguntó si lo
+    registraba. Es la misma fricción que A-20 (ver abajo).
+- **Oráculo sobre las respuestas reales de la corrida 38** (`eval_oracle.py`, sin llamar a Grok): de 397 turnos, 233
+  respuestas traían cifras en pesos y **ninguna** sin respaldo en las herramientas del turno. **Cuatro respuestas de
+  casos aprobados mostraban un SKU** (K-01, K-03, K-05 y Z-37: «Para CEM-050 hay 3 bulto disponibles; pediste 6»);
+  se corrigió en `8594748`. En 308 turnos que terminaron en una redacción de Grok, el servidor usó su texto en 60 y la
+  salida determinista en 248.
+- **Corrida 39 (regresión y suites nuevas).** La sesión que la lanzó se cerró por falta de memoria del equipo, pero
+  el proceso del evaluador terminó y dejó su reporte completo. 0.003436 USD por tarea; el 95,3 % de las llamadas
+  reutilizó el prompt fijo desde la caché y el 85,8 % de los tokens de entrada salió de ella (0,001144 USD por
+  llamada). Por suite: `ampliacion` 17/20, `mercado` 25/33, `parafrasis` 21/24, `extremos` 22/24, `fallas` 36/38,
+  `flujos` 14/15 y el resto completo. Ningún precio sin respaldo ni SKU visible.
+  - **Los 257 de antes siguen en 252/257.** R-12 y Z-14 pasan ahora. X-06 dijo «un rollo de cable 12 AWG negro te sale
+    a $2.700 el metro» (el caso prohíbe «te sale» porque no cotiza el rollo) y X-22 mostró la brocha sin el total de
+    las dos. Son redacciones de Grok que el guion no reproduce; no se tocaron.
+  - **Grok prometió fiar (M-33).** Ante «anótemelo en el cuaderno que el viernes le pago», respondió sin
+    herramientas «Listo, te lo anoto en el cuaderno… El viernes me pagas», y el servidor lo dejó pasar. Arreglado:
+    una redacción que promete fiar nunca se acepta (`promises_credit` de `store_replies.py`).
+  - **La tienda de mercado se presentaba como ferretería** al listar sus categorías (M-20, M-35): «Manejamos
+    artículos de ferretería en 10 categorías». Arreglado: la lista nombra lo que vende el negocio activo.
+  - **La cantidad como presentación (M-06, M-08, M-09, M-29, M-36 y P-docena).** Grok buscó «docena de huevos» con
+    presentation="docena", «12 huevos» con "12", «2 libras de papa criolla» con "2 libras" y «3 libras de tomate»
+    con measure="3 libras". Ningún producto tiene esa presentación y la respuesta ofreció opciones cercanas. Sus
+    borradores traían precios inventados (papa criolla a $9.800 las 2 libras, tomate a $2.500); el servidor los
+    descartó todos. Arreglado en el catálogo: si no hay ningún exacto, la búsqueda suelta esa cantidad y deja los
+    productos que se venden por esa unidad. «media libra de queso» sigue eligiendo la pieza de media libra, «2 libras
+    de queso» pregunta (el queso se vende por pieza) y «arroz de 10 libras» (dicho tras «de») sigue como opción
+    cercana.
+  - **Sin cambio, para decidir:**
+    - A-04 («chapa para el cajón del escritorio») ofreció la chapa para mueble como opción cercana. Es una respuesta
+      prudente; el caso esperaba que la eligiera.
+    - A-10 («un tanque de 1000 litros y un flotador de 1/2») dio los dos precios sin el total.
+    - A-20 y Z-35 son la fricción entre el prompt («me llevo» registra) y `pending_quantity_quote` (tras «¿cuántas
+      unidades?» la cantidad se cotiza primero). A-20 terminó con dos preguntas seguidas («¿Quieres que te lo
+      aparte…?» y «¿Quieres que registre el pedido?»).
+    - Z-30: el caso está estrecho.
+  - **Paráfrasis: 5 de 8 grupos respondieron igual.** `docena` («una docena», «12 huevos», «docena de huevos»)
+    difería por el defecto de la presentación. `tanque` («necesito un tanque plástico de 1.000 litros» quedó en
+    `found` y preguntó cuántas aunque dijo «un tanque»; los otros dos cotizaron). `fiado` respondió `answered` en una y `informed` en otra,
+    las dos sin prometer fiar.
+
+- **Corrida 40 (tras `58be938`).** Las tres suites nuevas pasan de 63/77 en la corrida 39 a 69/77. `mercado` sube
+  de 25/33 a 31/33: M-06, M-08, M-09, M-29 y M-36 encuentran el producto por su unidad de venta, y M-20 lista las
+  categorías del negocio. M-33 volvió a fallar («Listo, te lo anoto en el cuaderno… Pasa el viernes a recogerlo y
+  pagar»): la respuesta iba sin herramientas, por `direct_response`, que no miraba el fiado. Se arregló en `a64826c`.
+  A-18 («masilla para tapar huecos en madera de cedro») quedó en opciones cercanas y pasó en la 39 y la 41.
+- **Corrida 41 (`a64826c`, A/B de `GROK_CONV_ID`).** 71/77; M-33 responde «Aquí no fiamos: todo se paga en el
+  mostrador cuando recoges». Frente a la corrida 40, con los mismos 77 casos y casi las mismas llamadas (192 frente a
+  193):
+
+  | | Corrida 40 (sin la cabecera) | Corrida 41 (`GROK_CONV_ID=1`) |
+  |---|---|---|
+  | Llamadas con el prompt fijo en caché | 96,9 % | 99,0 % |
+  | Tokens de entrada desde la caché | 91,9 % | 94,8 % |
+  | USD por llamada | 0,000922 | 0,000839 (−9 %) |
+  | USD por tarea | 0,002312 | 0,002093 |
+
+  Es un solo par de corridas; la diferencia va en la dirección esperada (la pasarela sí aprovecha la cabecera), pero
+  no se ha repetido. Los 6 que fallan: A-04, A-10, A-20, P-tanque-2 y M-35 (ver la corrida 39), y M-20 («¿venden
+  cerveza o cigarrillos?»), que esta vez respondió con la lista de categorías (estado `informed`, que el caso no
+  acepta) sin afirmar que se vendan. Paráfrasis: 6 de 8 grupos responden igual; siguen distintos `tanque` y `fiado`
+  (en `fiado`, una respuesta consulta la tienda y otra responde directo; las tres dicen que no se fía).
+- **Gasto de las corridas 38 a 41:** 2.385018 USD (presupuesto aprobado por Julian: 5 USD).
+
 ## Suite `fallas`: buscar dónde se equivoca el agente (corridas 33 a 37, 24-10-2026)
 
 Pedido de Julian: una tanda de pruebas pensada para que el agente falle, no para confirmar que acierta. Se escribieron

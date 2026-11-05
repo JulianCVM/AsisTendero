@@ -1,0 +1,230 @@
+/* Estilos de cada sección del panel. Los tokens (claro y oscuro) están en tendero.css. */
+
+/* ---------- Hoy ---------- */
+.today-grid { display: grid; gap: 16px; align-items: start; }
+.side-stack { display: grid; gap: 16px; align-items: start; }
+/* Franja de cifras: cuatro números, cada uno lleva a su lista. En el celular, dos por fila. */
+.day-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.day-fact { display: grid; gap: 2px; align-content: start; padding: 12px 14px; min-height: 88px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface-2); color: var(--text); text-decoration: none; transition: border-color .15s; }
+.day-fact:hover { border-color: var(--text-2); }
+.day-fact[data-alert="true"] { border-color: var(--amber); background: var(--amber-soft); }
+.day-fact-label { font-size: .76rem; font-weight: 800; color: var(--muted); }
+.day-fact-value { font: 800 1.25rem/1.2 var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.day-fact-note { font-size: .74rem; font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
+.day-fact[data-alert="true"] .day-fact-note { color: var(--warning); }
+/* Bandeja «Por hacer»: la prioridad se lee en la etiqueta (texto e ícono) y en el borde, nunca solo en el color. */
+.inbox-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inbox-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px; border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); min-width: 0; }
+.inbox-item > .pill { justify-self: start; }
+.inbox-item[data-priority="urgente"] { border-left-color: var(--danger); }
+.inbox-item[data-priority="revisar"] { border-left-color: var(--warning); }
+.inbox-item[data-priority="hoy"] { border-left-color: var(--info); }
+.inbox-body { display: grid; gap: 2px; min-width: 0; }
+.inbox-title { font-size: .95rem; font-weight: 800; overflow-wrap: anywhere; }
+.inbox-detail { font-size: .82rem; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.inbox-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.inbox-actions .link { margin-left: auto; }
+.money { margin: 8px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.money div { padding: 10px 12px; border-radius: 12px; background: var(--sunk); display: grid; gap: 2px; }
+.money dt { font-size: .74rem; font-weight: 800; color: var(--muted); }
+.money dd { margin: 0; font: 800 1.05rem var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.money dd small { display: block; font: 600 .72rem var(--font); color: var(--muted); }
+.activity { margin-top: 10px; }
+.activity-link { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px;
+  font-size: .88rem; text-decoration: none; }
+.activity-link:hover strong { text-decoration: underline; }
+.activity-link .icon { width: 16px; height: 16px; }
+/* «Ver N más»: listas largas plegadas (foldList), con el número de lo que falta y no solo «más». */
+.fold-toggle { display: inline-flex; align-items: center; min-height: 44px; margin-top: 10px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); font-size: .84rem; font-weight: 800; }
+.fold-toggle:hover { border-color: var(--text); }
+.rank { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; counter-reset: rank; }
+.rank li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; counter-increment: rank; font-size: .88rem; }
+.rank-name { font-weight: 700; overflow-wrap: anywhere; }
+.rank-name::before { content: counter(rank) ". "; color: var(--muted); font-weight: 800; }
+.rank-amount { font: 700 .84rem var(--font-num); color: var(--muted); white-space: nowrap; }
+.rank-bar { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--chip); position: relative; overflow: hidden; }
+.rank-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--share, 0) * 100%); border-radius: inherit;
+  background: var(--amber); }
+.mini-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.mini-row { width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-height: 56px;
+  padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; border-radius: 0;
+  text-decoration: none; color: inherit; }
+.mini-list li:last-child .mini-row { border-bottom: 0; }
+.mini-row:hover { background: var(--sunk); }
+/* El nombre conserva al menos 190px: si la etiqueta no cabe al lado, baja a su propia línea en vez de partir el código. */
+.mini-name { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 190px; }
+.mini-name > span { display: grid; min-width: 0; }
+.mini-name strong { font-size: .88rem; overflow-wrap: break-word; }
+.mini-row > .pill { margin-left: auto; }
+.mini-name small { font: 600 .72rem var(--font-num); color: var(--muted); }
+.thumb { width: 40px; height: 40px; flex: none; border-radius: 10px; }
+
+/* ---------- Pedidos ---------- */
+/* .order es la tarjeta de las órdenes de compra; .order-row, la fila de un pedido del chat. */
+.order { display: grid; gap: 10px; padding: 14px; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); position: relative; overflow: hidden; min-width: 0; }
+.order::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--line-strong); }
+.order[data-status="pendiente"]::before { background: var(--amber); }
+.order[data-status="confirmado"]::before { background: var(--info); }
+.order[data-status="entregado"]::before { background: var(--success); }
+.order[data-status="cancelado"]::before, .order[data-status="vencido"]::before { background: var(--danger); }
+.order[data-status="cancelado"], .order[data-status="vencido"] { background: var(--surface); }
+.order-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.order-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.order-code { font: 800 1.02rem var(--font-num); letter-spacing: .02em; }
+.order-total { display: grid; justify-items: end; text-align: right; }
+.order-total span { font-size: .7rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.order-total strong { font: 800 1.12rem var(--font-num); font-variant-numeric: tabular-nums; }
+.order-list { display: grid; gap: 8px; }
+.order-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 14px 12px 16px; box-shadow: none; }
+.order-row > .order-review, .order-row > .order-actions, .order-row > .order-detail { grid-column: 1 / -1; }
+.order-main { display: grid; gap: 4px; min-width: 0; }
+.order-items { font-size: .86rem; font-weight: 600; color: var(--text-2); overflow-wrap: anywhere; }
+.order-side { display: grid; justify-items: end; align-content: start; gap: 6px; text-align: right; }
+.order-amount { font: 800 1.05rem var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.order-row .order-when { padding: 0; background: none; font-size: .82rem; }
+.order-row .order-when.is-urgent { background: none; }
+.order-detail summary { min-height: 40px; display: flex; align-items: center; font-size: .82rem; font-weight: 800; color: var(--text-2);
+  cursor: pointer; }
+.order-detail[open] { display: grid; gap: 8px; }
+.order-when { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--sunk);
+  font-size: .86rem; font-weight: 800; }
+.order-when.is-urgent { background: var(--amber-soft); color: var(--warning); }
+.order-review { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px dashed var(--warning);
+  color: var(--warning); font-size: .84rem; font-weight: 800; }
+.order-review span { display: flex; gap: 6px; align-items: center; }
+.order-review .icon { width: 16px; height: 16px; }
+.order-lines { list-style: none; margin: 0; padding: 0; display: grid; }
+.order-lines li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0;
+  border-bottom: 1px solid var(--line); font-size: .88rem; }
+.order-lines li:last-child { border-bottom: 0; }
+.line-what { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.line-what .thumb { width: 34px; height: 34px; border-radius: 8px; }
+.line-what > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.line-what b { font-weight: 900; white-space: nowrap; }
+.line-what em { font-style: normal; overflow-wrap: anywhere; }
+.line-what small { font: 600 .72rem var(--font-num); color: var(--muted); }
+.line-sub { font: 700 .86rem var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.order-note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-left: 3px solid var(--amber);
+  background: var(--amber-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: .86rem; font-weight: 700;
+  overflow-wrap: anywhere; }
+.order-note .icon { width: 18px; height: 18px; margin-top: 1px; }
+.order-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: .76rem; font-weight: 600; color: var(--muted); }
+.order-meta a { font-weight: 800; color: var(--text-2); }
+.order-history summary { min-height: 36px; display: flex; align-items: center; font-size: .8rem; font-weight: 800; color: var(--text-2);
+  cursor: pointer; }
+.order-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.order-actions .primary { flex: 1 1 140px; }
+.order-row .order-actions .primary { flex: 0 1 auto; }
+.order-grid { display: grid; gap: 12px; align-items: start; }
+
+/* ---------- Ventas ---------- */
+.filter-fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.filter-fold summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer;
+  font-weight: 800; list-style: none; }
+.filter-fold summary::-webkit-details-marker { display: none; }
+.filter-fold summary::after { content: ""; margin-left: 4px; width: 8px; height: 8px; border: solid var(--muted); border-width: 0 2px 2px 0;
+  transform: rotate(45deg); transition: transform .15s; }
+.filter-fold[open] summary::after { transform: rotate(225deg); }
+.filter-fold summary small { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--muted); }
+.filter-fold .filters { padding: 4px 16px 16px; }
+.field.compact { flex: 1 1 140px; }
+.field.compact input, .field.compact select { min-height: 44px; }
+.sales-grid { display: grid; gap: 16px; align-items: start; }
+/* Las transacciones usan la tabla del inventario (.stock-table, en tendero-bodega.css); aquí, solo sus celdas propias. */
+.tx-total { display: grid; justify-items: end; gap: 2px; }
+.tx-total small { font: 600 .72rem var(--font); color: var(--muted); }
+.tx-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+
+/* ---------- Conversaciones ---------- */
+.chat-layout { display: grid; gap: 16px; align-items: start; min-width: 0; }
+.chat-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.chat-item { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; padding: 12px; text-align: left;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.chat-item[aria-current="true"] { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber) inset; }
+.chat-avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--chip);
+  font: 800 .8rem var(--font-num); grid-row: span 2; }
+.chat-avatar.is-live { box-shadow: 0 0 0 3px var(--success); }
+.chat-item { color: inherit; text-decoration: none; }
+.chat-item-body { display: grid; gap: 4px; min-width: 0; }
+.chat-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.chat-top strong { font: 800 .92rem var(--font-num); }
+.chat-when { font: 600 .74rem var(--font-num); color: var(--muted); white-space: nowrap; }
+.chat-preview { grid-column: 2 / -1; font-size: .84rem; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.chat-tags { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.chat-tags .pill { font-size: .7rem; padding: 2px 8px 2px 6px; }
+.chat-detail { display: grid; gap: 12px; min-width: 0; }
+.chat-detail-head { display: flex; align-items: flex-start; gap: 10px; }
+.chat-detail-title { flex: 1; min-width: 0; }
+.chat-detail-title h2 { font-size: 1.1rem; font-weight: 900; }
+.chat-alerts { display: grid; gap: 8px; }
+/* En el celular el historial se acorta (44vh) para que «Tomar el chat» y las demás acciones queden a la vista. */
+.transcript { list-style: none; margin: 0; padding: 12px; display: grid; gap: 10px; max-height: 44vh; overflow-y: auto; overscroll-behavior: contain;
+  border-radius: 14px; background: var(--sunk); }
+.bubble { display: grid; gap: 4px; max-width: 86%; padding: 10px 12px; border-radius: 16px; font-size: .9rem; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble small { font: 600 .7rem var(--font-num); color: var(--muted); white-space: normal; }
+.bubble.from-customer { justify-self: end; background: #EAF3ED; color: #173B4A; border-bottom-right-radius: 4px; }
+.bubble.from-customer small { color: #4A6A5C; }
+.bubble.from-agent { justify-self: start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.bubble.from-staff { justify-self: start; background: var(--amber-soft); border: 1px solid var(--amber); border-bottom-left-radius: 4px; }
+.bubble.is-system { justify-self: center; max-width: 100%; background: transparent; border: 1px dashed var(--line-strong);
+  font-size: .8rem; color: var(--muted); text-align: center; }
+.bubble .who { display: flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); white-space: normal; }
+.bubble .who .icon { width: 14px; height: 14px; }
+.chat-orders { display: grid; gap: 8px; }
+.chat-orders:empty { display: none; }
+.chat-reply { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.chat-reply textarea { min-height: 72px; }
+.chat-reply .primary { justify-self: end; }
+.chat-actions:empty { display: none; }
+.ban-message { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--sunk); font: 500 .84rem var(--font-num);
+  overflow-wrap: anywhere; border-left: 3px solid var(--danger); }
+.chat-placeholder { display: none; }
+.chat-ban-box { flex-basis: 100%; }
+.chat-ban-box summary { cursor: pointer; font-weight: 800; color: var(--danger); padding: 8px 0; }
+.chat-ban { display: grid; gap: 8px; }
+.chat-ban .danger { justify-self: start; }
+
+/* ---------- Tableta ---------- */
+@media (min-width: 640px) {
+  .order-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .day-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Las acciones van debajo del texto, no en una tercera columna que estrecharía el título. */
+  .inbox-item { grid-template-columns: auto minmax(0, 1fr); }
+  .inbox-item > .pill { align-self: start; }
+  .inbox-actions { grid-column: 2; }
+  .order-row > .order-actions { grid-column: 1; }
+  .order-row > .order-detail { grid-column: 1 / -1; }
+  .money { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .side-stack { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 900px) {
+  .sales-grid { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); }
+}
+/* Conversaciones: lista y detalle lado a lado cuando hay espacio; en el celular, el detalle reemplaza la lista. */
+@media (max-width: 899px) {
+  .chat-layout[data-open="true"] .chat-list-wrap { display: none; }
+  #view-conversaciones:has(.chat-layout[data-open="true"]) > .toolbar { display: none; }
+}
+@media (min-width: 900px) {
+  .transcript { max-height: 60vh; }
+  .chat-layout { grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); }
+  .chat-list-wrap { position: sticky; top: 96px; max-height: calc(100vh - 120px); overflow-y: auto; padding-right: 4px; }
+  .chat-back { display: none; }
+  .chat-layout:not([data-open="true"]) .chat-placeholder { display: grid; }
+  .chat-placeholder { align-content: center; min-height: 320px; }
+}
+@media (min-width: 1024px) {
+  .today-grid { grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); }
+}
+@media (min-width: 1400px) {
+  .order-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

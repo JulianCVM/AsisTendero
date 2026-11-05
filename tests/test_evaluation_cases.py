@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from asistendero import evaluate
-from asistendero.catalog import MockCatalog
-from asistendero.grok import Decision
-from asistendero.seed import create_mock_db
+from asistendero.agente.modelo.grok import Decision
+from asistendero.datos.seed import create_mock_db
+from asistendero.evaluacion import evaluate
+from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 def call(name, **arguments):

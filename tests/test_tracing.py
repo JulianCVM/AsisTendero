@@ -5,12 +5,13 @@ from threading import Thread
 
 import pytest
 
-from asistendero import evaluate, visual
-from asistendero.catalog import MockCatalog
-from asistendero.grok import Decision, ModelError
-from asistendero.seed import create_mock_db
-from asistendero.sessions import SessionStore
-from asistendero.tracing import run_traced
+from asistendero.agente.conversacion.sessions import SessionStore
+from asistendero.agente.modelo.grok import Decision, ModelError
+from asistendero.datos.seed import create_mock_db
+from asistendero.entregas.visor import visual
+from asistendero.evaluacion import evaluate
+from asistendero.observabilidad.tracing import run_traced
+from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 PVC = {"sku": "PVC-050", "name": "Tubo PVC presión para agua", "variant": "1/2 pulgada", "unit": "metro",
@@ -115,6 +116,12 @@ def test_trace_records_model_failure_with_code_and_unknown_cost():
 
 def test_trace_shows_server_reminders_when_grok_answers_without_required_steps():
     events = []
+    cod = {"sku": "COD-050", "name": "Codo PVC presión 90°", "variant": "1/2 pulgada", "unit": "unidad",
+           "price_cop": 1800, "stock": 40, "updated_at": "2026-10-15T00:00:00-05:00"}
+    two_matches = lambda name, arguments: {
+        "status": "ok", "data": {"results": [{"matches": [PVC, cod], "nearby": []}]},
+        "error": None, "source": "mock_sqlite", "observed_at": "2026-10-20T12:00:00+00:00",
+    }
     steps = iter([
         Decision("respond", "productos", None, None, "El PVC está a $1.000."),
         Decision("call_tool", "productos", "buscar_productos",
@@ -123,7 +130,7 @@ def test_trace_shows_server_reminders_when_grok_answers_without_required_steps()
         Decision("respond", "productos", None, None, ""),
         Decision("respond", "productos", None, None, ""),
     ])
-    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, executor, lambda *_: next(steps))
+    result = run_traced("Necesito 2 metros de PVC de 1/2 para agua", events.append, two_matches, lambda *_: next(steps))
 
     reminders = [event for event in events if event["type"] == "route" and event["details"].get("aviso")]
     assert len(reminders) == 2
@@ -132,7 +139,7 @@ def test_trace_shows_server_reminders_when_grok_answers_without_required_steps()
     assert [item.get("error", {}).get("code") for item in requests[3] if item["estado"] == "aviso"] == [
         "SEARCH_REQUIRED", "QUOTE_REQUIRED",
     ]
-    # Cada aviso se envía una vez: tras el segundo «respond» el servidor no insiste ni cotiza por su cuenta.
+    # Cada aviso se envía una vez: tras el segundo «respond» el servidor no insiste ni cotiza con varios matches.
     assert events[-1]["details"]["tools_executed"] == ["buscar_productos"]
     assert events[-1]["details"]["model_calls"] == 4
     assert "$1.000" not in result["respuesta"]
@@ -154,7 +161,6 @@ def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
         "Necesito 2 metros de tubo PVC de 1/2 para agua": [
             call("buscar_productos", items=[{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
             call("consultar_disponibilidad", sku="PVC-050"),
-            call("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
             finish(),
         ],
         "Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg": [
@@ -191,12 +197,10 @@ def test_evaluate_cases_runs_all_ten_s2_scenarios_without_live_grok(tmp_path):
         "Necesito 20 metros de tubo PVC de 1/2 para agua": [
             call("buscar_productos", items=[{"text": "20 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]),
             call("consultar_disponibilidad", sku="PVC-050"),
-            call("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]),
             finish(),
         ],
         "Busco un taladro de 20 V": [
             call("buscar_productos", items=[{"text": "taladro de 20 V", "product": "taladro", "measure": "20 V"}]),
-            finish(),
         ],
         # Desde S3 el horario sale de consultar_info_tienda.
         "Hola, ¿están atendiendo en este momento?": [
@@ -230,8 +234,6 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
         Decision("call_tool", "productos", "buscar_productos",
                  {"items": [{"text": "2 metros de tubo PVC de 1/2 para agua", "product": "tubo", "material": "PVC", "measure": "1/2 pulgada", "use": "agua"}]}, "",
                  "grok-4.20-0309-non-reasoning", 80, 15),
-        Decision("call_tool", "productos", "calcular_cotizacion_informativa",
-                 {"lines": [{"sku": "PVC-050", "quantity": 2}]}, "", "grok-4.20-0309-non-reasoning", 90, 15),
         Decision("respond", "productos", None, None, "", "grok-4.20-0309-non-reasoning", 100, 20),
         # Pasos para F-01-CATALOG_UNAVAILABLE:
         Decision("call_tool", "productos", "buscar_productos",
@@ -251,6 +253,7 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
     assert report["skipped_ids"] == ["S2-02"]
     assert [item["id"] for item in report["cases"]] == ["S2-01"]
     assert report["passed"] == 1 and report["total"] == 1
+    assert report["cases"][0]["events"][-1]["details"]["model_calls"] == 2
 
     f_catalog, f_model, _ = report["controlled_failures"]
     assert f_catalog["id"] == "F-01-CATALOG_UNAVAILABLE"
@@ -277,7 +280,7 @@ def test_evaluate_supports_skip_and_controlled_failures_without_live_grok(tmp_pa
 
 
 def test_evaluate_cli_exits_without_calling_grok_when_live_flag_is_absent(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["asistendero.evaluate"])
+    monkeypatch.setattr("sys.argv", ["asistendero.evaluacion.evaluate"])
     assert evaluate.main() == 0
     assert "Usa --live" in capsys.readouterr().out
 
@@ -370,6 +373,46 @@ def test_visual_server_keeps_the_session_on_the_server(monkeypatch, tmp_path):
         assert status == 200 and json.loads(body) == {"avisos": ["Pasaron 5 minutos sin confirmar el pedido P-ABC123."]}
         assert json.loads(get(f"/api/avisos?sesion={session_id}")[1]) == {"avisos": []}
         assert get("/api/avisos?sesion=../../etc/passwd")[0] == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_visual_server_reuses_the_connection_only_after_reading_a_rejected_body(tmp_path):
+    # Con HTTP/1.1 la conexión sigue abierta: un cuerpo sin leer se leería como la siguiente solicitud.
+    server = visual.make_server(0, SessionStore(tmp_path / "sessions.sqlite3"))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host = {"Host": f"127.0.0.1:{server.server_port}"}
+    body = json.dumps({"consulta": "GET /api/secreto HTTP/1.1"})
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            connection.request("POST", "/api/trace", body, {**host, "Content-Type": "text/plain"})
+        except PermissionError:
+            pytest.skip("Este entorno restringe conexiones a sockets locales")
+        rejected = connection.getresponse()
+        assert rejected.status == 415
+        rejected.read()
+        connection.request("POST", "/api/otra", body, {**host, "Content-Type": "application/json"})
+        missing = connection.getresponse()
+        assert missing.status == 404
+        missing.read()
+        connection.request("GET", "/api/harness", headers=host)
+        harness = connection.getresponse()
+        assert harness.status == 200 and "prompt_version" in json.loads(harness.read())
+        # Un cuerpo más largo que el límite no se lee: el servidor cierra la conexión en vez de reutilizarla.
+        # Se declara el largo sin mandarlo entero: con fotos el límite es de megas y el cliente seguiría enviando.
+        connection.putrequest("POST", "/api/trace", skip_host=True)
+        for name, value in {**host, "Content-Type": "application/json",
+                            "Content-Length": str(visual.MAX_BODY_BYTES + 1)}.items():
+            connection.putheader(name, value)
+        connection.endheaders(b"x" * 5000)
+        too_long = connection.getresponse()
+        assert too_long.status == 400 and too_long.getheader("Connection") == "close"
+        too_long.read()
+        connection.close()
     finally:
         server.shutdown()
         server.server_close()

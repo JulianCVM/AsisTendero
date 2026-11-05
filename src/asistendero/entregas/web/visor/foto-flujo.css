@@ -1,0 +1,83 @@
+/* Recorrido de una foto (foto-flujo.js). En escritorio, cuatro columnas: los carriles cliente, servidor y Grok, y la
+   columna de datos; cada etapa ocupa su fila y las flechas van en un SVG encima. En celular, una lista vertical. */
+.photo-panel { padding: 22px 20px 20px; }
+.photo-panel > .panel-head p { max-width: 70ch; }
+.photo-flow { position: relative; margin-top: 18px; }
+.photo-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pf-link path { fill: none; stroke: var(--chip-hover-line); stroke-width: 1.6; }
+.pf-link text { fill: var(--muted); font: 800 11px "Nunito Sans", sans-serif; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; }
+.pf-link[data-walked] path { stroke: var(--amber-line); stroke-width: 2.6; }
+.pf-link[data-walked] text { fill: var(--ink); }
+.pf-arrow { fill: var(--chip-hover-line); }
+.pf-data-link { fill: none; stroke: var(--success-line); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.pf-data-link[data-used] { stroke: var(--success); stroke-width: 2.2; }
+
+.photo-rows {
+  display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, .85fr);
+  column-gap: clamp(22px, 3vw, 48px); row-gap: 38px; margin: 0; padding: 0; list-style: none;
+}
+.pf-head, .pf-row { display: contents; }
+.pf-lane-title {
+  grid-row: 1; display: grid; gap: 2px; padding: 8px 10px; border-bottom: 3px solid var(--line);
+  font-size: .72rem; color: var(--muted);
+}
+.pf-lane-title strong { color: var(--ink); font-size: .82rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.pf-lane-title[data-lane="cliente"] { border-bottom-color: var(--chip-hover-line); }
+.pf-lane-title[data-lane="servidor"] { border-bottom-color: var(--amber-line); }
+.pf-lane-title[data-lane="grok"] { border-bottom-color: var(--brand); }
+.pf-lane-title[data-lane="datos"] { border-bottom-color: var(--success-line); }
+
+.pf-card {
+  position: relative; z-index: 1; display: grid; align-content: start; gap: 5px; min-width: 0; padding: 11px 12px;
+  border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 12px; background: var(--surface-2);
+  box-shadow: var(--shadow); color: var(--ink);
+}
+.pf-card[data-lane="cliente"] { border-left-color: var(--chip-hover-line); }
+.pf-card[data-lane="servidor"] { border-left-color: var(--amber-line); }
+.pf-card[data-lane="grok"] { border-left-color: var(--brand); }
+.pf-top { display: flex; align-items: center; gap: 7px; }
+.pf-step {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink);
+  color: var(--paper); font-size: .7rem; font-weight: 900;
+}
+.pf-lane { color: var(--amber-deep); font-size: .62rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.pf-mark { margin-left: auto; font-weight: 900; color: var(--muted); }
+.pf-title { margin: 0; font-size: .88rem; font-weight: 900; line-height: 1.2; }
+.pf-code { color: var(--muted); font: .68rem var(--font-mono); overflow-wrap: anywhere; }
+.pf-does { margin: 0; color: var(--text-2); font-size: .74rem; line-height: 1.45; }
+.pf-exit { margin: 0; padding: 6px 8px; border: 1px dashed var(--danger-line); border-radius: 8px; color: var(--text-2); font-size: .7rem; line-height: 1.4; }
+.pf-exit code { font: .64rem var(--font-mono); overflow-wrap: anywhere; }
+.pf-state { margin: 2px 0 0; padding-top: 6px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: .74rem; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; }
+.pf-card[data-state="done"] { border-color: var(--success-line); }
+.pf-card[data-state="done"] .pf-mark, .pf-card[data-state="done"] .pf-state { color: var(--success); }
+.pf-card[data-state="stopped"] { border-color: var(--danger-line); background: var(--danger-soft); }
+.pf-card[data-state="stopped"] .pf-mark, .pf-card[data-state="stopped"] .pf-state { color: var(--danger); }
+.pf-card[data-state="skipped"] { opacity: .72; }
+.pf-card[data-state="waiting"] .pf-mark { color: var(--amber-deep); }
+
+.pf-store {
+  position: relative; z-index: 1; align-self: center; display: grid; gap: 2px; min-width: 0; padding: 8px 10px;
+  border: 1px dashed var(--success-line); border-radius: 10px; background: var(--surface-2); font-size: .72rem;
+}
+.pf-store strong { font-size: .78rem; }
+.pf-store code { color: var(--muted); font: .64rem var(--font-mono); overflow-wrap: anywhere; }
+.pf-store-mode { color: var(--success); font-size: .62rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.pf-store-note { color: var(--muted); }
+.pf-store[data-used] { border-style: solid; border-color: var(--success); background: var(--success-soft); }
+
+.photo-stores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 22px 0 0; padding: 0; list-style: none; }
+.photo-stores li { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); font-size: .74rem; }
+.photo-stores code { color: var(--muted); font: .66rem var(--font-mono); overflow-wrap: anywhere; }
+.photo-verdict { margin: 14px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+@media (max-width: 760px) {
+  .photo-panel { padding: 18px 14px; }
+  .photo-panel > .panel-head { flex-direction: column; }
+  .photo-links, .pf-head { display: none; }
+  .photo-rows { grid-template-columns: 1fr; row-gap: 0; }
+  .pf-row { display: grid; gap: 6px; }
+  .pf-row:not(:last-child)::after { content: ""; display: block; width: 2px; height: 14px; margin-left: 22px; background: var(--line); }
+  .pf-card, .pf-store { grid-column: auto !important; grid-row: auto !important; }
+  .pf-store { margin-left: 18px; }
+  .photo-stores { grid-template-columns: 1fr; }
+}

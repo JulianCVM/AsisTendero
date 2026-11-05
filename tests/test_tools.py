@@ -5,13 +5,14 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MockCatalog
-from asistendero.executor import catalog_executor
-from asistendero.graph import build_graph
-from asistendero.grok import Decision
-from asistendero.seed import create_mock_db
-from asistendero import tools
-from asistendero.tools import BOGOTA, execute_tool
+from asistendero.agente.flujo.graph import build_graph
+from asistendero.agente.herramientas.executor import catalog_executor
+from asistendero.agente.herramientas.tools import execute_tool
+from asistendero.agente.modelo.grok import Decision
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda import reloj
+from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda.reloj import BOGOTA
 
 
 @pytest.fixture
@@ -313,7 +314,7 @@ def test_graph_integration_with_real_tools_across_s2_scenarios(catalog):
     (datetime(2026, 10, 25, 10, 0, tzinfo=BOGOTA), False),   # domingo
 ])
 def test_store_hours_say_if_open_with_the_server_clock(catalog, monkeypatch, now, open_now):
-    monkeypatch.setattr(tools, "local_now", lambda: now)
+    monkeypatch.setattr(reloj, "local_now", lambda: now)
     response = execute_tool("consultar_info_tienda", {"tema": "horario"}, catalog=catalog)
     assert response["status"] == "ok"
     assert response["data"]["abierto_ahora"] is open_now
@@ -354,7 +355,7 @@ def test_explore_category_lists_categories_and_products_without_prices(catalog):
 
 
 def test_graph_answers_store_questions_with_real_tools(catalog, monkeypatch):
-    monkeypatch.setattr(tools, "local_now", lambda: datetime(2026, 10, 25, 10, 0, tzinfo=BOGOTA))
+    monkeypatch.setattr(reloj, "local_now", lambda: datetime(2026, 10, 25, 10, 0, tzinfo=BOGOTA))
     result = build_graph(
         catalog_executor(catalog),
         Script(tool("consultar_info_tienda", tema="horario"), say("")),

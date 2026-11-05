@@ -1,0 +1,169 @@
+/* Demo autoejecutada de /inicio: el celular, «Qué comprobó el asistente» y lo que llega al panel del tendero. */
+
+/* ---------- Aviso: una etiqueta visible y la explicación corta plegada ---------- */
+.demo-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
+.demo-tag { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 999px;
+  border: 1px dashed var(--line-strong); background: var(--glass); color: var(--text); font-size: .86rem; font-weight: 900; }
+.demo-tag .icon { width: 18px; height: 18px; color: var(--info); }
+.demo-about { color: var(--text-2); font-size: .92rem; }
+.demo-about summary { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; cursor: pointer; font-weight: 800;
+  color: var(--text); text-decoration: underline 2px var(--amber); text-underline-offset: 5px; }
+/* La explicación flota bajo la etiqueta (anclada a .demo-notice): abrirla no empuja la demo ni la página. Se cierra
+   con su resumen, con Escape o tocando fuera (inicio.js). Sin JS sigue siendo un <details> que se lee igual. */
+.demo-section .section-head { position: relative; z-index: 4; }
+.demo-notice { position: relative; }
+.demo-about p { max-width: 60ch; padding: 4px 4px 2px; }
+.demo-about[data-float] p { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: min(60ch, 100%);
+  max-width: none; padding: 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow); color: var(--text-2); }
+
+/* ---------- Controles de la demo: fila de casos (se desplaza en pantallas angostas) y botones ---------- */
+.demo-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 22px; }
+.scenario-rail { flex: 1 1 100%; min-width: 0; }
+/* El borde difuminado aparece solo del lado donde quedan casos (inicio-demo.js marca data-fade). */
+.scenario-rail[data-fade~="start"] { --fade-start: 36px; }
+.scenario-rail[data-fade~="end"] { --fade-end: 36px; }
+.scenario-list { display: flex; gap: 8px; overflow-x: auto; padding: 4px; margin: -4px; scrollbar-width: none;
+  scroll-snap-type: x proximity; max-width: calc(100% + 8px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--fade-start, 0px), #000 calc(100% - var(--fade-end, 0px)), transparent); }
+.scenario-list::-webkit-scrollbar { display: none; }
+.scenario { position: relative; flex: none; min-height: 44px; padding: 0 16px; border-radius: 999px; overflow: hidden;
+  font-weight: 800; font-size: .88rem; color: var(--text-2); background: var(--glass); border: 1px solid var(--glass-line);
+  box-shadow: 0 0 0 1px var(--glass-ring); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  scroll-snap-align: start; transition: background .25s, color .25s, transform .2s var(--ease); }
+.scenario:hover { color: var(--text); transform: translateY(-1px); }
+.scenario[aria-pressed="true"] { background: var(--amber); color: var(--on-amber); border-color: transparent; }
+.scenario[aria-pressed="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: var(--on-amber); opacity: .55; transform: scaleX(var(--progress, 0)); transform-origin: left;
+  transition: transform .4s linear; }
+.demo-buttons { display: flex; align-items: center; gap: 8px; }
+.demo-count { min-width: 6.5em; margin-right: 4px; color: var(--text-2); font-family: var(--font-num); font-size: .9rem; font-weight: 800; }
+@media (max-width: 479px) {
+  .demo-buttons { width: 100%; }
+  .demo-count { margin-right: auto; }
+}
+
+/* ---------- Escenario: celular primero; los paneles al lado según el ancho ---------- */
+/* minmax(0, 1fr): el texto que se escribe en el celular no puede ensanchar la columna ni la página. */
+.demo-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.demo-stage[data-pane="inside"] #pane-panel, .demo-stage[data-pane="panel"] #pane-inside { display: none; }
+.pane-switch { display: flex; gap: 4px; justify-self: center; padding: 4px; border-radius: 999px; background: var(--glass);
+  border: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.pane-tab { position: relative; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: none;
+  font-weight: 800; font-size: .88rem; color: var(--text-2); transition: background .25s, color .25s; }
+.pane-tab[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.pane-tab.has-news::after { content: "•"; position: absolute; top: 2px; right: 8px; color: var(--amber); font-size: 1.2rem; }
+
+@media (min-width: 760px) {
+  .demo-stage { grid-template-columns: 340px 1fr; align-items: start; }
+  .demo-stage .phone { grid-row: 1 / span 2; }
+  .pane-switch { display: none; }
+  .demo-stage[data-pane] #pane-panel, .demo-stage[data-pane] #pane-inside { display: flex; }
+}
+@media (min-width: 1140px) {
+  .demo-stage { grid-template-columns: 1fr 352px 1fr; grid-template-areas: "inside phone panel"; }
+  .demo-stage .phone { grid-area: phone; grid-row: auto; }
+  #pane-inside { grid-area: inside; }
+  #pane-panel { grid-area: panel; }
+}
+
+/* ---------- Celular ---------- */
+.phone { width: min(352px, 100%); margin: 0 auto; padding: 11px; border-radius: 48px;
+  background: linear-gradient(150deg, #24505F, #0B1A20 60%); box-shadow: 0 30px 80px rgba(23, 59, 74, .35),
+  inset 0 0 0 1.5px rgba(255, 255, 255, .14), inset 0 0 0 6px #0B1A20; }
+.phone-body { display: flex; flex-direction: column; height: 620px; border-radius: 38px; overflow: hidden; contain: layout;
+  background: radial-gradient(circle at 20% 10%, var(--amber-soft), transparent 45%), var(--bg); }
+.phone-status { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 10px 22px 4px;
+  font-family: var(--font-num); font-size: .72rem; font-weight: 700; }
+.phone-status span:last-child { text-align: right; }
+.phone-notch { width: 92px; height: 24px; border-radius: 999px; background: #0B1A20; }
+/* Alto fijo y una sola línea: «escribiendo…» o un nombre largo no mueven el chat. */
+.phone-head { flex: none; height: 58px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line);
+  background: var(--glass-strong); }
+.phone-head img { border-radius: 50%; background: var(--surface); }
+.phone-head div { display: grid; line-height: 1.15; min-width: 0; margin-right: auto; }
+.phone-head strong { font-size: .92rem; }
+.phone-head strong, .phone-head small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.phone-head small { color: var(--success); font-size: .74rem; font-weight: 700; }
+.phone-head small.is-busy { color: var(--muted); }
+.sim-badge { flex: none; padding: 3px 8px; border-radius: 999px; border: 1px dashed var(--line-strong); color: var(--muted);
+  font-size: .66rem; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.phone-thread { flex: 1; list-style: none; margin: 0; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; scrollbar-width: thin; }
+.msg { max-width: 86%; display: grid; gap: 3px; animation: msg-in .45s var(--ease) both; }
+.msg-who { font-size: .66rem; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.msg-text { padding: 9px 12px; border-radius: 16px; font-size: .88rem; line-height: 1.4; overflow-wrap: anywhere; }
+.msg-check { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--success); font-size: .7rem; font-weight: 800; }
+.msg-check .icon { width: 13px; height: 13px; stroke-width: 2.6; }
+.from-customer { align-self: flex-end; justify-items: end; }
+.from-customer .msg-text { background: var(--success-soft); border-bottom-right-radius: 5px; }
+.from-agent { align-self: flex-start; }
+.from-agent .msg-text { background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.from-staff { align-self: flex-start; }
+.from-staff .msg-text { background: var(--amber-soft); border: 1px solid var(--amber); border-bottom-left-radius: 5px; }
+.from-notice { align-self: center; max-width: 92%; justify-items: center; }
+.from-notice .msg-text { display: flex; gap: 6px; align-items: center; padding: 6px 12px; border-radius: 12px;
+  border: 1px dashed var(--danger); color: var(--danger); background: var(--danger-soft); font-size: .78rem; font-weight: 800; }
+.from-notice .icon { width: 15px; height: 15px; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(12px) scale(.96); } }
+.typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; border-radius: 16px; background: var(--surface-2);
+  border: 1px solid var(--line); animation: msg-in .3s var(--ease) both; }
+.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: .15s; }
+.typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.phone-composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px 16px; border-top: 1px solid var(--line);
+  background: var(--glass-strong); }
+.composer-field { flex: 1; min-width: 0; min-height: 40px; display: flex; align-items: center; padding: 0 14px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); font-size: .86rem; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; }
+.composer-field.is-typing { color: var(--text); }
+.composer-field.is-typing::after { content: ""; width: 2px; height: 1.1em; margin-left: 2px; background: var(--text);
+  animation: caret .8s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.composer-send { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--amber);
+  color: var(--on-amber); transition: transform .2s var(--ease); }
+.composer-send.is-sending { transform: scale(.86) rotate(-12deg); }
+
+/* ---------- Paneles al lado del celular ---------- */
+/* Cada panel es una caja de alto fijo y su lista se desplaza dentro: cambiar de vista o de caso no mueve lo que sigue.
+   Entre 760 y 1139 px los dos paneles van uno sobre otro junto al celular y se reparten su alto (642 px), así el de
+   arriba no empuja al de abajo. Desde 1140 px cada uno tiene su columna y mide lo que su contenido. */
+.pane { display: flex; flex-direction: column; gap: 12px; height: 340px; padding: 18px; border-radius: 24px; contain: layout; }
+@media (min-width: 760px) { .pane { height: calc((642px - 16px) / 2); } }
+@media (min-width: 1140px) { .pane { height: auto; align-self: start; } }
+.pane h3 { display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 900; }
+.pane h3 .icon { color: var(--warning); }
+.pane-empty { color: var(--muted); font-size: .9rem; }
+.inside-list, .mirror-list { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; gap: 8px; }
+/* «Por dentro» crece con cada paso: tiene su propio desplazamiento para no estirar la demo más que el celular. */
+.inside-list, .mirror-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 2px 4px 2px 2px; }
+@media (min-width: 1140px) {
+  .inside-list { max-height: 560px; }
+  .mirror-list { max-height: 560px; }
+}
+.step { position: relative; display: grid; gap: 4px; padding: 10px 12px 10px 14px; border-radius: 14px;
+  background: var(--glass-strong); border: 1px solid var(--line); animation: step-in .5s var(--ease) both;
+  transition: border-color .3s, box-shadow .3s; }
+.step::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--line-strong); }
+.step.is-now { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
+.step.is-now::before { background: var(--amber); }
+.step p { font-size: .86rem; color: var(--text-2); }
+.step code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .76rem; font-weight: 700;
+  color: var(--text); overflow-wrap: anywhere; }
+@keyframes step-in { from { opacity: 0; transform: translateX(-14px); } }
+.mirror { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: start; padding: 12px; border-radius: 16px;
+  background: var(--glass-strong); border: 1px solid var(--line); animation: step-in .5s var(--ease) both; }
+.mirror.flash { animation: flash 1.1s var(--ease); }
+@keyframes flash { 0% { box-shadow: 0 0 0 0 var(--amber); } 40% { box-shadow: 0 0 0 6px var(--amber-soft); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mirror > .icon { grid-row: span 3; width: 36px; height: 36px; padding: 8px; border-radius: 12px; background: var(--chip); }
+.mirror strong { font-size: .92rem; }
+.mirror p { font-size: .82rem; color: var(--text-2); }
+.pill { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 2px 9px; border-radius: 999px;
+  font-size: .74rem; font-weight: 800; border: 1px solid transparent; }
+.pill.ok { background: var(--success-soft); color: var(--success); }
+.pill.warn { background: var(--warning-soft); color: var(--warning); }
+.pill.info { background: var(--info-soft); color: var(--info); }
+.pill.danger { background: var(--danger-soft); color: var(--danger); }

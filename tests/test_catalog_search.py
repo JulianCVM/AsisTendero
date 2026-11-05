@@ -2,9 +2,9 @@ import sqlite3
 
 import pytest
 
-from asistendero.catalog import MAX_MATCHES, MockCatalog, tokens
-from asistendero.search import ProductQuery
-from asistendero.seed import create_mock_db
+from asistendero.datos.seed import create_mock_db
+from asistendero.tienda.catalogo.catalog import MAX_MATCHES, MockCatalog, tokens
+from asistendero.tienda.catalogo.search import ProductQuery
 
 
 @pytest.fixture
@@ -82,18 +82,24 @@ def test_database_facts_and_business_scope_remain_server_controlled(catalog):
 
 
 def test_measures_separate_sizes_from_quantities():
-    from asistendero.measures import measures
+    from asistendero.tienda.catalogo.measures import measures
 
     assert measures("Necesito tornillo para madera 1/4 x 2 pulgadas") == {"1/4x2", "2in"}
     assert measures("2 tornillos de 1/4 x 1") == {"2", "1/4x1"}
     assert measures("2 bisagras de 3 1/2\"") == {"2", "3-1/2in"}
     assert measures("tubo PVC de media pulgada") == {"1/2in"}
     assert measures("cemento gris de 50 kg") == {"50kg"}
+    # Paráfrasis del 31-10: en letras o con punto de miles es la misma medida que en cifras.
+    assert measures("brochas de tres pulgadas") == measures("brochas de 3 pulgadas") == {"3in"}
+    assert measures("deme una libra") == {"1lb"}
+    assert measures("tanque de mil litros") == measures("tanque de 1.000 litros") == measures("1000 litros") == {"1000l"}
+    # Un decimal no es un punto de miles, y una palabra que no es número no se toca.
+    assert measures("gaseosa de 1.5 litros") == {"1.5l"} and measures("unas pulgadas") == set()
 
 
 def _selected(catalog, message, **item):
-    from asistendero.tools import execute_tool
-    from asistendero.validation import grounded_products, validate_request
+    from asistendero.agente.herramientas.tools import execute_tool
+    from asistendero.agente.reglas.validation import grounded_products, validate_request
 
     arguments = validate_request("buscar_productos", {"items": [item]}, message, [])
     response = execute_tool("buscar_productos", arguments, catalog=catalog)
@@ -126,7 +132,7 @@ def test_large_catalog_selects_only_the_variant_the_message_describes(catalog, m
 
 
 def test_large_catalog_is_fictional_and_keeps_s2_rows(catalog):
-    from asistendero.seed import PRODUCTS
+    from asistendero.datos.seed import PRODUCTS
 
     assert len(PRODUCTS) >= 350
     legacy = {row[0]: row[4:6] for row in PRODUCTS[:6]}
@@ -145,7 +151,7 @@ def test_plural_filter_covers_singular_variant(catalog):
 
 def test_with_two_items_an_attribute_must_be_in_its_own_phrase(catalog):
     # «gris» es del cemento: no puede filtrar el tubo aunque esté en el mensaje.
-    from asistendero.validation import validate_request
+    from asistendero.agente.reglas.validation import validate_request
 
     message = "Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg"
     arguments = validate_request("buscar_productos", {"items": [
@@ -158,8 +164,8 @@ def test_with_two_items_an_attribute_must_be_in_its_own_phrase(catalog):
 def test_with_two_items_each_attribute_is_backed_by_its_part_of_the_message(catalog):
     # C-08, corrida de regresión S4: Grok dejó «galón» solo en presentation; con dos artículos se descartaba y se
     # preguntaba la presentación que el cliente ya había dicho.
-    from asistendero.tools import execute_tool
-    from asistendero.validation import grounded_products, validate_request
+    from asistendero.agente.herramientas.tools import execute_tool
+    from asistendero.agente.reglas.validation import grounded_products, validate_request
 
     message = "Necesito 1 galón de pintura blanca de vinilo y 2 brochas de 3 pulgadas"
     arguments = validate_request("buscar_productos", {"items": [
@@ -179,7 +185,7 @@ def test_with_two_items_each_attribute_is_backed_by_its_part_of_the_message(cata
     ("manguera de 15 metros", "manguera de 15 metros"), ("2 galones de pintura vinilo", "galones pintura vinilo"),
 ])
 def test_a_quantity_said_in_the_text_does_not_search_for_a_measure(text, expected):
-    from asistendero.search import without_quantities
+    from asistendero.tienda.catalogo.search import without_quantities
 
     assert tokens(without_quantities(text)) == tokens(expected)
 
