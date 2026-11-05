@@ -37,8 +37,10 @@ COSTO POR TAREA (corrida 48, 345 tareas reales, costo informado por la API)
 - Las herramientas corren en el servidor sobre SQLite y no tienen costo de API.
 
 QUÉ FALLÓ Y QUÉ SE ARREGLÓ
-Casos que no pasaron en la corrida final (48):
-- X-22 (extremos): no dice «$13.800».
+Casos que no pasaron en la corrida final (48 sobre bef4913):
+- X-22 (extremos): no decía «$13.800» porque Grok inventó un SKU para el taladro inexistente y la validación abortaba
+  toda la cotización. Arreglado tras la corrida 48 mediante partición determinista de ítems y auto-cotización parcial
+  en servidor (validation.py, order_rules.py, tools.py y graph.py), con su prueba en tests/test_graph.py.
 Lo que destapó la corrida 45 (340/345 sobre df6ef33) y se arregló antes de la final, cada arreglo con una prueba que
 falla sin él:
 - F-10: la foto de referencia del tubo PVC era una válvula; la visión real dijo «válvula» y el agente respondió con
@@ -60,7 +62,6 @@ Lo que destapó la corrida 47 (343/345 sobre b552a2a) y se arregló antes de la 
 - H-02: con pintura en la lista, «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura y
   preguntó cuántas brochas. Ahora lo nuevo con su cantidad tiene que entrar al total pedido.
 Abierto:
-- X-22 («2 brochas de 3 pulgadas y un taladro») depende de Grok: la respuesta es segura pero a veces sin el total.
 - La visión en baja resolución confunde productos parecidos; el servidor nunca cotiza sin coincidencia en el
   catálogo, así que el riesgo es una opción equivocada, no un precio inventado. 63 de 246 familias van sin foto.
 - La corrida 44 se cortó a los 207 casos porque el equipo se quedó sin memoria; desde la 45 el set se corre en

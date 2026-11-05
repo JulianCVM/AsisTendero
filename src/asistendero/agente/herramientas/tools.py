@@ -116,10 +116,12 @@ def _calculate_quote(arguments: dict, catalog: MockCatalog) -> dict:
         validated.append((sku, quantity))
 
     quote_lines = []
+    missing_skus: list[str] = []
     for sku, quantity in validated:
         product = catalog.get(sku)
         if product is None:
-            raise _ToolError("NOT_FOUND", f"No existe el SKU {sku} en el catálogo de esta sede.")
+            missing_skus.append(sku)
+            continue
         if quantity > product.stock:
             raise _ToolError(
                 "INSUFFICIENT_STOCK",
@@ -135,6 +137,9 @@ def _calculate_quote(arguments: dict, catalog: MockCatalog) -> dict:
             "unit_price_cop": product.price_cop,
             "subtotal_cop": subtotal,
         })
+
+    if not quote_lines and missing_skus:
+        raise _ToolError("NOT_FOUND", f"No existe el SKU {missing_skus[0]} en el catálogo de esta sede.")
 
     return _ok({
         "lines": quote_lines,

@@ -56,9 +56,9 @@ Lo que destapó cada una y se arregló antes de la siguiente, cada arreglo con u
   L-02, `consultar_pedido` con `pedido=null` se rechazaba.
 - **47:** H-02, con pintura en la lista, «y una brocha de 4 pulgadas, ¿cuánto me queda todo?» cotizó solo la pintura
   sin aviso del servidor (también había fallado en la 44).
-- **48:** solo X-22 («2 brochas de 3 pulgadas y un taladro»), que falla en todas: Grok inventa un SKU para el taladro,
-  la validación lo rechaza y la respuesta, segura, da el precio unitario de la brocha sin el total. Queda abierto como
-  variación de Grok.
+- **48:** solo X-22 («2 brochas de 3 pulgadas y un taladro»), que fallaba en la corrida sobre `bef4913`: Grok inventaba
+  un SKU para el taladro, la validación lo rechazaba y la respuesta, segura, daba el precio unitario de la brocha sin el
+  total. Se resolvió determinísticamente en el servidor tras la corrida 48 (ver abajo).
 
 **Corrida 48 (la del entregable):** 344/345 y 3/3; ferretería 297/298 y mercado 47/47; la suite `fotos` 11/11 con 8
 llamadas de visión real (0.002672 USD). 0.002803 USD por tarea, mediana 0.001699, 2,99 llamadas por tarea y 46 tareas
@@ -69,6 +69,18 @@ sin llamar a Grok. Reportes: `eval-20261101T203838787427Z`, `…204047172772Z`, 
 **Gasto acumulado desde la corrida 38:** 4.385929 (hasta la 44) + 1.183481 (45) + 0.088889 (auditoría de fotos) +
 1.107960 (46) + 0.953063 (47) + 0.967176 (48) = **8.686498 USD**, más unos 0,0001 de una llamada de visión para
 revisar una foto, de los 10 USD aprobados por Julian el 01-11-2026.
+
+### Resolución determinista del caso X-22 tras la corrida 48 (`bef4913`)
+
+- **ID del caso:** `X-22` (`suite`: `extremos`, `negocio`: `ferreteria`)
+- **Commit de falla:** `bef4913` (Corrida 48: 344/345)
+- **Mensaje del cliente:** `"necesito 2 brochas de 3 pulgadas y un taladro"`
+- **Expectativa del caso:** `expected_status`: `["partial", "quoted"]`, `expected_sku`: `"BRO-3"`, `must_include`: `["$13.800"]` (subtotal de 2 brochas de 3" a $6.900 c/u)
+- **Causa raíz del fallo:** Grok intentó cotizar ambos productos en una sola llamada a `calcular_cotizacion_informativa` generando un SKU alucinado (`TALADRO-1`) para el taladro (inexistente en el catálogo). La validación del servidor (`validate_request`) rechazó toda la llamada con `SKU_NOT_GROUNDED`. El fallback determinista informó la ausencia del taladro y el precio unitario de la brocha ($6.900 c/u), pero omitió calcular el subtotal y total de la línea ($13.800 por las 2 brochas), incumpliendo el criterio `must_include`.
+- **Solución técnica (partición determinista y auto-cotización parcial en servidor):**
+  1. En `validation.py` (`validate_request`), `order_rules.py` (`_lines`) y `tools.py` (`_calculate_quote`), al recibir una solicitud de `calcular_cotizacion_informativa` o `registrar_pedido` con múltiples ítems donde hubo búsquedas sin coincidencias en el catálogo (`not_found`), se particiona la lista en `valid_items` (SKUs respaldados en catálogo/grounding) e `invalid_items` (SKUs inexistentes o alucinados). Si existe al menos un ítem válido, no se aborta la operación completa: se procesa determinísticamente la cotización del subconjunto válido (`BRO-3`, 2 unidades = `$13.800`) y el flujo salta directo a `respond` sin reenviar el turno a Grok.
+  2. En `graph.py` (`_partial_auto_quote_lines` y `_auto_quote_call`), cuando `buscar_productos` consulta varios artículos y combina ítems distinguidos unívocamente con cantidad entera en su cláusula (`item_clause`) junto a ítems inexistentes (`not_found`), el servidor auto-cotiza en `retrieve` el subconjunto válido sin requerir otra vuelta a Grok.
+  3. En `answers.py` (`render_answer`), se ensambla la respuesta con estado `partial`, incluyendo la observación controlada para los artículos inexistentes («Uy, un taladro no lo manejo por ahora…») y el bloque completo de cotización con subtotales y total consolidado (`$13.800`).
 
 ## Corrida 44: los 345 casos con la suite de fotos, interrumpida (01-11-2026)
 

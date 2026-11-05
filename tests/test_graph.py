@@ -1467,3 +1467,30 @@ def test_a_measure_said_inside_an_unbacked_presentation_is_kept_and_the_word_is_
     plain = run(recording, Script(tool("buscar_productos", items=[{**item, "presentation": "bolsa grande"}]), say("")),
                 "necesito cemento gris")
     assert "measure" not in sent[-1]["items"][0] and plain["estado"] == "clarify"
+
+
+def test_mixed_quote_with_non_existent_item_partitions_and_quotes_valid_subset(tmp_path):
+    # X-22 (corrida 48): Grok buscó las brochas y el taladro y luego intentó cotizar BRO-3 junto a un SKU alucinado
+    # (TALADRO-1); el servidor particiona la solicitud y calcula el subtotal de las brochas ($13.800) sin reenviar a Grok.
+    items = [
+        {"text": "2 brochas de 3 pulgadas", "product": "brocha", "measure": "3 pulgadas"},
+        {"text": "un taladro", "product": "taladro"},
+    ]
+    planner = Script(
+        tool("buscar_productos", items=items),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "BRO-3", "quantity": 2}, {"sku": "TALADRO-1", "quantity": 1}]),
+    )
+    result = run(_real_executor(tmp_path), planner, "necesito 2 brochas de 3 pulgadas y un taladro")
+    assert result["estado"] == "partial"
+    assert "$13.800" in result["respuesta"] and "taladro no lo manejo" in result["respuesta"]
+    assert result["model_calls"] == 2
+    assert result["tool_calls"][-1]["executed"]
+    assert result["tool_calls"][-1]["arguments"] == {"lines": [{"sku": "BRO-3", "quantity": 2}]}
+
+    # También auto-cotiza en retrieve cuando Grok responde tras la búsqueda mixta sin invocar la herramienta de cotización.
+    auto = run(
+        _real_executor(tmp_path / "auto"),
+        Script(tool("buscar_productos", items=items), say("")),
+        "necesito 2 brochas de 3 pulgadas y un taladro",
+    )
+    assert auto["estado"] == "partial" and "$13.800" in auto["respuesta"] and auto["model_calls"] == 2
