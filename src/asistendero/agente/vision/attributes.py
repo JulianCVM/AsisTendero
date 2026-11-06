@@ -13,11 +13,11 @@ from asistendero.tienda.catalogo.search import ProductQuery, without_quantities
 
 SAMPLE_COUNTER_TEMPLATE = (
     "No logro identificar con certeza la referencia exacta en la imagen. "
-    "Te recomiendo llevar la muestra física al mostrador de la tienda para que te asesoremos personalmente."
+    "Te recomiendo llevar la muestra física al mostrador de la tienda para que te asesoremos personalmente con mucho gusto."
 )
 SCREW_SAFEGUARD_TEMPLATE = (
-    "Recibí la foto, pero no logro identificar con certeza las medidas o el tipo de tornillo. "
-    "¿Para qué material lo necesitas (madera, lámina, drywall) y de qué largo aproximado?"
+    "¡Gracias por la foto! La recibí bien, pero no logro identificar con certeza las medidas o el tipo de tornillo. "
+    "¿Me cuentas para qué material lo necesitas (madera, lámina, drywall) y de qué largo aproximado para buscarlo con gusto?"
 )
 MAX_VISION_CLARIFICATIONS = 2
 CONFIDENCE_LEVELS = ("alta", "media", "baja")

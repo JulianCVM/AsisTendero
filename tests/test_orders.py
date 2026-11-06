@@ -558,7 +558,7 @@ def test_a_quote_beyond_what_is_left_without_a_search_says_so(chat):
                 tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 13}]), say())
     assert more["tool_calls"][0]["response"]["error"]["code"] == "INSUFFICIENT_STOCK"
     assert more["estado"] == "insufficient_stock"
-    assert "no tengo 13 metros disponibles" in more["respuesta"]
+    assert "no me alcanzan los 13 metros, en este momento solo me quedan 9 metros" in more["respuesta"]
     assert "apartado en tu pedido" in more["respuesta"]
     assert "No pude consultar" not in more["respuesta"] and "$" not in more["respuesta"]
 
@@ -917,7 +917,7 @@ def test_me_llevo_after_how_many_registers_and_a_bare_quantity_is_quoted_first(c
                  tool("calcular_cotizacion_informativa", lines=[{"sku": "MAR-20", "quantity": 5}]), say())
     # Una cantidad sola no es una compra: no hay pedido, y la respuesta dice que no alcanza, sin la pregunta repetida.
     assert book.session_orders(other) == []
-    assert asked["estado"] == "insufficient_stock" and "no tengo 5" in asked["respuesta"]
+    assert asked["estado"] == "insufficient_stock" and "no me alcanzan las 5 unidades" in asked["respuesta"] and "solo me quedan 2 unidades" in asked["respuesta"]
     assert "registre el pedido" not in asked["respuesta"] and "$18.900" not in asked["respuesta"]
 
 

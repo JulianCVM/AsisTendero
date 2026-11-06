@@ -37,7 +37,7 @@ ASKS_STOCK = re.compile(r"\bcuant[oa]s\b[^?.!]{0,50}\b(?:quedan|hay|tienen?)\b|\
 ASKS_SUITABILITY = re.compile(r"\b(?:sirve[ns]?|me\s+sirve|funciona[ns]?|aguanta[ns]?|resiste[ns]?|es\s+(?:bueno|buena|apto|apta)"
                               r"|recomienda[ns]?|recomendaria)\b[^?.!]{0,60}\bpara\b")
 SUITABILITY_NOTE = ("Si sirve para ese trabajo no te lo puedo asegurar: en el catálogo solo tengo precio y existencias. "
-                    "Pregúntale a tu maestro de obra o en el mostrador.")
+                    "Te recomiendo preguntarle a tu maestro de obra o con mucho gusto te asesoramos en el mostrador.")
 # Lo que la redacción de Grok no puede afirmar cuando el cliente pregunta si algo sirve.
 SUITABILITY_CLAIM = re.compile(r"\b(?:si\s+(?:te\s+)?sirve|claro\s+que\s+(?:si|sirve)|es\s+ideal|ideal\s+para|perfect[oa]\s+para"
                                r"|te\s+(?:va\s+a\s+(?:servir|funcionar|aguantar)|sirve|funciona|aguanta)|apt[oa]\s+para"
@@ -106,9 +106,9 @@ def stock_note(unit: str, stock: int, asked: bool, needed: int = 0) -> str:
 
 
 def whole_units_question(unit: str, whole: int) -> str:
-    """«Lo vendo por metro completo: ¿te cotizo 2 o 3 metros?» cuando el cliente pidió una fracción."""
+    """«Ese producto lo vendemos por metro completo: ¿te cotizo 2 o 3 metros?» cuando el cliente pidió una fracción."""
     complete = "completa" if unit in FEMININE else "completo"
-    return f"Lo vendo por {unit} {complete}: ¿te cotizo {whole} o {whole + 1} {units(unit, 2)}?"
+    return f"Ese producto lo vendemos por {unit} {complete}: ¿te cotizo {whole} o {whole + 1} {units(unit, 2)}?"
 
 
 def asks_suitability(normalized_message: str) -> bool:
@@ -119,10 +119,10 @@ def found_sentence(product: Product, stock: int, first: bool, asked: bool = Fals
                    suitability: bool = False) -> str:
     name = in_sentence(label(product.name, product.variant))
     if stock <= 0:
-        return f"El {name} está agotado por ahora."
+        return f"El {name} se encuentra agotado por ahora. ¿Buscas alguna otra referencia en la que te pueda colaborar?"
     each = "" if names_unit(name, product.unit) else f" {per_unit(product.unit)}"
     # «¿sirve para fundir una placa?» contestado con «Sí, tenemos…» sonaba a «sí sirve» (Z-22, suite fallas).
-    opening = ("Tengo" if suitability else "Sí, tenemos") if first else "También tengo"
+    opening = ("Con gusto te cuento que tengo" if suitability else "¡Con mucho gusto! Sí, tenemos") if first else "También tenemos"
     return f"{opening} {name}, a {format_cop(product.price_cop)}{each}.{stock_note(product.unit, stock, asked, needed)}"
 
 
@@ -169,17 +169,17 @@ def _line_parts(line: dict, products: dict[str, Product]) -> tuple[str, str, str
 
 
 def quote_block(quote: dict, products: dict[str, Product], header: str) -> str:
-    """Un producto en una frase («Los 3 metros de … te salen en $25.500»); varios, en lista con su total."""
+    """Un producto en una frase («¡Con mucho gusto! Los 3 metros de … te salen en $25.500»); varios, en lista con su total."""
     lines = quote["lines"]
     if len(lines) == 1:
         line = lines[0]
         name, variant, unit = _line_parts(line, products)
         amount = amount_of(line["quantity"], unit, name, variant)
         if line["quantity"] == 1:
-            return f"{amount[0].upper()}{amount[1:]} te sale en {format_cop(line['subtotal_cop'])}."
+            return f"¡Con mucho gusto! {amount[0].upper()}{amount[1:]} te sale en {format_cop(line['subtotal_cop'])}."
         unit = sold_as(unit, variant)[0]
         article = "Las" if unit in FEMININE else "Los"
-        return (f"{article} {amount} te salen en {format_cop(line['subtotal_cop'])} "
+        return (f"¡Con mucho gusto! {article} {amount} te salen en {format_cop(line['subtotal_cop'])} "
                 f"(a {format_cop(line['unit_price_cop'])} {per_unit(unit)}).")
     rows = []
     for line in lines:
@@ -191,14 +191,28 @@ def quote_block(quote: dict, products: dict[str, Product], header: str) -> str:
 def quote_offer(context: dict | None, orders, clarifying: bool) -> str:
     """Cierre de una cotización: fuera de una conversación no aparta; dentro, se ofrece apartar."""
     if context is None:
-        return "Es solo una cotización. No es un pedido ni una reserva."
+        return "Esta es tu cotización con mucho gusto. No es un pedido ni una reserva."
     if orders or clarifying:
         return ""
-    return "¿Quieres que te lo aparte para que pases a recogerlo?"
+    return "¿Quieres que te lo aparte de una vez para que pases a recogerlo?"
 
 
-def short_stock_text(lines: list[dict], products: dict, availability: dict) -> str:
-    """«Uy, del tubo … solo me quedan 12 metros y necesitas 20. ¿Te cotizo los 12?»"""
+def short_stock_line(name: str, stock: int, quantity: int, unit: str, note: str = "") -> str:
+    """Frase determinista que revela proactivamente las existencias disponibles cuando no alcanza lo pedido."""
+    if stock <= 0:
+        return f"El {name} se encuentra agotado por ahora.{note} ¿Buscas alguna otra referencia en la que te pueda colaborar?"
+    req_article = ("la" if quantity == 1 else "las") if unit in FEMININE else ("el" if quantity == 1 else "los")
+    reach = "alcanza" if quantity == 1 else "alcanzan"
+    remain = "queda" if stock == 1 else "quedan"
+    dem = ("esa" if stock == 1 else "esas") if unit in FEMININE else ("ese" if stock == 1 else "esos")
+    serves = "sirve" if stock == 1 else "sirven"
+    clause = (f"{of_the(name)} no me {reach} {req_article} {quantity} {units(unit, quantity)}, "
+              f"en este momento solo me {remain} {stock} {units(unit, stock)}.")
+    return f"{clause[0].upper()}{clause[1:]}{note} ¿Te {serves} {dem} {stock} o prefieres revisar otra medida?"
+
+
+def short_stock_text(lines: list[dict], products: dict, availability: dict, *, skip_zero: bool = False) -> str:
+    """«Del [producto] no me alcanzan las [solicitada] unidades, en este momento solo me quedan [disponible]…»"""
     short = []
     for line in lines:
         product = products.get(line["sku"])
@@ -206,17 +220,29 @@ def short_stock_text(lines: list[dict], products: dict, availability: dict) -> s
         if product and stock is not None and line["quantity"] > stock:
             short.append((in_sentence(label(product.name, product.variant)), stock, line["quantity"], product.unit))
     if not short:
-        return "No me alcanza para esa cantidad. ¿Te cotizo una cantidad menor?"
-    # Agotado, ya lo dijo la frase del surtido: «solo me quedan 0 unidades» sobraba (suite surtido, U-10).
-    short = [item for item in short if item[1] > 0]
-    if not short:
         return ""
-    text = "; ".join(f"{of_the(name)} solo me {'queda' if stock == 1 else 'quedan'} {stock} {units(unit, stock)} y "
-                     f"necesitas {quantity}" for name, stock, quantity, unit in short)
-    stock = short[0][1]
-    offer = (f"¿Te cotizo {'el' if stock == 1 else 'los'} {stock}?" if len(short) == 1 and stock
-             else "¿Te cotizo una cantidad menor?")
-    return f"Uy, {text}. {offer}"
+    if skip_zero:
+        # Agotado, ya lo dijo la frase del surtido: «solo me quedan 0 unidades» sobraba (suite surtido, U-10).
+        short = [item for item in short if item[1] > 0]
+        if not short:
+            return ""
+    if len(short) == 1:
+        name, stock, quantity, unit = short[0]
+        return short_stock_line(name, stock, quantity, unit)
+    clauses = []
+    for name, stock, quantity, unit in short:
+        if stock <= 0:
+            clauses.append(f"el {name} se encuentra agotado por ahora")
+        else:
+            req_article = ("la" if quantity == 1 else "las") if unit in FEMININE else ("el" if quantity == 1 else "los")
+            reach = "alcanza" if quantity == 1 else "alcanzan"
+            remain = "queda" if stock == 1 else "quedan"
+            clauses.append(
+                f"{of_the(name)} no me {reach} {req_article} {quantity} {units(unit, quantity)}, "
+                f"en este momento solo me {remain} {stock} {units(unit, stock)}"
+            )
+    text = "; ".join(clauses)
+    return f"{text[0].upper()}{text[1:]}. ¿Te sirven esas cantidades disponibles o prefieres revisar otra medida?"
 
 
 def order_lines(order: dict) -> str:

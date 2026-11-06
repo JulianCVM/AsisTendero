@@ -58,9 +58,9 @@ MAX_TOOL_CALLS = 6
 MAX_MESSAGE_CHARS = 2000
 # Turnos previos del cliente que cuentan como «lo que dijo» para elegir variante y cantidad.
 REFERENCE_TURNS = 3
-REFUSAL_CLOSING = ("Con gusto te ayudo con productos, precios y existencias del catálogo de demostración, "
+REFUSAL_CLOSING = ("Con mucho gusto te ayudo con productos, precios y existencias del catálogo de demostración, "
                    "o con información de la tienda.")
-PERSONAL_DATA_NOTE = "No hace falta compartir datos personales para cotizar; no los guardo."
+PERSONAL_DATA_NOTE = "No hace falta compartir datos personales para cotizar; tranquilo, por tu seguridad no los guardo."
 
 
 class AgentState(TypedDict):
@@ -492,10 +492,10 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
                 # Lo ya consultado es verificable; se muestra aunque el modelo haya fallado.
                 _, answer = render_answer(message, calls, state.get("contexto"), state["consulta"])
             elif estado == "model_invalid":
-                answer = "No pude interpretar bien tu mensaje. ¿Puedes contarme de nuevo qué producto necesitas?"
+                answer = "Disculpa, no pude interpretar bien tu mensaje. ¿Puedes contarme de nuevo qué producto necesitas para ayudarte con gusto?"
             else:
-                answer = ("No pude completar la consulta con el asistente en este momento, así que no tengo "
-                          "precios ni existencias verificados. Intenta de nuevo en unos minutos.")
+                answer = ("En este momento no pude completar la consulta con el asistente, así que no tengo "
+                          "precios ni existencias verificados. Por favor intenta de nuevo en unos minutos y con gusto te atiendo.")
             return {**common, "estado": estado, "error": error, "respuesta": answer}
 
         if not calls:

@@ -81,14 +81,14 @@ def test_the_shopkeeper_writes_a_day_a_date_or_discontinued():
 
 @pytest.mark.parametrize(("restock", "asked", "stock", "expected"), [
     ("martes", False, 12, ""),
-    ("martes", True, 12, "El martillo me llega los martes, cuando viene el proveedor."),
-    ("2026-10-27", True, 12, "El martillo me llega el martes 27/10."),
+    ("martes", True, 12, "Con gusto te cuento: el martillo me llega los martes, cuando viene el proveedor."),
+    ("2026-10-27", True, 12, "Con gusto te cuento: el martillo me llega el martes 27/10."),
     ("martes", False, 0, "El martillo está agotado por ahora, pero me llega los martes, cuando viene el proveedor."),
     ("descontinuado", False, 0, "El martillo está agotado y ya no lo vamos a volver a traer."),
-    ("descontinuado", True, 4, "El martillo ya no lo vamos a volver a traer; lo que queda es lo último."),
+    ("descontinuado", True, 4, "Te cuento que el martillo ya no lo vamos a volver a traer; lo que queda es lo último."),
     ("", False, 0, "El martillo está agotado por ahora."),
     ("", True, 0, "El martillo está agotado y no tengo fecha de cuándo vuelve a llegar; en el mostrador te pueden "
-                  "averiguar."),
+                  "averiguar con gusto."),
     ("", False, 12, ""),
 ])
 def test_the_restock_is_said_only_when_asked_or_out_of_stock(restock, asked, stock, expected):
@@ -98,15 +98,15 @@ def test_the_restock_is_said_only_when_asked_or_out_of_stock(restock, asked, sto
 @pytest.mark.parametrize(("name", "restock", "asked", "stock", "expected"), [
     # Suite surtido (U-04, U-08): decía «El cinta aislante … está agotado».
     ("cinta aislante negra 18 m", "", True, 0, "La cinta aislante negra 18 m está agotada y no tengo fecha de cuándo "
-                                               "vuelve a llegar; en el mostrador te pueden averiguar."),
+                                               "vuelve a llegar; en el mostrador te pueden averiguar con gusto."),
     ("esmalte sintético gris en galón", "descontinuado", False, 0,
      "El esmalte sintético gris en galón está agotado y ya no lo vamos a volver a traer."),
-    ("llave expansiva de 12 pulgadas", "jueves", True, 3, "La llave expansiva de 12 pulgadas me llega los jueves, "
+    ("llave expansiva de 12 pulgadas", "jueves", True, 3, "Con gusto te cuento: la llave expansiva de 12 pulgadas me llega los jueves, "
                                                           "cuando viene el proveedor."),
     ("guantes de carnaza talla L", "martes", False, 0,
      "Los guantes de carnaza talla L están agotados por ahora, pero me llegan los martes, cuando viene el proveedor."),
     ("pintura vinilo marfil", "descontinuado", True, 2,
-     "La pintura vinilo marfil ya no la vamos a volver a traer; lo que queda es lo último."),
+     "Te cuento que la pintura vinilo marfil ya no la vamos a volver a traer; lo que queda es lo último."),
 ])
 def test_the_restock_sentence_agrees_with_the_product(name, restock, asked, stock, expected):
     assert restock_sentence(name, restock, asked, stock, TODAY) == expected

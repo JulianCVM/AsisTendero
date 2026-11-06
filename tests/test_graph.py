@@ -342,7 +342,7 @@ def test_insufficient_stock_is_explained_without_total():
     )
     result = run(executor, planner, "Necesito 20 metros de PVC de 1/2")
     assert result["estado"] == "insufficient_stock"
-    assert "necesitas 20" in result["respuesta"]
+    assert "no me alcanzan los 20 metros" in result["respuesta"]
     assert "solo me quedan 12 metros" in result["respuesta"]
     assert "$170.000" not in result["respuesta"]
 
@@ -1053,7 +1053,7 @@ def test_a_fraction_of_a_unit_is_not_a_quantity_and_the_reply_offers_whole_units
                      tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 5}]), say(""))
     result = run(FakeExecutor({pvc["text"]: (["PVC-050"], [])}), planner, "necesito 2.5 metros de tubo PVC de 1/2 para agua")
     assert result["tool_calls"][1]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
-    assert "Lo vendo por metro completo: ¿te cotizo 2 o 3 metros?" in result["respuesta"]
+    assert "Ese producto lo vendemos por metro completo: ¿te cotizo 2 o 3 metros?" in result["respuesta"]
     assert "$42.500" not in result["respuesta"]
     from asistendero.agente.reglas.validation import quantities_in_message
     assert quantities_in_message("un galón y medio de pintura") == set()

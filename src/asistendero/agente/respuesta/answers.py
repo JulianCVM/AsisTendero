@@ -22,7 +22,7 @@ from asistendero.agente.respuesta.order_replies import order_allowances, order_r
 from asistendero.agente.respuesta.reply_text import (
     DEMO_NOTE, FEMININE, LOW_STOCK, MAX_NEARBY, MAX_OPTIONS, SUITABILITY_CLAIM, SUITABILITY_NOTE, asks_stock,
     asks_suitability, found_sentence, in_sentence, label, of_the, option_lines, quote_block, quote_offer,
-    short_stock_text, units, whole_units_question,
+    short_stock_line, short_stock_text, units, whole_units_question,
 )
 from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence, restock_subjects
 from asistendero.agente.respuesta.store_replies import (
@@ -51,11 +51,11 @@ PAY_LATER = (r"(?:pago|pagar|pagaria)\s+(?:(?:el|la|en\s+la|a\s+fin\s+de)\s+)?(?
 RESERVATION_REQUEST = re.compile(
     r"\b(?:apart\w+|reserv\w+|separ(?:a|e|ar|ame|amelo|en)\b|fia\w*|fiar\w*|credito|" + PAY_LATER + ")"
 )
-RESERVATION_NOTE = "No es un pedido ni una reserva: por este chat no aparto productos, no fío ni recibo pagos."
+RESERVATION_NOTE = "No es un pedido ni una reserva: por este chat solo te comparto la cotización; no aparto productos, no fío ni recibo pagos."
 # En una sesión sí hay pedidos: lo que nunca se hace es fiar o cobrar, y sin pedido registrado no hay nada apartado.
 CREDIT_REQUEST = re.compile(r"\b(?:fia\w*|fiar\w*|credito|" + PAY_LATER + ")")
-CREDIT_NOTE = "No fío ni recibo pagos por este chat: el pago es en el mostrador al recoger."
-NO_ORDER_NOTE = "Todavía no hay nada apartado: si lo quieres llevar, dime cuántas unidades y registro el pedido."
+CREDIT_NOTE = "Vecino, por políticas de la tienda no fío ni recibo pagos por este chat: todo se cancela en el mostrador al momento de recoger."
+NO_ORDER_NOTE = "Todavía no hay nada apartado: si te antojas de llevarlo, dime cuántas unidades necesitas y con mucho gusto registro el pedido."
 
 
 def with_reservation_note(message: str, answer: str, calls: list[ToolCall] | None = None,
@@ -80,7 +80,7 @@ def with_reservation_note(message: str, answer: str, calls: list[ToolCall] | Non
 
 
 # «Se me acabó» y «no me quedan» dicen lo mismo que «agotado» (Grok real, suite surtido).
-OUT_OF_STOCK = re.compile(r"\bagotad|\bse (?:me |nos |le )?(?:acabo|acabaron)\b|\bno (?:me|nos) quedan?\b")
+OUT_OF_STOCK = re.compile(r"\bagotad|\bse (?:me |nos |le )?(?:acabo|acabaron|agoto|agotaron)\b|\bno (?:me|nos) quedan?\b")
 
 
 def direct_response(original: str, decision: Decision) -> str:
@@ -91,22 +91,23 @@ def direct_response(original: str, decision: Decision) -> str:
         normalize_text(original),
     ):
         return ("No pude verificar el horario de la tienda en este momento. "
-                "Si me dices qué producto buscas, te doy precio y disponibilidad.")
+                "Si me cuentas qué producto buscas, con mucho gusto te doy precio y disponibilidad.")
     reply = decision.reply.strip()
     # Sin explorar_categoria, una lista de lo que vende la tienda sería inventada («herramientas eléctricas», 26-10).
     if asks_assortment(normalize_text(original)):
-        return "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad."
+        return "¡Hola! Con mucho gusto te ayudo. ¿Qué estás buscando? Dime el producto y la medida, y de una te doy precio y disponibilidad."
     # Fiar nunca se promete, consulte o no la tienda: el pago es en el mostrador (contrato del agente). En la corrida
     # 40 (M-33) Grok respondió sin herramientas «Listo, te lo anoto en el cuaderno… Pasa el viernes a pagar».
     if promises_credit(normalize_text(reply)):
-        return "Aquí no fiamos: todo se paga en el mostrador cuando recoges. ¿Te ayudo con algo más?"
+        return ("Vecino, por políticas de la tienda no fiamos ni manejamos fiado: todo se cancela en el mostrador al "
+                "momento de recoger. ¿Te puedo colaborar con alguna otra consulta?")
     # Sin herramientas no hay precio ni existencias comprobadas que se puedan afirmar.
     if (
         not reply or len(reply) > 400 or FORBIDDEN_CLAIMS.search(reply) or "$" in reply
         or leaks(reply, active_prompt()[1])
         or re.search(r"\b\d+\s+(metro|bulto|unidad|galon)", normalize_text(reply))
     ):
-        return "¿Qué estás buscando? Te doy precio y disponibilidad de lo que necesites."
+        return "¡Hola! Con mucho gusto te atiendo. ¿Qué estás buscando? Te doy precio y disponibilidad de lo que necesites."
     return reply
 
 
@@ -134,15 +135,17 @@ def _render_pagination(group: dict, asked_raw: str, store: list[str], demo: list
         subject = in_sentence(items[0].name) if same_name else _display(group["grupo"], items, shared=True)
         extra = len(still_left)
         more = f"\n(y {extra} {'opción' if extra == 1 else 'opciones'} más)" if extra > 0 else ""
-        question = "¿Qué medida o referencia necesitas?" if same_name else "¿Cuál te sirve?"
+        question = ("¿Qué medida o referencia necesitas? Con gusto te doy el precio." if same_name
+                    else "¿Cuál te sirve? Con mucho gusto te doy el precio.")
         block = f"De {subject} también tengo estas opciones:\n" + "\n".join(option_lines(items)) + f"{more}\n{question}"
         return "clarify", _join([block, *store, *demo])
     items = [_option_to_product(opt) for opt in (group.get("opciones") or [])]
     if not items:
-        return "clarify", _join(["¿Qué producto y qué medida buscas?", *store, *demo])
+        return "clarify", _join(["¿Qué producto y qué medida buscas? Dime y con mucho gusto te ayudo.", *store, *demo])
     same_name = len({item.name for item in items}) == 1
     subject = in_sentence(items[0].name) if same_name else _display(group["grupo"], items, shared=True)
-    question = "¿Qué medida o referencia necesitas?" if same_name else "¿Cuál te sirve?"
+    question = ("¿Qué medida o referencia necesitas? Con gusto te doy el precio." if same_name
+                else "¿Cuál te sirve? Con mucho gusto te doy el precio.")
     block = f"De {subject} esas son todas las opciones que manejo:\n" + "\n".join(option_lines(items)) + f"\n{question}"
     return "clarify", _join([block, *store, *demo])
 
@@ -174,27 +177,27 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     if not findings and not store and not any(call["executed"] for call in calls) and "SESSION_REQUIRED" in rejected:
         # Z-11 (corrida 34): sin conversación, «deme 3 de esos» intentó un pedido y la respuesta decía «abre una
         # conversación»; el cliente nunca dijo qué producto quería.
-        return "clarify", _join(["¿De qué producto me hablas? Dime cuál y qué medida, y te lo busco.", *demo])
+        return "clarify", _join(["¡Con mucho gusto te ayudo! ¿De qué producto me hablas? Dime cuál y qué medida, y te lo busco de una.", *demo])
     if not findings and (store or orders):
         return (orders and (orders[0] or "order_issue")) or "informed", _join([*store, *order_text, *demo])
     checked = availability_by_sku(calls)
+    if not findings and quote_call and (quote_call["response"].get("error") or {}).get("code") == "INSUFFICIENT_STOCK":
+        # Q-13 (corrida 30): «agrégale 1 galón más» se cotizó sin buscar en el turno; no alcanzaba y la respuesta
+        # decía «No pude consultar el catálogo».
+        return "insufficient_stock", _join([_short_of_known(quote_call, context, checked), *demo])
     if not findings and checked:
         # Un producto que la sesión ya conocía, consultado sin buscar («¿y cuándo le llegan más?»).
         lines = [_availability_line(data, asked) for data in checked.values()]
         return "found", _join([*lines, *demo])
-    if not findings and quote_call and (quote_call["response"].get("error") or {}).get("code") == "INSUFFICIENT_STOCK":
-        # Q-13 (corrida 30): «agrégale 1 galón más» se cotizó sin buscar en el turno; no alcanzaba y la respuesta
-        # decía «No pude consultar el catálogo».
-        return "insufficient_stock", _join([_short_of_known(quote_call, context), *demo])
     if not findings:
         options = ambiguous_reference(asked_raw, context)
         if options and any((call["response"].get("error") or {}).get("code") == "AMBIGUOUS_REFERENCE" for call in calls):
-            return "clarify", f"¿Cuál quieres: {' o '.join(options)}? Dime cuál y te lo cotizo."
+            return "clarify", f"¿Cuál quieres: {' o '.join(options)}? Dime cuál prefieres y con mucho gusto te lo cotizo."
         if any((call["response"].get("error") or {}).get("code") == "VAGUE_SEARCH" for call in calls):
-            return "clarify", "¿De qué producto me hablas? Dime cuál y qué medida, y te lo busco."
+            return "clarify", "¡Con mucho gusto te ayudo! ¿De qué producto me hablas? Dime cuál y qué medida, y te lo busco de una."
         if any((call["response"].get("error") or {}).get("code") == "TOO_MANY_ITEMS" for call in calls):
-            return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje. ¿Me mandas la lista "
-                               f"en grupos de {MAX_ITEMS} o menos?")
+            return "clarify", (f"Puedo revisar hasta {MAX_ITEMS} productos por mensaje para darte el dato exacto. "
+                               f"¿Me mandas la lista en grupos de {MAX_ITEMS} o menos, por favor?")
         selected_ctx = chosen_options(asked_raw, context)
         if not selected_ctx and (aff := affirms_active_item(asked_raw, context)):
             selected_ctx = [aff]
@@ -203,14 +206,14 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             unit = target.get("unidad") or "unidad"
             many = "Cuántas" if unit in FEMININE else "Cuántos"
             item_name = in_sentence(label(target["nombre"], target.get("variante") or ""))
-            return "clarify", _join([f"¿{many} {units(unit, 2)} {of_the(item_name)} necesitas?", *demo])
+            return "clarify", _join([f"¡Perfecto! ¿{many} {units(unit, 2)} {of_the(item_name)} necesitas? Con gusto te cotizo.", *demo])
         if ordinal_note := unresolved_ordinal(asked_raw, context):
             return "clarify", _join([ordinal_note, *demo])
         if any(call["response"]["status"] == "error" for call in calls):
-            return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
-                                  "existencias verificados. Intenta de nuevo en unos minutos.")
-        return "not_verified", ("No pude verificar ese producto en el catálogo. ¿Me dices qué producto y qué "
-                                "medida buscas?")
+            return "tool_error", ("En este momento no pude consultar el catálogo, así que no tengo precios ni "
+                                  "existencias verificados. Por favor intenta de nuevo en unos minutos y con gusto te atiendo.")
+        return "not_verified", ("Ese producto no lo tengo identificado así en el catálogo. ¿Me cuentas qué "
+                                "producto y qué medida buscas para colaborarte con gusto?")
 
     availability = availability_by_sku(calls)
     quoted = {line["sku"] for line in (quote or {}).get("lines", [])}
@@ -230,6 +233,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     suitability = asks_suitability(asked)
     sentences, questions, statuses, products = [], [], [], {}
     last_selected: Product | None = None
+    zero_restock_said = False
     seen = set()
     for index, finding in enumerate(findings):
         finding = without_negated(asked, finding)
@@ -262,27 +266,29 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             closest = in_sentence(nearby[0].name) if len({item.name for item in nearby[:MAX_NEARBY]}) == 1 else "esto"
             options = "\n".join(option_lines(nearby[:MAX_NEARBY]))
             query = _display(finding["query"], nearby)
-            sentences.append(f"{query[0].upper()}{query[1:]} así como lo pides no lo manejo. Lo más parecido que tengo es "
-                             f"{closest}, aunque no es exactamente lo mismo.{caveat}\n{options}")
+            sentences.append(f"{query[0].upper()}{query[1:]} así como lo pides no lo tengo disponible por ahora. "
+                             f"Lo más parecido que tengo es {closest}, aunque no es exactamente lo mismo.{caveat}\n{options}")
             statuses.append("nearby")
         elif not matches:
-            sentences.append(f"Uy, {finding['query']} no lo manejo por ahora. Si tienes otra referencia o medida, con "
-                             "gusto te la busco.")
+            sentences.append(f"Por ahora {finding['query']} no lo manejo. Si buscas alguna otra herramienta, "
+                             "referencia o medida, cuéntame y con mucho gusto te la busco.")
             statuses.append("not_found")
         elif selected:
             last_selected = selected
             stock = availability.get(selected.sku, {}).get("stock", selected.stock)
             first = not any(status == "found" for status in statuses)
+            restock_val = availability.get(selected.sku, {}).get("restock", selected.restock)
             restock = restock_sentence(in_sentence(label(selected.name, selected.variant)),
-                                       availability.get(selected.sku, {}).get("restock", selected.restock),
-                                       index in restock_about, stock)
+                                       restock_val, index in restock_about, stock)
             # Lo que va en la cotización ya sale con su precio ahí: repetirlo arriba sonaba a reporte. Agotado, la
             # frase del surtido ya lo dice.
             if selected.sku not in quoted and stock > 0:
                 sentences.append(found_sentence(selected, stock, first, asks_stock(asked) and not short, needed,
                                                 suitability))
-            if restock:
+            if restock and not (short and stock <= 0 and not restock_val and index not in restock_about):
                 sentences.append(restock)
+                if stock <= 0:
+                    zero_restock_said = True
             statuses.append("found")
         else:
             same_name = len({item.name for item in matches}) == 1
@@ -291,7 +297,8 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             extra = len(matches) - MAX_OPTIONS
             more = f"\n(y {extra} {'opción' if extra == 1 else 'opciones'} más)" if extra > 0 else ""
             # Con el mismo nombre solo cambia la variante: se pregunta por ella, como en el mostrador.
-            question = "¿Qué medida o referencia necesitas?" if same_name else "¿Cuál te sirve?"
+            question = ("¿Qué medida o referencia necesitas? Con gusto te doy el precio." if same_name
+                        else "¿Cuál te sirve? Con mucho gusto te doy el precio.")
             questions.append(intro + "\n" + "\n".join(option_lines(matches[:MAX_OPTIONS])) + f"{more}\n{question}")
             statuses.append("clarify")
 
@@ -305,10 +312,13 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     elif quote_call:
         error = quote_call["response"]["error"]
         if error["code"] == "INSUFFICIENT_STOCK":
-            quote_part = short_stock_text(quote_call["arguments"]["lines"], products, availability)
+            quote_part = short_stock_text(quote_call["arguments"]["lines"], products, availability,
+                                          skip_zero=zero_restock_said)
+            if not quote_part and not zero_restock_said:
+                quote_part = _short_of_known(quote_call, context, availability)
             status = "insufficient_stock"
         else:
-            quote_part = "No pude sacar el total en este momento; los precios de arriba sí están al día."
+            quote_part = "En este momento no pude calcular el total, pero los precios unitarios de arriba sí están al día."
             status = "quote_error"
     if orders:
         status = orders[0] or status
@@ -320,14 +330,14 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             whole = fractional_amount(asked_raw)
             many = "Cuántas" if product.unit in FEMININE else "Cuántos"
             questions.append(whole_units_question(product.unit, whole) if whole
-                             else f"¿{many} {units(product.unit, 2)} necesitas?")
+                             else f"¿{many} {units(product.unit, 2)} necesitas? Con gusto te cotizo.")
     # La tienda va después de los productos: el horario se suele preguntar al final («¿a qué hora paso?»).
     caution = [SUITABILITY_NOTE] if suitability else []
     answer = _join([*sentences, *caution, quote_part, *store, *questions, *order_text, *demo])
     return status, answer
 
 
-def _short_of_known(call: ToolCall, context: dict | None) -> str:
+def _short_of_known(call: ToolCall, context: dict | None, availability: dict | None = None) -> str:
     """Lo que no alcanzó, nombrado con lo que la sesión ya conoce del producto (no hubo búsqueda en el turno)."""
     known = {
         opt.get("sku"): opt
@@ -341,13 +351,27 @@ def _short_of_known(call: ToolCall, context: dict | None) -> str:
     held = {line.get("sku") for order in (context or {}).get("pedidos") or []
             if order.get("estado") in {"pendiente", "confirmado"} for line in order.get("lineas") or []}
     lines = call["arguments"]["lines"]
-    line = next((line for line in lines if line["sku"] in call["response"]["error"]["message"]), lines[0])
-    item = known.get(line["sku"]) or {}
-    name = in_sentence(label(item.get("nombre") or "ese producto", item.get("variante") or ""))
+    error_msg = (call["response"].get("error") or {}).get("message") or ""
+    line = next((line for line in lines if line["sku"] in error_msg), lines[0])
+    sku = line["sku"]
+    avail_data = (availability or {}).get(sku) or {}
+    item = known.get(sku) or avail_data or {}
+    name = in_sentence(label(item.get("nombre") or item.get("name") or "ese producto",
+                             item.get("variante") or item.get("variant") or ""))
+    unit = item.get("unidad") or item.get("unit") or "unidad"
     quantity = line["quantity"]
-    note = " Lo que ya tienes apartado en tu pedido también cuenta." if line["sku"] in held else ""
-    return (f"Uy, {of_the(name)} no tengo {quantity} {units(item.get('unidad') or 'unidad', quantity)} "
-            f"disponibles.{note} ¿Te cotizo una cantidad menor?")
+    note = " Lo que ya tienes apartado en tu pedido también cuenta." if sku in held else ""
+    stock = avail_data.get("stock") if isinstance(avail_data.get("stock"), int) else None
+    if stock is None and (match := re.search(r"disponibles?\s+(\d+)", error_msg)):
+        stock = int(match.group(1))
+    if stock is None and isinstance(item.get("stock"), int):
+        stock = item["stock"]
+    if stock is not None:
+        return short_stock_line(name, stock, quantity, unit, note)
+    req_article = ("la" if quantity == 1 else "las") if unit in FEMININE else ("el" if quantity == 1 else "los")
+    reach = "alcanza" if quantity == 1 else "alcanzan"
+    clause = f"{of_the(name)} no me {reach} {req_article} {quantity} {units(unit, quantity)}."
+    return f"{clause[0].upper()}{clause[1:]}{note} ¿Prefieres revisar otra cantidad o medida?"
 
 
 def _availability_line(data: dict, asked: str) -> str:
@@ -364,7 +388,7 @@ def _availability_line(data: dict, asked: str) -> str:
 def _quote_header(quote: dict, products: dict[str, Product]) -> str:
     """Con líneas que no se buscaron en este turno, la cotización suma lo que el cliente ya llevaba."""
     carried = len(quote["lines"]) > 1 and any(line["sku"] not in products for line in quote["lines"])
-    return "Con lo que llevas, te quedaría así:" if carried else "Te quedaría así:"
+    return "¡Con mucho gusto! Con lo que llevas, te quedaría así:" if carried else "¡Con mucho gusto! Te quedaría así:"
 
 
 def _with_offer(block: str, quote: dict, offer: str) -> str:
@@ -455,6 +479,9 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
             return False
     elif quote_call:
         allowed_counts |= {line["quantity"] for line in quote_call["arguments"]["lines"]}
+        err_msg = (quote_call["response"].get("error") or {}).get("message") or ""
+        if match := re.search(r"disponibles?\s+(\d+)", err_msg):
+            allowed_counts.add(int(match.group(1)))
     if not set(re.findall(r"\$[\d.,]*\d", reply)) <= allowed_amounts:
         return False
     # X-06 (corrida 39): el cable se vende por metro y Grok escribió «un rollo … te sale a $2.700 el metro», como si
@@ -486,6 +513,17 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     stocks = [availability.get(p.sku, {}).get("stock", p.stock) for p in selected.values()]
     if OUT_OF_STOCK.search(normalized) and 0 not in stocks:
         return False
+    if short:
+        err_msg = (quote_call["response"].get("error") or {}).get("message") or ""
+        err_stock = int(m.group(1)) if (m := re.search(r"disponibles?\s+(\d+)", err_msg)) else None
+        for line in quote_call["arguments"]["lines"]:
+            product = selected.get(line["sku"])
+            stock = availability.get(line["sku"], {}).get("stock", product.stock if product else err_stock)
+            if stock is not None and line["quantity"] > stock:
+                if stock > 0 and not re.search(rf"\b{stock}\b", reply):
+                    return False
+                if stock == 0 and not OUT_OF_STOCK.search(normalized):
+                    return False
     # Cada producto elegido debe aparecer con su precio y, si está agotado, decirlo (ahí el precio sobra: «está
     # agotado, me llega el martes»). Cuánto queda no se exige: el cliente no lo preguntó (visor, 23-10); si Grok lo
     # dice, la cifra ya se comprobó arriba.

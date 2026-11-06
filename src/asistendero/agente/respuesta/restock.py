@@ -77,17 +77,17 @@ def restock_sentence(name: str, restock: str, asked: bool, stock: int, today: da
             return f"{subject} {is_} {out} y ya no {it} vamos a volver a traer."
         if kind:
             return f"{subject} {is_} {out} por ahora, pero me {arrives} {_when(kind, value)}."
-        unknown = (f" y no tengo fecha de cuándo {comes} a llegar; en el mostrador te pueden averiguar" if asked
+        unknown = (f" y no tengo fecha de cuándo {comes} a llegar; en el mostrador te pueden averiguar con gusto" if asked
                    else " por ahora")
         return f"{subject} {is_} {out}{unknown}."
     if not asked:
         return ""
     if kind == DISCONTINUED:
-        return f"{subject} ya no {it} vamos a volver a traer; lo que queda es lo último."
+        return f"Te cuento que {the} {name} ya no {it} vamos a volver a traer; lo que queda es lo último."
     if kind:
-        return f"{subject} me {arrives} {_when(kind, value)}."
-    return (f"No tengo fecha de cuándo {comes} a llegar {the} {name}; en el mostrador te pueden averiguar con el "
-            "proveedor.")
+        return f"Con gusto te cuento: {the} {name} me {arrives} {_when(kind, value)}."
+    return (f"Por ahora no tengo fecha de cuándo {comes} a llegar {the} {name}; en el mostrador te "
+            "pueden averiguar con el proveedor.")
 
 
 def restock_reply_ok(normalized_reply: str, restocks: list[str], today: date | None = None) -> bool:

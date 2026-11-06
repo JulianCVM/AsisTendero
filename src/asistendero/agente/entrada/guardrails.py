@@ -27,7 +27,7 @@ SENSITIVE_TOPICS = {
     "CREDENTIALS": (
         r"\b(?:api[\s_-]*key|llave\s+(?:de\s+(?:la\s+)?)?(?:api|grok|acceso|del\s+reto)|token|contrasen\w*|password"
         r"|clave\s+(?:de\s+(?:acceso|la\s+api|grok|administrador|admin|wifi)|secreta)|credencial\w*|grok_api_key)|(?<!\w)\.env\b",
-        "No comparto llaves, contraseñas ni credenciales.",
+        "No comparto llaves, contraseñas ni credenciales por seguridad.",
     ),
     "INTERNAL_DATA": (
         r"\b(?:base\s+de\s+datos|sqlite|consulta\s+sql|\bsql\b|codigo\s+fuente|archivos?\s+internos?"
@@ -39,7 +39,7 @@ SENSITIVE_TOPICS = {
         r"\s+(?:del?\s+)?(?:los\s+|las\s+|la\s+|otros?\s+|otras?\s+|mis?\s+)?(?:clientes?|usuarios?|vecinos?|emplead\w+|trabajador\w*|duen\w+|propietari\w+)"
         r"|que\s+(?:compro|compraron|pidio|pidieron)\s+(?:el|la|los|las|otro|otra|otros|mi\s+vecin\w+)"
         r"|quien\s+(?:compro|compraron|pidio))",
-        "No comparto datos de otros clientes ni del personal de la tienda.",
+        "Por respeto y privacidad, no comparto datos de otros clientes ni del personal de la tienda.",
     ),
     "BUSINESS_PRIVATE": (
         r"\b(?:precio\s+de\s+(?:compra|costo|fabrica)|costo\s+(?:de\s+compra|real|interno)|margen(?:es)?"

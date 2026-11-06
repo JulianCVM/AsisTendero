@@ -36,14 +36,14 @@ HARD_FAILURE_STATES = frozenset({"model_error", "tool_error"})
 MAX_REASON_CHARS = MAX_BAN_EXCERPT
 MAX_STAFF_REPLY_CHARS = 500
 
-HANDOFF_REPLY = ("Le aviso al tendero para que te atienda por aquí. Mientras tanto, si quieres, te sigo ayudando "
-                 "con precios y existencias.")
-HANDOFF_AGAIN_REPLY = "Ya le avisé al tendero; en cuanto pueda te atiende por aquí."
-STAFF_HOLD_REPLY = "El tendero está atendiendo esta conversación y te responde por aquí en un momento."
-ESCALATION_NOTICE = "No pude resolver tus últimos mensajes, así que le avisé al tendero para que te ayude por aquí."
-TAKEN_NOTICE = "El tendero tomó la conversación y te responde por aquí."
-RELEASED_NOTICE = "El tendero te deja de nuevo con el asistente."
-FINISHED_NOTICE = "El tendero dio por terminada la conversación. ¡Gracias por escribir!"
+HANDOFF_REPLY = ("Le aviso al tendero para que te atienda por aquí. Mientras tanto, si quieres, "
+                 "te sigo ayudando con precios y existencias.")
+HANDOFF_AGAIN_REPLY = "Tranquilo, ya le avisé al tendero; en cuanto pueda te atiende por aquí con mucho gusto."
+STAFF_HOLD_REPLY = "El tendero ya está atendiendo esta conversación y te responde por aquí en un momento. ¡Gracias por tu paciencia!"
+ESCALATION_NOTICE = "No pude resolver bien tus últimos mensajes, así que le avisé al tendero para que te ayude personalmente por aquí."
+TAKEN_NOTICE = "¡Hola! El tendero tomó la conversación y te responde por aquí."
+RELEASED_NOTICE = "El tendero te deja de nuevo con el asistente. ¿En qué más te puedo colaborar con gusto?"
+FINISHED_NOTICE = "El tendero dio por terminada la conversación. ¡Muchas gracias por escribir!"
 STAFF_PREFIX = "Tendero: "
 
 # Acción del panel → estados desde los que se permite y estado al que lleva.

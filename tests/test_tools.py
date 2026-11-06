@@ -279,7 +279,7 @@ def test_graph_integration_with_real_tools_across_s2_scenarios(catalog):
         ),
     ).invoke({"consulta": "Necesito 20 metros de PVC de 1/2 para agua"})
     assert s2_07["estado"] == "insufficient_stock"
-    assert "solo me quedan 12 metros y necesitas 20" in s2_07["respuesta"]
+    assert "no me alcanzan los 20 metros, en este momento solo me quedan 12 metros" in s2_07["respuesta"]
     assert s2_07["respuesta"].count("quedan 12 metros") == 1
 
     # S2-08: producto fuera de catálogo -> not_found

@@ -83,7 +83,7 @@ def test_an_existing_base_gets_the_new_products_without_losing_the_shopkeepers_e
 
 
 def test_the_market_prompt_only_swaps_examples_and_keeps_the_hardware_prompt_untouched():
-    assert PROMPT_VERSION == "s4-conversacion-v12" and MARKET_PROMPT_VERSION == "mercado-v1"
+    assert PROMPT_VERSION == "s4-conversacion-v13" and MARKET_PROMPT_VERSION == "mercado-v1"
     assert "ferretería" in AGENT_PROMPT and "ferretería" not in MARKET_PROMPT
     assert "tienda de barrio" in MARKET_PROMPT and "PVC" not in MARKET_PROMPT and "taladro" not in MARKET_PROMPT
     assert "vencimiento, frescura, origen, beneficios para la salud" in MARKET_PROMPT

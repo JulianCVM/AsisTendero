@@ -255,7 +255,7 @@ def unresolved_ordinal(message: str, context: dict | None) -> str | None:
     if not ORDINAL.search(norm) or _heads_in_text(norm):
         return None
     if len(groups) > 1:
-        return "¿De cuál de los productos que te mostré me hablas?"
+        return "¿De cuál de los productos que te mostré me hablas? Dime y con gusto te ayudo."
     count = len(groups[0].get("opciones") or [])
     return f"Solo te mostré {count} {'opción' if count == 1 else 'opciones'}; ¿cuál de esas te sirve?"
 

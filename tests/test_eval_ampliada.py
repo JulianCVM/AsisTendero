@@ -212,7 +212,10 @@ def _cases():
     return [case for case in cases if case["suite"] in SUITES]
 
 
-def test_every_new_case_passes_with_a_scripted_grok(tmp_path):
+def test_every_new_case_passes_with_a_scripted_grok(tmp_path, monkeypatch):
+    from asistendero.tienda import reloj
+
+    monkeypatch.setattr(reloj, "local_now", lambda: SIM_START)
     cases = _cases()
     assert {case["suite"] for case in cases} == SUITES and len(cases) >= 70
     catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
@@ -224,8 +227,8 @@ def test_every_new_case_passes_with_a_scripted_grok(tmp_path):
     # Cada caso corrió con el negocio y el prompt que dice: ningún mensaje de la tienda de mercado vio la ferretería.
     market = {turn["query"] for case in cases if case.get("negocio") == "mercado" for turn in case.get("turns", [case])}
     assert {planner.kinds[query] for query in market if query in planner.kinds} == {"mercado"}
-    assert {record["prompt_version"] for record in report["cases"]} == {"s4-conversacion-v12", "mercado-v1"}
-    assert report["prompt_versions"] == ["mercado-v1", "s4-conversacion-v12"]
+    assert {record["prompt_version"] for record in report["cases"]} == {"s4-conversacion-v13", "mercado-v1"}
+    assert report["prompt_versions"] == ["mercado-v1", "s4-conversacion-v13"]
     # Un guion correcto responde igual a las tres formas de pedir lo mismo.
     groups = report["summary"]["paraphrase_groups"]
     assert len(groups) == 8 and all(group["consistent"] for group in groups.values())

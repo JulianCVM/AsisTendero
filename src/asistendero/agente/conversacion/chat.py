@@ -104,8 +104,8 @@ def _human_turn(store: SessionStore, session_id: str, message: str, context: dic
     return None
 
 
-PHOTO_UNAVAILABLE_REPLY = ("No pude revisar la foto en este momento. Escríbeme el nombre del producto y la medida, "
-                           "o tráela al mostrador, y te ayudo.")
+PHOTO_UNAVAILABLE_REPLY = ("En este momento no pude revisar la foto. Escríbeme el nombre del "
+                           "producto y la medida, o tráela al mostrador, y con mucho gusto te ayudo.")
 
 
 def _look(store: SessionStore, session_id: str, message: str, image: ImageAttributePayload | str, context: dict,

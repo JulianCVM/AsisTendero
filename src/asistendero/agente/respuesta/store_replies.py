@@ -109,8 +109,9 @@ def store_lines(calls: list[ToolCall], with_listing: bool = True) -> list[str]:
     lines = []
     for topic, data in store_info_by_topic(calls).items():
         if topic == "horario" and isinstance(data.get("dias"), dict):
-            now = "Ahora mismo estamos abiertos." if data.get("abierto_ahora") else "Ahora mismo estamos cerrados."
-            lines.append(f"Atendemos {_schedule_text(data['dias'])}. {data.get('festivos', '')} {now}"
+            now = ("Ahora mismo estamos abiertos. ¡Con gusto te atendemos!" if data.get("abierto_ahora")
+                   else "Ahora mismo estamos cerrados. ¡Con gusto te atendemos en nuestro horario!")
+            lines.append(f"¡Con mucho gusto! Atendemos {_schedule_text(data['dias'])}. {data.get('festivos', '')} {now}"
                          .replace("  ", " "))
         elif isinstance(data.get("texto"), str):
             lines.append(data["texto"])
@@ -120,15 +121,15 @@ def store_lines(calls: list[ToolCall], with_listing: bool = True) -> list[str]:
         if "categorias" in listing:
             # Una línea por categoría, tal como está en el catálogo: nada de «y más» ni familias que no existen.
             names = "\n".join(f"• {item['categoria']}" for item in listing["categorias"])
-            lines.append(f"Manejamos {ASSORTMENT_NAME[BUSINESS_KIND.get()]} en {len(listing['categorias'])} "
+            lines.append(f"¡Con mucho gusto! Manejamos {ASSORTMENT_NAME[BUSINESS_KIND.get()]} en {len(listing['categorias'])} "
                          f"categorías:\n{names}\n"
-                         "¿Qué estás buscando? Dime el producto y la medida, y te doy precio y disponibilidad.")
+                         "¿Qué estás buscando? Dime el producto y la medida, y con gusto te doy precio y disponibilidad.")
         else:
             products = listing["productos"]
             shown = [item["nombre"] for item in products[:MAX_LISTED_PRODUCTS]]
             more = f" y {len(products) - len(shown)} más" if len(products) > len(shown) else ""
-            lines.append(f"En {listing['categoria']} hay: {', '.join(shown)}{more}. Dime cuál y qué medida "
-                         "necesitas para darte precio y existencias.")
+            lines.append(f"¡Con mucho gusto! En {listing['categoria']} hay: {', '.join(shown)}{more}. Dime cuál y qué "
+                         "medida necesitas para darte precio y existencias de una.")
     return lines
 
 

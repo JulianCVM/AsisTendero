@@ -65,7 +65,10 @@ AFFIRMATIVE_DEMONSTRATIVE = re.compile(
     r"^(?:si\b[\s,]*)*(?:(?:dame|deme|quiero|llevo|mejor|pues|listo|dale|claro)\s+)*"
     r"(?:es[eao]|est[eo]|aquel(?:la|lo)?)(?:\s+mism[oa])?(?:\s+(?:esta\s+bien|por\s+favor|porfa|gracias))?[\s.!?]*$"
 )
-SHORT_OFFER_QUESTION = re.compile(r"¿te\s+cotizo\s+(?:el|los)\s+(\d+)\?", re.IGNORECASE)
+SHORT_OFFER_QUESTION = re.compile(
+    r"¿te\s+(?:cotizo\s+(?:el|la|los|las)\s+(\d+)(?:\s+disponibles?)?|sirven?\s+(?:es[eao]s?|el|la|los|las)\s+(\d+)(?:\s+o\s+prefieres\s+revisar\s+otra\s+medida)?)\?",
+    re.IGNORECASE,
+)
 AFFIRMATIVE_SHORT = re.compile(
     r"^(?:si|dale|listo|bueno|claro|de\s+una)\b(?:\s*,?\s*(?:cotiz\w*|es[oa]s?|los?\s+\d+|porfa|por\s+favor))*[\s.!?]*$"
 )
@@ -417,7 +420,7 @@ def affirms_active_item(message: str, context: dict | None) -> dict | None:
 
 
 def offered_short_quantity(message: str, context: dict | None) -> int | None:
-    """Cantidad menor ofrecida en el turno anterior («¿Te cotizo los 4?») cuando el cliente acepta («sí, esos»)."""
+    """Cantidad menor ofrecida en el turno anterior («¿Te sirven esas 12…?» / «¿Te cotizo los 4?») cuando el cliente acepta."""
     turns = (context or {}).get("turnos") or []
     if not turns:
         return None
@@ -425,14 +428,15 @@ def offered_short_quantity(message: str, context: dict | None) -> int | None:
     if not match:
         return None
     norm = " ".join(canonical_text(message).split())
-    return int(match.group(1)) if AFFIRMATIVE_SHORT.match(norm) else None
+    qty = match.group(1) or match.group(2)
+    return int(qty) if qty and AFFIRMATIVE_SHORT.match(norm) else None
 
 
 _QUANTITY_QUESTION = re.compile(
     r"(?:\bcuant[oa]s?\b"
     r"|\bcuant[oa]\b[^?¿]*\b(?:necesit\w*|quier\w*|llev\w*|cotiz\w*|seri\w*|cantidad|metraje)\b"
     r"|\bque\s+(?:cantidad|metraje)\b"
-    r"|\b(?:cotizo|cotizar|llevas?|quieres?|deseas?)\s+(?:(?:el|la|los|las)\s+)?\d+\b"
+    r"|\b(?:cotizo|cotizar|llevas?|quieres?|deseas?|sirven?)\s+(?:(?:el|la|los|las|es[eao]s?)\s+)?\d+\b"
     r"|\bcotizo\s+una\s+cantidad\s+menor\b)"
 )
 _STOCK_MENTION = re.compile(

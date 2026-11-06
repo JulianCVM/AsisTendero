@@ -29,17 +29,17 @@ RUSHES = re.compile(r"\bapur|\bapresur|date prisa|se (?:te |le )?vence pronto|ti
 CONFIRMED_HOURS = int(CONFIRMED_HOLD.total_seconds() // 3600)
 # Un rechazo de la validación también tiene una salida fija: se le pide al cliente lo que falta.
 REJECTION_TEXT = {
-    "PURCHASE_NOT_STATED": "¿Quieres que registre el pedido? Dime qué te llevas y cuántas unidades, y te muestro el resumen.",
-    "CONFIRMATION_NOT_STATED": "Revisa el resumen del pedido y respóndeme «sí, confirmo» para confirmarlo.",
-    "TIME_NOT_GROUNDED": "¿Qué día y a qué hora pasas a recoger? Por ejemplo: «hoy a las 4».",
-    "CANCEL_NOT_STATED": "¿Quieres cancelar el pedido? Dímelo y lo cancelo.",
-    "ORDER_UNCHANGED": "¿Qué te llevas en lugar de lo que cancelé? Dime el producto y cuántas unidades.",
-    "SESSION_REQUIRED": "Para registrar un pedido abre una conversación; aquí solo puedo cotizar.",
+    "PURCHASE_NOT_STATED": "¿Quieres que registre el pedido? Dime con gusto qué te llevas y cuántas unidades, y te muestro el resumen.",
+    "CONFIRMATION_NOT_STATED": "Por favor revisa el resumen del pedido y respóndeme «sí, confirmo» para confirmarlo con gusto.",
+    "TIME_NOT_GROUNDED": "¿Qué día y a qué hora pasas a recoger? Por ejemplo: «hoy a las 4», y te lo agendo con gusto.",
+    "CANCEL_NOT_STATED": "¿Quieres cancelar el pedido? Dímelo con confianza y lo cancelo de una.",
+    "ORDER_UNCHANGED": "¿Qué te llevas en lugar de lo que cancelé? Dime el producto y cuántas unidades para ayudarte con gusto.",
+    "SESSION_REQUIRED": "Para registrar un pedido abre una conversación; por aquí solo puedo cotizar con gusto.",
     # Sin estos textos, un código de pedido inventado («P-XXXXXX») terminaba en «No pude verificar ese producto».
     "INVALID_ARGUMENT": "No encuentro ese pedido en esta conversación. Si quieres llevar algo, dime el producto y "
-                        "cuántas unidades.",
-    "SKU_NOT_GROUNDED": "¿Qué producto te llevas? Dime cuál y cuántas unidades, y registro el pedido.",
-    "QUANTITY_NOT_GROUNDED": "¿Cuántas unidades te llevas? Dímelo y registro el pedido.",
+                        "cuántas unidades con gusto.",
+    "SKU_NOT_GROUNDED": "¿Qué producto te llevas? Dime cuál y cuántas unidades, y con mucho gusto registro el pedido.",
+    "QUANTITY_NOT_GROUNDED": "¿Cuántas unidades te llevas? Dímelo y con mucho gusto registro el pedido.",
 }
 
 
@@ -64,28 +64,29 @@ def _summary(order: dict) -> str:
 def _describe(tool: str, order: dict) -> str:
     code = order["pedido"]
     if tool == "registrar_pedido":
-        opening = (f"Listo, cambié tu pedido: cancelé el {order['reemplaza']} y registré el {code}"
-                   if order.get("reemplaza") else f"Listo, registré tu pedido {code}")
+        opening = (f"¡Listo, con mucho gusto! Cambié tu pedido: cancelé el {order['reemplaza']} y registré el {code}"
+                   if order.get("reemplaza") else f"¡Listo, con mucho gusto! Registré tu pedido {code}")
         return (f"{opening} para recoger en la tienda:\n{_summary(order)}\n"
-                f"Para dejártelo guardado, ¿me confirmas con un «sí» antes de las {_hour(order.get('aparta_hasta'))}? "
-                f"Ya confirmado te lo guardo hasta {CONFIRMED_HOURS} horas, así que puedes venir con calma.")
+                f"Para dejártelo bien guardado, ¿me confirmas con un «sí» antes de las {_hour(order.get('aparta_hasta'))}? "
+                f"Ya confirmado te lo guardo hasta {CONFIRMED_HOURS} horas, así que puedes venir con toda calma.")
     if tool == "confirmar_pedido":
         held = f" y te lo guardo hasta el {_when(order['aparta_hasta'])}" if order.get("aparta_hasta") else ""
-        pickup = (f"Te esperamos el {_when(order['recogida'])}." if order.get("recogida")
-                  else "¿Más o menos a qué hora pasas por él?")
-        return f"¡Listo! Confirmé el pedido {code} por {_cop(order['total_cop'])}: quedó confirmado{held}. {pickup}"
+        pickup = (f"Te esperamos el {_when(order['recogida'])} con mucho gusto." if order.get("recogida")
+                  else "¿Más o menos a qué hora te queda bien pasar por él?")
+        return f"¡Listo, muchas gracias! Confirmé el pedido {code} por {_cop(order['total_cop'])}: quedó confirmado{held}. {pickup}"
     if tool == "agendar_recogida":
-        text = f"Perfecto, te esperamos el {_when(order['recogida'])} con tu pedido {code}." if order.get("recogida") else ""
+        text = (f"¡Perfecto! Con mucho gusto, te esperamos el {_when(order['recogida'])} con tu pedido {code}."
+                if order.get("recogida") else "")
         if order.get("nota"):
             text = f"{text} Anoté en el pedido {code}: «{order['nota']}».".strip()
         if order["estado"] == "pendiente":
             text += f" Aún falta que lo confirmes: lo aparto hasta las {_hour(order.get('aparta_hasta'))}."
         return text
     if tool == "cancelar_pedido":
-        return f"Listo, cancelé el pedido {code}. Si lo vuelves a necesitar, me dices."
+        return f"¡Listo, tranquilo! Cancelé el pedido {code}. Si más adelante lo vuelves a necesitar, me avisas con toda confianza."
     pickup = f", recogida el {_when(order['recogida'])}" if order.get("recogida") else ""
     hold = f", apartado hasta el {_when(order['aparta_hasta'])}" if order.get("aparta_hasta") else ""
-    return f"Pedido {code}: {STATUS_TEXT.get(order['estado'], order['estado'])}{hold}{pickup}.\n{_summary(order)}"
+    return f"Aquí tienes el estado de tu pedido {code}: {STATUS_TEXT.get(order['estado'], order['estado'])}{hold}{pickup}.\n{_summary(order)}"
 
 
 STATUS_BY_TOOL = {"registrar_pedido": "order_pending", "confirmar_pedido": "order_confirmed",
@@ -123,7 +124,7 @@ def order_reply(calls: list[ToolCall]) -> tuple[str | None, str] | None:
         response = call["response"]
         if response.get("status") == "ok":
             if call["requested_tool"] == "consultar_pedido" and not (response.get("data") or {}).get("pedidos"):
-                lines.append("No tienes pedidos en esta conversación.")
+                lines.append("No tienes pedidos en esta conversación por ahora. Si te antojas de algo, me avisas con gusto.")
                 status = status if results else "order_status"
             continue
         code = (response.get("error") or {}).get("code")
@@ -178,9 +179,10 @@ def notice_text(event: dict) -> str:
     """Aviso proactivo para el cliente a partir de un evento del pedido (orders.OrderBook.notices)."""
     code = event["pedido"]
     if event["estado"] == "vencido" and event["detalle"] == "sin confirmar a tiempo":
-        return (f"Pasaron {HOLD_MINUTES} minutos sin confirmar el pedido {code}, así que liberé lo apartado. "
-                "Si aún lo quieres, escríbeme y lo registro de nuevo con el precio vigente.")
+        return (f"¡Hola! Pasaron {HOLD_MINUTES} minutos sin confirmar el pedido {code}, así que liberé lo apartado. "
+                "Si aún lo quieres, escríbeme con confianza y lo registro de nuevo con el precio vigente.")
     if event["estado"] == "vencido":
-        return f"El pedido {code} venció porque no se recogió a tiempo, y se liberó lo apartado."
-    return (f"Tu pedido {code} sigue apartado solo hasta las {_hour(event.get('aparta_hasta'))}. "
-            "¿Lo confirmas? Respóndeme «sí, confirmo».")
+        return (f"¡Hola! El pedido {code} venció porque no se recogió a tiempo, y se liberó lo apartado. "
+                "Si todavía lo necesitas, escríbeme con gusto.")
+    return (f"¡Hola! Tu pedido {code} sigue apartado solo hasta las {_hour(event.get('aparta_hasta'))}. "
+            "¿Me lo confirmas? Respóndeme «sí, confirmo» con confianza.")

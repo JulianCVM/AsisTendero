@@ -430,11 +430,11 @@ def _product(stock, unit="metro"):
 
 
 @pytest.mark.parametrize(("stock", "asked", "needed", "expected"), [
-    (12, False, 0, "Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro."),
-    (12, True, 0, "Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Me quedan 12 metros."),
-    (3, False, 0, "Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Ojo, solo me quedan 3 metros."),
-    (12, False, 20, "Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Ojo, solo me quedan 12 metros."),
-    (0, False, 0, "El tubo PVC presión para agua de 1/2 pulgada está agotado por ahora."),
+    (12, False, 0, "¡Con mucho gusto! Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro."),
+    (12, True, 0, "¡Con mucho gusto! Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Me quedan 12 metros."),
+    (3, False, 0, "¡Con mucho gusto! Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Ojo, solo me quedan 3 metros."),
+    (12, False, 20, "¡Con mucho gusto! Sí, tenemos tubo PVC presión para agua de 1/2 pulgada, a $8.500 el metro. Ojo, solo me quedan 12 metros."),
+    (0, False, 0, "El tubo PVC presión para agua de 1/2 pulgada se encuentra agotado por ahora. ¿Buscas alguna otra referencia en la que te pueda colaborar?"),
 ])
 def test_stock_is_said_only_when_asked_low_short_or_out(stock, asked, needed, expected):
     # Visor, 23-10: cada opción decía «quedan 12 metros» aunque el cliente no preguntó cuánto había.
@@ -765,4 +765,45 @@ def test_shopping_list_quoted_on_final_summary_and_decoupled_from_new_items(chat
     assert "LIST_QUOTE_REQUIRED" in t3["avisos_enviados"]
 
 
+def test_agent_replies_with_warm_and_friendly_tone(chat):
+    turn, sessions, _ = chat
+    session = sessions.create()
+    cement = {"text": "cemento gris de 50 kg", "product": "cemento", "measure": "50 kg"}
+    # 1. Disponibilidad sin cantidad: tono cálido y pregunta cordial.
+    t1 = turn(session, "¿tienen cemento gris de 50 kg?", tool("buscar_productos", items=[cement]), say())
+    assert "¡Con mucho gusto!" in t1["respuesta"] and "Con gusto te cotizo." in t1["respuesta"]
+    # 2. Cotización: apertura cálida y oferta amable de apartado.
+    t2 = turn(session, "2 bultos", quote(("CEM-050", 2)), say())
+    assert "¡Con mucho gusto!" in t2["respuesta"] and "¿Quieres que te lo aparte de una vez" in t2["respuesta"]
+    # 3. Producto no encontrado: frase fluida y limpia sin encadenar disculpas ni muletillas.
+    t3 = turn(session, "¿tienen taladro percutor?", tool("buscar_productos", items=[{"text": "taladro percutor", "product": "taladro"}]), say())
+    assert "Por ahora taladro percutor no lo manejo." in t3["respuesta"]
+    assert "con mucho gusto te la busco" in t3["respuesta"]
+    assert "¡Qué pena contigo! Uy" not in t3["respuesta"]
 
+
+def test_insufficient_stock_reveals_exact_available_quantity_immediately(chat):
+    from asistendero.agente.respuesta.reply_text import short_stock_text
+
+    # 1. Plantilla con stock parcial (piden 40 y hay 23): incluye la cifra exacta disponible y ofrece cotizarlas.
+    product_23 = _product(23, unit="unidad")
+    partial = short_stock_text([{"sku": "PVC-050", "quantity": 40}], {"PVC-050": product_23}, {})
+    assert "40" in partial and "23" in partial
+    assert "no me alcanzan las 40 unidades, en este momento solo me quedan 23 unidades" in partial
+    assert "¿Te sirven esas 23 o prefieres revisar otra medida?" in partial
+
+    # 2. Plantilla con stock 0 (totalmente agotado): informa que está agotado y ofrece buscar otra referencia.
+    product_0 = _product(0, unit="unidad")
+    empty = short_stock_text([{"sku": "PVC-050", "quantity": 5}], {"PVC-050": product_0}, {})
+    assert empty == "El tubo PVC presión para agua de 1/2 pulgada se encuentra agotado por ahora. ¿Buscas alguna otra referencia en la que te pueda colaborar?"
+
+    # 3. Flujo conversacional de dos turnos (sin búsqueda en el segundo turno): revela el stock exacto de inmediato.
+    turn, sessions, _ = chat
+    session = sessions.create()
+    turn(session, "¿tienen tubo PVC de 1/2 para agua?", tool("buscar_productos", items=[PVC_HALF]), say())
+    exceeded = turn(session, "necesito 40 metros", tool("buscar_productos", items=[PVC_HALF]), say())
+    assert exceeded["estado"] == "insufficient_stock"
+    assert "40" in exceeded["respuesta"] and "12" in exceeded["respuesta"]
+    assert "no me alcanzan los 40 metros, en este momento solo me quedan 12 metros" in exceeded["respuesta"]
+    assert "¿Te sirven esos 12 o prefieres revisar otra medida?" in exceeded["respuesta"]
+    assert "cantidad menor" not in exceeded["respuesta"]
