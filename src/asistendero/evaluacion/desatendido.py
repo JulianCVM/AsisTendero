@@ -47,6 +47,7 @@ from asistendero.evaluacion.bitacora_carga import (
 from asistendero.evaluacion.carga_carluz import build_queue
 from asistendero.evaluacion.cobertura_carluz import build_coverage
 from asistendero.evaluacion.eval_report import record_cost
+from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
 from asistendero.evaluacion.evaluate import evaluate_cases, git_state
 from asistendero.tienda import reloj
 from asistendero.tienda.bodega.stock_assistant import interpret_text
@@ -172,7 +173,11 @@ def run_task(task: dict, catalog: MockCatalog, planner) -> dict:
     if task.get("suite") == "bodega":
         with tempfile.TemporaryDirectory() as folder:
             return run_bodega_case(task, catalog.path, Path(folder), interpret=BODEGA_INTERPRET)
-    report = evaluate_cases([task], catalog=catalog, planner=planner)
+    # Las conversaciones de cobertura fijan la hora de la tienda como ``evaluate --live`` (miércoles 21-10, 9:00):
+    # sus casos esperan «paso mañana a las 3» el 22-10 a las 15:00. Con el reloj real, la corrida 2 agendó bien el
+    # domingo 08/11 y el caso fallaba por la fecha, no por el agente.
+    clock = StoreClock(SIM_START) if task.get("suite") == "cobertura" else None
+    report = evaluate_cases([task], catalog=catalog, planner=planner, clock=clock)
     return report["cases"][0]
 
 

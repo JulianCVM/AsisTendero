@@ -844,3 +844,22 @@ def test_published_run_keeps_the_measurements_and_hides_the_store_figures(tmp_pa
     # La matriz de capacidades sale igual de la copia publicable.
     assert cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(full)) == \
         cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(public))
+
+
+def test_coverage_conversations_run_on_the_simulated_store_day(monkeypatch):
+    # Corrida 2: «paso mañana a las 3» se agendó bien con el reloj real (domingo 08/11) y el caso, que espera el
+    # 22-10 como evaluate --live, fallaba. Las conversaciones fijan la hora de la tienda; la carga no.
+    from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
+
+    seen = {}
+
+    def fake_evaluate(cases, *, catalog, planner, clock=None):
+        seen[cases[0]["suite"]] = clock
+        return {"cases": [{"id": cases[0]["id"]}]}
+
+    monkeypatch.setattr(desatendido, "evaluate_cases", fake_evaluate)
+    desatendido.run_task({"id": "C-001", "suite": "cobertura", "turns": []}, catalog=None, planner=None)
+    desatendido.run_task({"id": "U-0001", "suite": "carga", "query": "¿tienen tubo?"}, catalog=None, planner=None)
+    assert isinstance(seen["cobertura"], StoreClock) and seen["cobertura"].start == SIM_START
+    assert abs((seen["cobertura"]() - SIM_START).total_seconds()) < 60
+    assert seen["carga"] is None
