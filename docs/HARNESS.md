@@ -227,6 +227,14 @@ Desde S3, la base `.local/mock_catalog_s3.sqlite3` contiene **435 variantes fict
 - El panel y el visor piden cómo rotularse (`store_identity`): una tienda real no dice «Datos simulados».
 - La tienda dio el 07-11-2026 su dirección, la pausa del mediodía (11:55 a. m. a 2:00 p. m.) y los medios de pago (efectivo y transferencia). El horario llegó en texto, así que `consultar_info_tienda` no calcula «abierto ahora» para ella. Julian decidió usar como precio el valor del inventario mientras la tienda no dé su lista de venta.
 - **Semana de carga (S4):** `evaluacion/desatendido.py` procesa una cola de consultas distintas sobre esta base (`carga_carluz.py`) a ritmo fijo durante 12 horas y deja la bitácora en `evaluation/s4_carga/` (`docs/DESPLIEGUE.md`).
+- **Cobertura (S4):** el mismo modo corre otras dos colas:
+  - **Conversaciones completas** (`cobertura_carluz.py`): cada turno se califica por separado, con estado, SKU,
+    pedidos, recogida y avisos, y la bitácora registra cada turno.
+  - **Mensajes del tendero al asistente de bodega** (`bodega_carluz.py`): cada caso corre sobre una copia de la base y
+    se compara la bodega, el precio y lo pendiente al proveedor con lo que dijo el tendero, antes y después de
+    confirmar.
+
+  `cobertura_reporte.py` arma la matriz de capacidades sin leer las respuestas.
 
 Para que 2.032 productos no pesen: `explorar_categoria` lista por familias cuando una categoría pasa de `MAX_CATEGORY_ENTRIES` (40) y dice cuántas quedaron sin listar (`sin_listar`), `tokens` y `measures` usan caché, y `order_lines` tiene índice por SKU. Las mediciones y el plan de contenedor y modo desatendido están en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 

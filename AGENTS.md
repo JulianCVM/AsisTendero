@@ -127,6 +127,8 @@ propio.
    - `read_sheet` (`hoja_xlsx.py`); `build_catalog`, `parse_quantity`, `split_description` y `search_terms` (`carluz.py`);
      `import_inventory` (`importar_carluz.py`); `business_kind`, `store_identity` y `KNOWN_BUSINESSES` (`seed.py`);
      `store_note` (`reply_text.py`); `load_catalog_words` (`context_resolution.py`); `open_real_store` (`launcher.py`); `build_queue` (`carga_carluz.py`), `work` y `supervise` (`desatendido.py`),
+     `build_coverage` (`cobertura_carluz.py`), `build_bodega_cases` y `run_bodega_case` (`bodega_carluz.py`),
+     `comparison_markdown` (`cobertura_reporte.py`),
      `write_summary` (`bitacora_carga.py`).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
      `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
@@ -212,6 +214,7 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Importar un inventario real (columnas, cantidades, exclusiones, categorías, sinónimos) | `carluz.py` y `carluz_vocabulario.py`, el lector en `hoja_xlsx.py` y la base en `importar_carluz.py`, con su prueba en `tests/test_carluz.py`, que usa un libro inventado: nunca el Excel real ni sus cifras |
 | Cómo se atiende o se rotula la tienda real | `_CARLUZ_CHANGES` de `prompt.py` subiendo `CARLUZ_PROMPT_VERSION`; `store_identity` de `seed.py`; casos en `evaluation/cases_carluz.json`, sin precios ni existencias |
 | El modo desatendido de S4 (cola, ritmo, reanudación, bitácora) | `desatendido.py`, `carga_carluz.py` y `bitacora_carga.py` de `evaluacion/`, con su prueba en `tests/test_carluz.py`; la bitácora, en `evaluation/s4_carga/` |
+| Las colas de cobertura (conversaciones completas, asistente de bodega) y su matriz de capacidades | `cobertura_carluz.py`, `bodega_carluz.py` y `cobertura_reporte.py` de `evaluacion/`, con su prueba en `tests/test_carluz.py`; las bitácoras, en `evaluation/s4_cobertura/` y `evaluation/s4_bodega/` |
 | El contenedor | Plan en `docs/DESPLIEGUE.md` (aún sin construir) |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
 | La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
