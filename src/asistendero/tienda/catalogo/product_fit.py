@@ -5,6 +5,8 @@ distintos (en la suite variados, «ladrillos» trajo el ladrillo y el mortero, y
 de 9 pulgadas), cada uno era el único de su nombre y se preguntaba una presentación que el cliente ya había dicho.
 """
 
+import re
+
 from asistendero.tienda.catalogo.catalog import Product, tokens
 from asistendero.tienda.catalogo.measures import UNITS, atom_support, contradicts, measures, split_atom
 from asistendero.tienda.catalogo.search import CLAUSE_BREAK
@@ -17,15 +19,35 @@ def said_about(message: str, text: str) -> str:
     concreto» escrito por Grok elegiría por el cliente que solo dijo «broca de 1/4».
     """
     words = tokens(text)
-    clauses = [part for part in CLAUSE_BREAK.split(message) if part.strip()]
-    best = max(clauses, key=lambda part: len(tokens(part) & words), default="")
+    cuts = [0, *(edge for match in CLAUSE_BREAK.finditer(message) for edge in match.span()), len(message)]
+    clauses = [(cuts[index], cuts[index + 1]) for index in range(0, len(cuts) - 1, 2)
+               if message[cuts[index]:cuts[index + 1]].strip()]
+    # Partes seguidas también cuentan, recortadas del mensaje tal como llegó: el inventario real pone comas dentro
+    # del nombre («toma … codelca, grande industrial», C-028) y en los decimales («x 1,5», C-020), y la primera parte
+    # sola perdía el resto. Con el mismo acierto gana la más corta: dos artículos separados por coma se siguen
+    # leyendo cada uno con lo suyo.
+    spans = [message[clauses[start][0]:clauses[end - 1][1]]
+             for start in range(len(clauses)) for end in range(start + 1, len(clauses) + 1)]
+    best = max(spans, key=lambda part: (len(tokens(part) & words), -len(part)), default="")
     return best if words & tokens(best) else message
+
+
+# «x 1,5» es un número: la coma decimal no separa palabras (cobertura C-020, «x 1» se leía también en «x 1,5»).
+_DECIMAL = re.compile(r"(?<![\d.,])\d+[.,]\d+(?![\d.,])")
+
+
+def _said_words(text: str) -> set[str]:
+    return tokens(_DECIMAL.sub(" ", text)) | {number.replace(",", ".") for number in _DECIMAL.findall(text)}
+
+
+def _forms(word: str) -> set[str]:
+    return {word.replace(",", ".")} if _DECIMAL.fullmatch(word) else tokens(word, synonyms=False)
 
 
 def _words(product: Product) -> list[set[str]]:
     # Sin sinónimos del lado del producto: «cuñete» tiene a «galón» de sinónimo y con él «10 galones» elegía el
     # cuñete de 5 galones. Los sinónimos sí amplían lo que dijo el cliente («foco» dice «bombillo»).
-    return [forms for word in f"{product.name} {product.variant}".split() if (forms := tokens(word, synonyms=False))]
+    return [forms for word in f"{product.name} {product.variant}".split() if (forms := _forms(word))]
 
 
 def _hits(said: set[str], product: Product) -> int:
@@ -34,7 +56,7 @@ def _hits(said: set[str], product: Product) -> int:
 
 def described_whole(message: str, text: str, product: Product) -> bool:
     """El cliente dijo cada palabra del nombre y la variante («pintura vinilo beige» y «galones»)."""
-    return _hits(tokens(said_about(message, text)), product) == len(_words(product))
+    return _hits(_said_words(said_about(message, text)), product) == len(_words(product))
 
 
 def closest_named(message: str, text: str, products: list[Product]) -> list[Product]:
@@ -44,7 +66,7 @@ def closest_named(message: str, text: str, products: list[Product]) -> list[Prod
     ninguno y decide la unidad de venta o se pregunta. En un empate gana el único que el cliente describió entero
     («galón» frente a «cuñete de 5 galones»); si no hay uno solo, quedan todos los empatados.
     """
-    said = tokens(said_about(message, text))
+    said = _said_words(said_about(message, text))
     named = [product for product in products if tokens(product.name.split()[0], synonyms=False) & said]
     hits = {product.sku: _hits(said, product) for product in named}
     best = max(hits.values(), default=0)

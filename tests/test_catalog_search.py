@@ -223,3 +223,41 @@ def test_naming_a_product_whole_chooses_it_over_a_longer_name(message, expected)
     finding = {"query": query, "request": {"text": query, "product": "aerosol"}, "matches": [matte, hot], "nearby": []}
     chosen = grounded_selection(message, finding)
     assert (chosen.sku if chosen else None) == expected
+
+
+def _carluz_like(*names):
+    from asistendero.tienda.catalogo.catalog import Product
+
+    return [Product(f"CLZ-{index}", name, "", "metro", 1, 5, "") for index, name in enumerate(names)]
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("necesito 10 manguera para gas economica x 1", "CLZ-0"),
+    ("necesito 10 manguera para gas economica x 1,5", "CLZ-1"),
+    ("necesito 10 manguera para gas economica x 2", "CLZ-2"),
+])
+def test_a_decimal_measure_in_the_name_is_one_number(message, expected):
+    # Cobertura C-020 (Carluz): «x 1» se leía también en «x 1,5» porque la coma partía el decimal en 1 y 5.
+    from asistendero.agente.reglas.validation import grounded_selection
+
+    hoses = _carluz_like("Manguera para gas economica x 1", "Manguera para gas economica x 1,5",
+                         "Manguera para gas economica x 2")
+    query = message.removeprefix("necesito 10 ")
+    finding = {"query": query, "request": {"text": query, "product": "manguera"}, "matches": hoses, "nearby": []}
+    assert grounded_selection(message, finding).sku == expected
+
+
+def test_a_comma_inside_a_product_name_does_not_cut_what_the_customer_said():
+    # Cobertura C-028 (Carluz): «toma … codelca, grande industrial» se cortaba en la coma y quedaban tres opciones.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.product_fit import said_about
+
+    sockets = _carluz_like("Toma aerea eléctrica hembra codelca con polo a tierra, grande",
+                           "Toma aerea eléctrica hembra codelca, grande industrial",
+                           "Toma aerea eléctrica hembra codelca, pequeña")
+    message = "¿cuánto vale toma aerea eléctrica hembra codelca, grande industrial?"
+    query = "toma aerea eléctrica hembra codelca grande industrial"
+    finding = {"query": query, "request": {"text": query, "product": "toma"}, "matches": sockets, "nearby": []}
+    assert grounded_selection(message, finding).sku == "CLZ-1"
+    # Dos artículos separados por coma siguen siendo dos partes: cada uno se lee solo con lo suyo.
+    assert said_about("brocha de 2 pulgadas, y un rodillo de 9 pulgadas", "rodillo de 9 pulgadas").strip().startswith("un rodillo")
