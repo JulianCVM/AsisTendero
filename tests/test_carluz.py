@@ -799,3 +799,48 @@ def test_capability_matrix_compares_two_runs_without_reading_answers(tmp_path):
     # Lo que respondió el agente (con precios del inventario real) nunca llega a la tabla.
     assert "$" not in table
     assert table.index("recogida") < table.index("regateo")  # primero lo que más falla
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Sí, tenemos caja octagonal, a $655 c/u. Ojo, solo me queda 1 unidad.",
+     "Sí, tenemos caja octagonal, a $[valor] c/u. Ojo, solo me queda [n] unidad."),
+    ("Uy, del vinilo t1 solo me quedan 2 galones y necesitas 6. ¿Te cotizo los 2?",
+     "Uy, del vinilo t1 solo me quedan [n] galones y necesitas 6. ¿Te cotizo los 2?"),
+    ("Total: $86.205", "Total: $[valor]"),
+    ("sube tornillo carriaje de 3/8 x 4\" a 29.500", "sube tornillo carriaje de 3/8 x 4\" a [valor]"),
+    ("conté y hay 7 chazo caiman de 1/4", "conté y hay [n] chazo caiman de 1/4"),
+    ("hice inventario: 12 tapa ciega de 10x10", "hice inventario: [n] tapa ciega de 10x10"),
+    ("necesito 3 t sanitario de 4x2 4\"", "necesito 3 t sanitario de 4x2 4\""),
+])
+def test_published_copy_hides_real_prices_and_stock(text, expected):
+    from asistendero.evaluacion.publicar_bitacora import mask_text
+
+    assert mask_text(text) == expected
+
+
+def test_published_run_keeps_the_measurements_and_hides_the_store_figures(tmp_path):
+    from asistendero.evaluacion import cobertura_reporte, publicar_bitacora
+
+    full = tmp_path / "completa"
+    full.mkdir()
+    entry = {"tipo": "tarea", "id": "B-001", "clase": "conteo", "exito": False, "costo_usd": "0.0008",
+             "entrada": "en la bodega quedan 9 rodillo", "respuesta": "Rodillo a $12.400",
+             "motivos": ["CLZ-0042: bodega 3 → 5, debía sumar 2", "sin recogida «2026-10-22 15:00»"],
+             "turnos": [{"exito": True, "mensaje": "¿cuánto vale?", "respuesta": "a $5.140 c/u; quedan 4"}]}
+    (full / "bitacora.jsonl").write_text(json.dumps(entry, ensure_ascii=False) + "\n", encoding="utf-8")
+    (full / "cola.json").write_text(json.dumps([{"id": "B-001", "mensaje": "sube rodillo a 13.400",
+                                                 "esperado": [{"sku": "CLZ-0042", "precio": 13400, "cantidad": 2}]}]),
+                                    encoding="utf-8")
+    with (full / "bitacora.csv").open("w", encoding="utf-8", newline="") as handle:
+        handle.write("id,motivos,respuesta,costo_usd\nB-001,bodega 3 → 5,Rodillo a $12.400,0.0008\n")
+    public = tmp_path / "publica"
+    publicar_bitacora.publish(full, public)
+    published = (public / "bitacora.jsonl").read_text(encoding="utf-8") + (public / "cola.json").read_text(
+        encoding="utf-8") + (public / "bitacora.csv").read_text(encoding="utf-8")
+    for figure in ("12.400", "5.140", "13.400", "13400", "quedan 9", "quedan 4", "bodega 3", "→ 5"):
+        assert figure not in published
+    assert "CLZ-0042" in published and "2026-10-22 15:00" in published and "0.0008" in published
+    assert '"cantidad": 2' in published  # lo que dijo el tendero no es un dato de la tienda
+    # La matriz de capacidades sale igual de la copia publicable.
+    assert cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(full)) == \
+        cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(public))
