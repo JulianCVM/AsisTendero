@@ -22,8 +22,8 @@ agendar, cancelar, vencer a los 5 minutos) y el panel local del tendero; lo pidi
 ampliar el panel: ventas con **registro manual** del cobro (sin pasarela ni verificación bancaria, ver
 `docs/PAGOS.md`), abastecimiento con proveedores, categorías y alertas, asistente de bodega (Grok interpreta, el
 tendero confirma), supervisión de chats con atención humana, tienda de demostración (`--demo`) y página pública
-(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Ese mismo día pidió integrar la rama de visión de Camila: fotos del cliente en el chat, con atributos extraídos por Grok y búsqueda en el catálogo hecha por el servidor, y fotos de referencia libres de Wikimedia Commons en las respuestas (`docs/HARNESS.md`, «Fotos»). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
-datos reales de un piloto, cobros por el chat, fiados y domicilios.
+(`/inicio`). El 31-10-2026 Julian pidió una segunda tienda ficticia, de mercado diario, para evaluar al agente en situaciones domésticas (catálogo, prompt `mercado-v1` y suites; el panel y el visor siguen con la ferretería). Ese mismo día pidió integrar la rama de visión de Camila: fotos del cliente en el chat, con atributos extraídos por Grok y búsqueda en el catálogo hecha por el servidor, y fotos de referencia libres de Wikimedia Commons en las respuestas (`docs/HARNESS.md`, «Fotos»). El 07-11-2026 Julian pidió manejar **datos reales**: el inventario de Ferretería Carluz, importado de su Excel a `.local/carluz/`, que nunca sube al repositorio (`docs/HARNESS.md`, «Datos y barreras»). Siguen fuera de alcance mientras no lo pida el plan del corte: WhatsApp, Wompi u otra pasarela, Supabase,
+cobros por el chat, fiados y domicilios.
 
 **Marca:** el producto se llama **PulsoTienda** (panel del tendero y página pública) y el agente que atiende el chat, **AsisTendero** (visor, mensajes del chat y menciones al asistente). El paquete sigue siendo `asistendero`.
 
@@ -124,6 +124,10 @@ propio.
    - `read_photo` y `PhotoRejected` (`photo.py`), `look_at` (`look.py`), `ImageAttributePayload`,
      `sanitize_image_text` y `search_item` (`attributes.py`), `PhotoPlanner`, `backed_payload` y `fixed_reply` (`photo_planner.py`);
      `dhash`, `closest_family`, `fingerprint_report`, `photo_of` y `photo_file` (`product_photos.py`) y `reply_photos` (`reply_photos.py`); `describe_photo_flow` (`photo_flow.py`, el diagrama de la foto del visor) y `photo_for` (`eval_photos.py`, la foto de un caso de evaluación).
+   - `read_sheet` (`hoja_xlsx.py`); `build_catalog`, `parse_quantity`, `split_description` y `search_terms` (`carluz.py`);
+     `import_inventory` (`importar_carluz.py`); `business_kind`, `store_identity` y `KNOWN_BUSINESSES` (`seed.py`);
+     `store_note` (`reply_text.py`); `load_catalog_words` (`context_resolution.py`); `open_real_store` (`launcher.py`); `build_queue` (`carga_carluz.py`), `work` y `supervise` (`desatendido.py`),
+     `write_summary` (`bitacora_carga.py`).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
      `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
      (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
@@ -205,6 +209,10 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Qué recuerda una sesión o qué contexto ve Grok | `sessions.py` (límites en constantes), con su prueba en `tests/test_sessions.py` |
 | Un tema de la tienda o una política que Grok no puede afirmar sin consultarla | `STORE_INFO` de `seed.py`, `STORE_TOPICS` de `grok.py` y `POLICY_CLAIMS` de `store_replies.py` |
 | Un caso de evaluación | `evaluation/cases.json` (con pedidos, esperas, varios clientes o fotos: ver `eval_sessions.py` y `eval_photos.py`), con su guion en `tests/test_evaluation_cases.py` o `tests/test_eval_sessions.py`; los resultados reales, en `evaluation/*.md` |
+| Importar un inventario real (columnas, cantidades, exclusiones, categorías, sinónimos) | `carluz.py` y `carluz_vocabulario.py`, el lector en `hoja_xlsx.py` y la base en `importar_carluz.py`, con su prueba en `tests/test_carluz.py`, que usa un libro inventado: nunca el Excel real ni sus cifras |
+| Cómo se atiende o se rotula la tienda real | `_CARLUZ_CHANGES` de `prompt.py` subiendo `CARLUZ_PROMPT_VERSION`; `store_identity` de `seed.py`; casos en `evaluation/cases_carluz.json`, sin precios ni existencias |
+| El modo desatendido de S4 (cola, ritmo, reanudación, bitácora) | `desatendido.py`, `carga_carluz.py` y `bitacora_carga.py` de `evaluacion/`, con su prueba en `tests/test_carluz.py`; la bitácora, en `evaluation/s4_carga/` |
+| El contenedor | Plan en `docs/DESPLIEGUE.md` (aún sin construir) |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
 | La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
 | Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |

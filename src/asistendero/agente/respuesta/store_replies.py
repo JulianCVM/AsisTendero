@@ -12,7 +12,8 @@ DAY_NAMES = {"lunes": "lunes", "martes": "martes", "miercoles": "miércoles", "j
 MAX_LISTED_PRODUCTS = 15
 # Lo que vende cada negocio, para la lista de categorías: en la corrida 39 la tienda de mercado decía «Manejamos
 # artículos de ferretería en 10 categorías» (M-20 y M-35).
-ASSORTMENT_NAME = {"ferreteria": "artículos de ferretería", "mercado": "productos de mercado y del hogar"}
+ASSORTMENT_NAME = {"ferreteria": "artículos de ferretería", "mercado": "productos de mercado y del hogar",
+                   "carluz": "artículos de ferretería"}
 # «Estamos abiertos» cuando el servidor dice que está cerrada (o al revés) invalida la redacción de Grok.
 SAYS_OPEN = re.compile(r"\b(?:estamos|esta|seguimos|ya)\s+abiert|\babiert[oa]s?\s+(?:ahora|en\s+este\s+momento)")
 SAYS_CLOSED = re.compile(r"\b(?:estamos|esta|ya)\s+cerrad|\bcerrad[oa]s?\s+(?:ahora|en\s+este\s+momento)")
@@ -126,7 +127,8 @@ def store_lines(calls: list[ToolCall], with_listing: bool = True) -> list[str]:
         else:
             products = listing["productos"]
             shown = [item["nombre"] for item in products[:MAX_LISTED_PRODUCTS]]
-            more = f" y {len(products) - len(shown)} más" if len(products) > len(shown) else ""
+            hidden = len(products) - len(shown) + (listing.get("sin_listar") or 0)
+            more = f" y {hidden} más" if hidden else ""
             lines.append(f"En {listing['categoria']} hay: {', '.join(shown)}{more}. Dime cuál y qué medida "
                          "necesitas para darte precio y existencias.")
     return lines

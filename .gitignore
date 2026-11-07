@@ -9,3 +9,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+# Inventarios reales: nunca al repositorio público.
+*.xlsx
+*.xls

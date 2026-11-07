@@ -363,3 +363,17 @@ def test_graph_answers_store_questions_with_real_tools(catalog, monkeypatch):
     assert result["estado"] == "informed"
     assert "domingo cerrado" in result["respuesta"]
     assert "Ahora mismo estamos cerrados." in result["respuesta"]
+
+
+def test_partial_quote_says_which_skus_it_left_out(catalog):
+    # Antes: con un SKU válido y uno inexistente, la cotización salía «ok» con el total parcial y sin ningún aviso.
+    response = execute_tool("calcular_cotizacion_informativa",
+                            {"lines": [{"sku": "CEM-050", "quantity": 1}, {"sku": "NOEXISTE-1", "quantity": 2}]},
+                            catalog=catalog)
+    assert response["status"] == "ok"
+    assert [line["sku"] for line in response["data"]["lines"]] == ["CEM-050"]
+    assert response["data"]["skus_no_encontrados"] == ["NOEXISTE-1"]
+    assert response["data"]["reservation_created"] is False
+    whole = execute_tool("calcular_cotizacion_informativa", {"lines": [{"sku": "CEM-050", "quantity": 1}]},
+                         catalog=catalog)
+    assert "skus_no_encontrados" not in whole["data"]

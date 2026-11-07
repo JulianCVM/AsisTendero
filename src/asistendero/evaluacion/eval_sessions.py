@@ -33,7 +33,7 @@ from asistendero.agente.flujo.graph import Planner
 from asistendero.agente.modelo.grok import MODEL_OVERRIDE, current_model
 from asistendero.agente.modelo.prompt import serving
 from asistendero.agente.respuesta.order_replies import notice_text
-from asistendero.datos.seed import BUSINESSES
+from asistendero.datos.seed import KNOWN_BUSINESSES
 from asistendero.evaluacion.eval_checks import record, sum_known
 from asistendero.evaluacion.eval_photos import photo_for
 from asistendero.observabilidad.pricing import run_cost
@@ -184,7 +184,7 @@ def _store(case: dict, catalog_path: Path, folder: Path) -> tuple[OrderBook, Ses
     """Copia propia del catálogo para el caso: los pedidos de un caso no apartan existencias de otro."""
     database = folder / f"{case['id']}.sqlite3"
     shutil.copy(catalog_path, database)
-    business = BUSINESSES[case.get("negocio", "ferreteria")]
+    business = KNOWN_BUSINESSES[case.get("negocio", "ferreteria")]
     return OrderBook(database, business_id=business), SessionStore(folder / f"{case['id']}-sesiones.sqlite3")
 
 

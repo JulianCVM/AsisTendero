@@ -38,7 +38,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
 - Muestra en el visor el resultado de cada prueba para evaluarla (estado, quién redactó, herramientas pedidas, ejecutadas y rechazadas, costo y latencia), un castillo animado del harness (cada edificio es un nodo o una barrera del flujo), un mapa interactivo del flujo de decisión y la traza en paneles legibles con el JSON a un clic.
 
-El catálogo, los precios y las existencias de esta versión son **ficticios**. La cotización es **informativa** (`reservation_created=false`); un pedido solo existe si el cliente lo pidió y Grok lo registró, y nunca implica un pago. El tendero ve esos pedidos y administra el inventario en un panel local.
+De forma predeterminada, el catálogo, los precios y las existencias son **ficticios**. Con `--tienda carluz` el agente atiende sobre el inventario real de Ferretería Carluz, importado de su Excel a una base local que no se sube. La cotización es **informativa** (`reservation_created=false`); un pedido solo existe si el cliente lo pidió y Grok lo registró, y nunca implica un pago. El tendero ve esos pedidos y administra el inventario en un panel local.
 
 ## Cómo funciona
 
@@ -81,7 +81,7 @@ Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de 
 | **Python 3.11+** | Lógica del agente, catálogo, comandos y servidor local. |
 | **LangGraph** | Orquesta validación, interpretación, búsqueda y respuesta. |
 | **Grok** | Interpreta las consultas y redacta respuestas mediante una API de Chat Completions compatible con OpenAI. |
-| **SQLite** | Catálogo ficticio de una ferretería de demostración; consultas de solo lectura durante la conversación. |
+| **SQLite** | Catálogo ficticio de una ferretería de demostración o inventario real importado; consultas de solo lectura durante la conversación. |
 | **Pillow** | Abre y valida la foto del cliente, le quita los metadatos, la reduce y calcula su huella; también reduce las fotos de la biblioteca. |
 | **HTML, CSS y JavaScript** | Visor local de conversación, pasos y costos. |
 | **pytest** | Pruebas automatizadas con Grok simulado. |
@@ -142,6 +142,26 @@ En macOS o Linux, sustituye `.\.venv\Scripts\python.exe` por `./.venv/bin/python
 Arranca en un solo proceso el [visor](#visor-local) (chat del cliente y traza, [http://127.0.0.1:8765/](http://127.0.0.1:8765/)) y el [panel del tendero](#panel-del-tendero) ([http://127.0.0.1:8766/](http://127.0.0.1:8766/), con la página de presentación en `/inicio`). Los dos usan la misma tienda, los mismos pedidos y las mismas conversaciones: lo que un cliente pide en el chat aparece en el panel, y lo que el tendero responde al tomar una conversación llega al chat. Si el catálogo ficticio no existe, lo crea en `.local/mock_catalog_s3.sqlite3` (435 variantes de ferretería y la tienda de mercado del evaluador); si ya existe, solo le agrega los productos nuevos de la siembra sin tocar los precios ni las existencias que el tendero ya cambió. `Ctrl+C` detiene todo. Abrir las páginas no llama a Grok: cada mensaje del chat y cada **Interpretar** del asistente de bodega sí, y consumen créditos.
 
 El mismo comando, con un mensaje o con `--chat`, responde en la terminal (abajo). Los comandos de cada parte por separado (`asistendero.entregas.visor`, `asistendero.entregas.panel`, `asistendero.datos`) siguen disponibles. Si prefieres crear el catálogo sin arrancar nada, usa `python -m asistendero.datos`, que se detiene si la base ya existe.
+
+### Inventario real de Ferretería Carluz
+
+El Excel y la base nunca se suben al repositorio: quedan en `.local/carluz/`. Se importa una vez y se arranca con `--tienda carluz`:
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.datos.importar_carluz --xlsx "RUTA DEL EXCEL"
+.\.venv\Scripts\python.exe -m asistendero --tienda carluz
+```
+
+El primer comando imprime y guarda en `.local/carluz/importacion.json` el resumen: filas, productos, lo excluido y la reconciliación con la hoja. Para evaluar sobre esa base, con Grok real y consumo de créditos: `.\.venv\Scripts\python.exe -m asistendero.evaluacion --live --tienda carluz --budget-usd TOPE`. Los casos están en `evaluation/cases_carluz.json`, sin precios ni existencias. Ver [docs/HARNESS.md](docs/HARNESS.md) («Datos y barreras»).
+
+La semana de carga (S4) corre sola sobre esa base durante 12 horas, con Grok real y bitácora por tarea en `evaluation/s4_carga/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido preparar --tareas 1300
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido correr --horas 12.25 --budget-usd 25 --supervisar
+```
+
+Detalle, reanudación y recuperación de errores en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
 ### Terminal
 
@@ -281,7 +301,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `tienda/ventas/` | `payments.py` (registro manual del cobro, ver [PAGOS.md](docs/PAGOS.md)), `sales.py` y `sales_history.py`. |
 | `tienda/abastecimiento/` | `purchasing*.py` (proveedores y pedidos al proveedor) y `stock_*.py` (llegadas y cambios de bodega). |
 | `tienda/bodega/` | `stock_assistant.py` y `stock_proposal.py`: Grok interpreta lo que cuenta el tendero y el servidor arma una propuesta que se aplica solo al confirmarla. |
-| `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. `fotos/` guarda una foto libre de Wikimedia Commons por familia (208 de 246, revisadas a ojo), con `fotos.json` y `CREDITOS.md`. |
+| `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. `hoja_xlsx.py`, `carluz.py`, `carluz_vocabulario.py` e `importar_carluz.py`: importación del inventario real. `fotos/` guarda una foto libre de Wikimedia Commons por familia (208 de 246, revisadas a ojo), con `fotos.json` y `CREDITOS.md`. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py`, `harness_flow.py` (mapa del harness atado al grafo real) y `photo_flow.py` (recorrido de una foto atado a sus funciones). |
 | `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_costs.py` (costo por tarea, por mensaje, por llamada a Grok y por herramienta), `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
 | `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
@@ -296,7 +316,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 
 ## Estado y próximos pasos
 
-Este prototipo **no está conectado a un comercio real**. Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; gestiona pedidos para recoger sobre datos ficticios, pero no pagos, fiados, domicilios ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
+El agente ya atiende sobre el **inventario real de Ferretería Carluz** en local, pero **aún no ha corrido con Grok sobre él** ni está en operación con clientes de la tienda; sus valores están por confirmar como precios de venta (ver [docs/HARNESS.md](docs/HARNESS.md)). Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; gestiona pedidos para recoger, pero no pagos, fiados, domicilios ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
 
 La visión y las tareas están organizadas en [PLANIFICACION.md](PLANIFICACION.md) y en el [tablero de PulsoTienda](https://github.com/users/JulianCVM/projects/9). El diseño aplicado al visor se documenta en [DESIGN.md](DESIGN.md). Las decisiones de dinero o crédito deberán quedar bajo autorización del dueño o de un rol delegado, y una confirmación de pago requerirá una fuente verificable.
 

@@ -27,6 +27,39 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
+## Inventario real de Ferretería Carluz: importado, todavía sin corrida con Grok (07-11-2026)
+
+**Esta sección no afirma un resultado con Grok real, porque aún no se ha hecho esa corrida.** Lo que sigue se midió sin
+llamar al modelo. Las secciones de abajo siguen siendo sobre datos ficticios. Aquí solo van conteos: los precios, las
+existencias y el Excel se quedan en `.local/carluz/`, que no se sube.
+
+| Medida de la importación | Valor |
+|---|---|
+| Filas de la hoja | 2.041 |
+| Productos en la base | 2.032 |
+| Filas excluidas por no ser mercancía | 3 |
+| Filas repetidas unidas | 6 |
+| Reconciliación con la hoja | Exacta: mercancía + excluido = total de la hoja |
+| Cantidades fraccionarias, guardadas enteras | 87 |
+| Productos sin una unidad entera disponible | 15 |
+| Sin categoría reconocida (`Otros artículos`) | 92 (4,5 %) |
+| Con imagen | 0: el Excel no trae |
+
+**Lo que falta para cumplir lo que pidió el jurado:**
+
+- Permiso del tendero por escrito. Sin él, el nombre de la tienda y los casos no deberían publicarse.
+- La corrida real de `evaluation/cases_carluz.json` (31 casos), registrada aquí con commit, fecha, `PROMPT_VERSION` y costo.
+- El precio de venta: la columna de valor del Excel parece costo con IVA (126 de 134 pares cruzados dan exactamente
+  costo × 1,19). El agente la presenta como valor del inventario, a confirmar en el mostrador.
+
+**Límite conocido, visto con un guion sin Grok:** a «¿venden neveras?» el agente ofrece «Bombillo para nevera» como
+opción, porque la palabra está en el nombre. La respuesta no inventa nada y el nombre deja claro qué es, pero no es lo
+que el cliente pidió. El caso CL-19 lo cubre.
+
+**Vencimiento del surtido de M-27:** `MLPO-400` tiene fecha fija 2026-11-04. Desde `surtido.py` con `reloj.local_now`, la
+prueba con guion fija el día y vuelve a pasar; pero una corrida `--live` usa el reloj real, y M-27 ya no encontrará una
+fecha futura. Hay que resolverlo antes de la próxima corrida completa.
+
 ## Corridas 45 a 48: los 345 casos con Grok real hasta el commit de la entrega (01-11-2026)
 
 Objetivo: que todo lo que se entrega (resultado, costo por tarea y reporte técnico) salga de una corrida real
