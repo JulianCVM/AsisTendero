@@ -204,3 +204,22 @@ def test_measures_understand_the_abbreviations_of_the_real_inventory():
     assert measures("manguera 3 mtrs") == measures("manguera 3 metros") == {"3m"}
     assert measures("thinner 1 lt") == measures("thinner 1 litro")
     assert measures("lija 80 cms") != measures("lija 80 mm")
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("necesito 3 aerosol pintuco negro mate", "CLZ-A"),
+    ("necesito 3 aerosol pintuco negro mate alta temperatura", "CLZ-B"),
+    ("necesito 3 aerosol negro", None),
+])
+def test_naming_a_product_whole_chooses_it_over_a_longer_name(message, expected):
+    # Cobertura C-005 (Carluz): el cliente escribió el nombre exacto y recibió opciones porque el otro aerosol
+    # lleva las mismas palabras más «alta temperatura». Decir el nombre entero elige; decir menos, pregunta.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product
+
+    matte = Product("CLZ-A", "Aerosol pintuco negro mate", "", "unidad", 1, 5, "")
+    hot = Product("CLZ-B", "Aerosol pintuco negro mate alta temperatura", "", "unidad", 1, 5, "")
+    query = message.removeprefix("necesito 3 ")
+    finding = {"query": query, "request": {"text": query, "product": "aerosol"}, "matches": [matte, hot], "nearby": []}
+    chosen = grounded_selection(message, finding)
+    assert (chosen.sku if chosen else None) == expected

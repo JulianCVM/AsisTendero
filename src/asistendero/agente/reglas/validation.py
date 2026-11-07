@@ -220,7 +220,10 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         shared = set.intersection(*(tokens(f"{item.name} {item.variant}") for item in finding["matches"]))
         alone = sum(item.name == product.name for item in finding["matches"]) == 1
         support = tokens(f"{product.name} {product.variant}") & tokens(message) & tokens(described)
-        if alone and not support - shared and product.sku.casefold() not in message.casefold() and product != head:
+        # Salvo que el cliente lo haya nombrado entero: «aerosol pintuco negro mate» es ese y no el de «alta
+        # temperatura», que lleva las mismas palabras y más (cobertura C-005, Carluz).
+        if (alone and not support - shared and product.sku.casefold() not in message.casefold() and product != head
+                and not described_whole(message, finding["query"], product)):
             return None
     if not chosen and head is not None:
         chosen = [head]
