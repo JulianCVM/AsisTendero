@@ -51,6 +51,9 @@ EXPLICIT_PURCHASE = re.compile(
     r"|crea(?:me)?\s+(?:el\s+|un\s+)?pedido"
     r")"
 )
+TAKES_WHAT_IS_LEFT = re.compile(
+    r"\b(?:(?:los|las|lo)\s+que\s+(?:tenga\w*|tiene\w*|haya|hay|queden?|quede)|todo\s+lo\s+que\s+(?:tenga\w*|haya|hay|quede))\b")
+LEFT_IN_STOCK = re.compile(r"\bquedan?\s+(\d+)\b")
 # Un supuesto en pregunta («¿y si llevo 10…?», «¿si compro 3 me rebaja?»): sin coma tras el «si», no es el «sí».
 HYPOTHETICAL = re.compile(r"\bsi\s+(?:me\s+)?(?:llev|compr|pid)\w*\b[^.!]*\?")
 # «agrégale 2 brochas» suma a un pedido activo (Q-10). Sin pedido es sumar a la lista que se cotiza: con «agrega una
@@ -215,6 +218,11 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
               for sku, product in grounded_products(reference, calls).items()]
     removed = removed_now([item for item in named if item["nombre"]], current)
     allowed = order_quantities(reference) | added_quantities(current, context)
+    # «bueno, apárteme los que tenga» tras «solo me quedan 2»: esa cantidad la acaba de leer el servidor de la bodega
+    # (cobertura, C-027: se rechazaba y se preguntaba «¿cuántos?»). registrar_pedido vuelve a mirar las existencias.
+    turns = (context or {}).get("turnos") or []
+    if turns and TAKES_WHAT_IS_LEFT.search(normalize_text(current)):
+        allowed |= {int(number) for number in LEFT_IN_STOCK.findall(normalize_text(turns[-1].get("asistente") or ""))}
     # «me llevo todo»: las líneas de la lista ya las dijo el cliente, con su cantidad.
     listed = list_lines(context)
     from asistendero.agente.herramientas.observations import search_findings

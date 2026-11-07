@@ -206,7 +206,13 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             return "clarify", _join([f"¿{many} {units(unit, 2)} {of_the(item_name)} necesitas?", *demo])
         if ordinal_note := unresolved_ordinal(asked_raw, context):
             return "clarify", _join([ordinal_note, *demo])
-        if any(call["response"]["status"] == "error" for call in calls):
+        codes = [(call["response"].get("error") or {}).get("code") for call in calls if call["response"]["status"] == "error"]
+        # «¿tienen tabla?» con explorar_categoria → NOT_FOUND contestaba «No pude consultar el catálogo» (cobertura,
+        # C-059): el catálogo sí respondió, solo que no hay esa categoría.
+        if codes and all(code == "NOT_FOUND" for code in codes):
+            return "clarify", _join(["No lo encontré con ese nombre en el catálogo. ¿Me dices qué producto buscas y, "
+                                     "si la sabes, la medida o referencia?", *demo])
+        if codes:
             return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
                                   "existencias verificados. Intenta de nuevo en unos minutos.")
         return "not_verified", ("No pude verificar ese producto en el catálogo. ¿Me dices qué producto y qué "

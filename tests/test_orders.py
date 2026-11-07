@@ -1000,3 +1000,42 @@ def test_a_failing_order_tool_never_shows_the_exception_to_the_customer():
     status, text = order_reply([call])
     assert "KeyError" not in text and "falló (" not in text
     assert "sigue como estaba" in text and status == "order_issue"
+
+
+def test_apartame_los_que_tenga_after_short_stock_registers_what_is_left(chat):
+    # Cobertura C-027 (Carluz, Grok real): tras «solo me quedan 2», «bueno, entonces apárteme los que tenga» se
+    # rechazaba por cantidad no dicha y el agente preguntaba «¿cuántos?».
+    turn, sessions, book, _, _ = chat
+
+    def short_stock():
+        session = sessions.create()
+        short = turn(session, "Necesito 20 metros de tubo PVC de 1/2 para agua", tool("buscar_productos", items=[PVC_HALF]),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]), say())
+        assert "quedan 12" in short["respuesta"]
+        return session
+
+    other = short_stock()
+    too_many = turn(other, "bueno, entonces apárteme los que tenga",
+                    tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 15}]), say())
+    assert too_many["tool_calls"][0]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
+    session = short_stock()
+    result = turn(session, "bueno, entonces apárteme los que tenga",
+                  tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 12}]), say())
+    assert result["tool_calls"][0]["executed"] and result["estado"] == "order_pending"
+    assert book.session_orders(session)[0]["lineas"][0]["cantidad"] == 12
+
+
+def test_a_category_that_does_not_exist_is_not_a_catalog_failure():
+    # Cobertura C-059: «¿tienen tabla?» → explorar_categoria NOT_FOUND contestaba «No pude consultar el catálogo».
+    from asistendero.agente.herramientas.observations import error_envelope
+    from asistendero.agente.respuesta.answers import render_answer
+
+    def call(response):
+        return {"step": 1, "requested_tool": "explorar_categoria", "requested_arguments": {"categoria": "tabla"},
+                "executed": True, "arguments": {"categoria": "tabla"}, "response": response, "duration_ms": 1}
+
+    missing = error_envelope("error", "NOT_FOUND", "No hay esa categoría.", "catalog")
+    status, text = render_answer("¿tienen tabla?", [call(missing)], context={"turnos": []})
+    assert status == "clarify" and "No pude consultar" not in text and "$" not in text
+    broken = error_envelope("error", "TOOL_FAILURE", "La herramienta falló.", "agent_validation")
+    assert render_answer("¿tienen tabla?", [call(broken)], context={"turnos": []})[0] == "tool_error"

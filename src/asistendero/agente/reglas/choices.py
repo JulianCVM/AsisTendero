@@ -356,5 +356,12 @@ def check_reference(tool: str, arguments: object, message: str, calls: list[Tool
     options = ambiguous_reference(message, context)
     said = grounded_products(message, calls)
     lines = arguments.get("lines") if isinstance(arguments.get("lines"), list) else []
+    # «listo, me llevo eso» tras quitar algo de la lista: «eso» es la lista entera como quedó. El producto quitado
+    # seguía nombrado en la respuesta anterior («quité los bujes») y contaba como otra opción (cobertura, C-024).
+    from asistendero.agente.reglas.shopping_list import list_lines
+    listed = list_lines(context)
+    asked = {line.get("sku"): line.get("quantity") for line in lines if isinstance(line, dict)}
+    if listed and asked == listed:
+        return
     if options and any(isinstance(line, dict) and line.get("sku") not in said for line in lines):
         raise Rejected("AMBIGUOUS_REFERENCE", f"«ese» puede ser {' o '.join(options)}: pregúntale al cliente cuál.")
