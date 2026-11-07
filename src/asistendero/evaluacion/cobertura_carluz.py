@@ -12,6 +12,7 @@ nombrarlos tal cual. Como en la carga, la cola no lleva precios ni existencias: 
 
 from __future__ import annotations
 
+from collections import Counter
 import random
 from pathlib import Path
 
@@ -60,8 +61,12 @@ def _pools(database: Path, rng: random.Random) -> tuple[list[dict], list[list[di
     catalog = MockCatalog(database, CARLUZ_BUSINESS_ID)
     products = _products(database)
     rng.shuffle(products)
+    # El mismo nombre y variante en dos unidades («Regla metálica» por metro y por tramo) es ambiguo de verdad: el
+    # agente hace bien en preguntar, así que no sirve de producto «claro» (corrida 2: C-023, C-066, C-076).
+    twins = Counter((product["name"].strip().casefold(), product["variant"].strip().casefold()) for product in products)
     clear = [product for product in products
-             if product["stock"] >= 1 and len(_spoken(product)) <= 70 and _top(catalog, _spoken(product)) == product["sku"]]
+             if product["stock"] >= 1 and len(_spoken(product)) <= 70 and _top(catalog, _spoken(product)) == product["sku"]
+             and twins[(product["name"].strip().casefold(), product["variant"].strip().casefold())] == 1]
     families: dict[str, list[dict]] = {}
     for product in products:
         families.setdefault(product["name"].strip().lower(), []).append(product)
@@ -120,7 +125,9 @@ def build_coverage(database: Path, seed: int = 11, per_template: int = PER_TEMPL
         chosen, *_others = take(family_pool)
         add("opciones_y_memoria", [
             _turn(f"¿tienen {chosen['name'].strip().lower()}?", ["clarify", "found"]),
-            _turn(f"la de {chosen['variant'].strip()}", FOUND, expected_sku=chosen["sku"]),
+            # Elegida la opción, preguntar cuántas de esa variante también es correcto (corrida 1: 11 de 14 lo
+            # hicieron así); se exige que la nombre, y el SKU se comprueba en la cotización del turno siguiente.
+            _turn(f"la de {chosen['variant'].strip()}", [*FOUND, "clarify"], must_include=[chosen["variant"].strip()]),
             _turn("¿y cuánto me salen 2?", ["quoted", "insufficient_stock"], expected_sku=chosen["sku"]),
             _turn("me los llevo", ["order_pending", "order_issue"], expected_sku=chosen["sku"]),
         ])

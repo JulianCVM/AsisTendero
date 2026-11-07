@@ -863,3 +863,30 @@ def test_coverage_conversations_run_on_the_simulated_store_day(monkeypatch):
     assert isinstance(seen["cobertura"], StoreClock) and seen["cobertura"].start == SIM_START
     assert abs((seen["cobertura"]() - SIM_START).total_seconds()) < 60
     assert seen["carga"] is None
+
+
+def test_coverage_never_takes_a_product_sold_in_two_units_as_clear(wide, monkeypatch):
+    # Corrida 2: «Regla metálica» por metro y por tramo, sin variante, es ambigua de verdad; el agente preguntó bien.
+    import random
+
+    rows = [{"sku": "CLZ-9001", "name": "Regla metálica", "variant": "", "unit": "metro", "stock": 5},
+            {"sku": "CLZ-9002", "name": "Regla metálica", "variant": "", "unit": "tramo", "stock": 5},
+            {"sku": "CLZ-9003", "name": "Nivel de burbuja", "variant": "", "unit": "unidad", "stock": 5}]
+    monkeypatch.setattr(cobertura_carluz, "_products", lambda database: [dict(row) for row in rows])
+    monkeypatch.setattr(cobertura_carluz, "_top", lambda catalog, text: {"regla metálica": "CLZ-9001",
+                                                                        "nivel de burbuja": "CLZ-9003"}.get(text))
+    monkeypatch.setattr(cobertura_carluz, "_spoken", lambda product: product["name"].lower())
+    clear, _ = cobertura_carluz._pools(wide, random.Random(1))
+    assert [product["sku"] for product in clear] == ["CLZ-9003"]
+
+
+def test_choosing_an_option_may_ask_how_many_but_must_name_it(wide):
+    # Corrida 1: tras «la de 1/4x5/16» el agente preguntó «¿cuántas … de 1/4x5/16?», que es correcto; el SKU se
+    # comprueba en la cotización del turno siguiente.
+    cases = [case for case in cobertura_carluz.build_coverage(wide, per_template=3) if case["tipo"] == "opciones_y_memoria"]
+    assert cases
+    for case in cases:
+        chosen = case["turns"][1]
+        assert "clarify" in chosen["expected_status"] and "expected_sku" not in chosen
+        assert chosen["must_include"] and chosen["query"].endswith(chosen["must_include"][0])
+        assert case["turns"][2]["expected_sku"]
