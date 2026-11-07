@@ -16,6 +16,7 @@ from asistendero.entregas.estaticos import web_file
 from asistendero.observabilidad.harness_info import describe_harness
 from asistendero.observabilidad.tracing import run_traced
 from asistendero.tienda.catalogo.product_photos import PHOTO_ROUTE, photo_file
+from asistendero.datos.seed import DEMO_BUSINESS_ID, store_identity
 from asistendero.tienda.pedidos.orders import OrderBook
 
 
@@ -109,7 +110,9 @@ class TraceHandler(BaseHTTPRequestHandler):
                 self._json_error(403, "Origen local no permitido.")
                 self.close_connection = False
                 return
-            body = json.dumps(describe_harness(), ensure_ascii=False).encode("utf-8")
+            business = self.server.orders.business_id if self.server.orders else DEMO_BUSINESS_ID
+            info = {**describe_harness(), "tienda": store_identity(business)}
+            body = json.dumps(info, ensure_ascii=False).encode("utf-8")
             self._headers(200, "application/json; charset=utf-8", len(body))
             self.wfile.write(body)
             self.close_connection = False

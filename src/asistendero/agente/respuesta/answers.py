@@ -20,9 +20,9 @@ from asistendero.agente.reglas.validation import (
 )
 from asistendero.agente.respuesta.order_replies import order_allowances, order_reply, rushes_the_customer
 from asistendero.agente.respuesta.reply_text import (
-    DEMO_NOTE, FEMININE, LOW_STOCK, MAX_NEARBY, MAX_OPTIONS, SUITABILITY_CLAIM, SUITABILITY_NOTE, asks_stock,
+    FEMININE, LOW_STOCK, MAX_NEARBY, MAX_OPTIONS, SUITABILITY_CLAIM, SUITABILITY_NOTE, asks_stock,
     asks_suitability, found_sentence, in_sentence, label, of_the, option_lines, quote_block, quote_offer,
-    short_stock_text, units, whole_units_question,
+    note_words, short_stock_text, store_note, units, whole_units_question,
 )
 from asistendero.agente.respuesta.restock import asks_restock, restock_reply_ok, restock_sentence, restock_subjects
 from asistendero.agente.respuesta.store_replies import (
@@ -162,7 +162,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     store = store_lines(calls, with_listing=not findings or asks_assortment(asked))
     orders = order_reply(calls)
     quote, quote_call = latest_quote(calls)
-    demo = [DEMO_NOTE] if context is None or not context.get("turnos") else []
+    demo = [store_note()] if context is None or not context.get("turnos") else []
     order_text = [orders[1]] if orders else []
     if not quote and not orders and (page_group := pagination_group(asked_raw, context)) is not None:
         return _render_pagination(page_group, asked_raw, store, demo)
@@ -436,7 +436,7 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
         return False
     # La aclaración de demostración va una vez: en el primer mensaje de la conversación o en una consulta suelta.
     first = context is None or not context.get("turnos")
-    if first and not re.search(r"simulad|demostracion|fictici|de prueba", normalized):
+    if first and not re.search(note_words(), normalized):
         return False
     findings = search_findings(calls)
     selected = grounded_products(message, calls)

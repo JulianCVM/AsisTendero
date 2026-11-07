@@ -42,6 +42,15 @@ async function loadBadges() {
   setBadge('#badge-more', counts.pagos_por_verificar, 'pagos por verificar en Ventas');
 }
 
+// La página trae el rótulo de la demostración; una tienda real lo cambia en cuanto el servidor dice cuál es.
+async function applyStore() {
+  const store = await api('/api/tienda');
+  $('#store-name').textContent = store.nombre;
+  if (!store.real) return;
+  $('#store-note').textContent = store.nota;
+  document.querySelectorAll('.env-tag').forEach(tag => { tag.textContent = 'Inventario real'; });
+}
+
 const loaders = {
   hoy: () => loadToday(refresh),
   pedidos: () => loadOrders(refresh, takeFilter()),
@@ -137,4 +146,6 @@ setInterval(() => {
   if (!document.hidden && LIVE.has(route.view) && !document.querySelector('dialog[open]')
       && !document.activeElement?.matches('textarea, input')) refresh();
 }, REFRESH_MS);
+// Si no responde, el aviso de sin conexión de refresh ya lo dice; el rótulo se corrige al recargar.
+applyStore().catch(() => {});
 show();

@@ -66,11 +66,15 @@ def main() -> int:
     parser.add_argument("--chat", action="store_true", help="Conversación de varios turnos en la terminal")
     parser.add_argument("--demo", action="store_true",
                         help="arranca todo sobre la tienda de demostración (.local/demo), con datos simulados")
+    parser.add_argument("--tienda", choices=("carluz",),
+                        help="arranca todo sobre el inventario real importado a .local/carluz")
     parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
     args = parser.parse_args()
     consulta = " ".join(args.mensaje).strip()
     if args.demo and (args.chat or consulta):
         parser.error("--demo solo sirve para arrancar todo: úsalo sin mensaje y sin --chat.")
+    if args.tienda and (args.demo or args.chat or consulta):
+        parser.error("--tienda solo sirve para arrancar todo: úsalo sin --demo, sin mensaje y sin --chat.")
 
     load_dotenv()
     if args.model:
@@ -78,7 +82,7 @@ def main() -> int:
     if args.chat:
         return _chat()
     if not consulta:
-        return launcher.run(demo=args.demo)
+        return launcher.run(real_store=True) if args.tienda else launcher.run(demo=args.demo)
 
     try:
         # Una base creada antes del surtido no tiene la tabla: sin actualizarla, todo salía «sin fecha».

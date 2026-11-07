@@ -141,12 +141,16 @@ def _calculate_quote(arguments: dict, catalog: MockCatalog) -> dict:
     if not quote_lines and missing_skus:
         raise _ToolError("NOT_FOUND", f"No existe el SKU {missing_skus[0]} en el catálogo de esta sede.")
 
-    return _ok({
+    data = {
         "lines": quote_lines,
         "total_cop": sum(item["subtotal_cop"] for item in quote_lines),
         "currency": "COP",
         "reservation_created": False,
-    })
+    }
+    if missing_skus:
+        # La cotización parcial (X-22) sigue, pero dice qué dejó por fuera: antes el total salía sin aviso.
+        data["skus_no_encontrados"] = missing_skus
+    return _ok(data)
 
 
 def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
@@ -157,8 +161,9 @@ def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
     if content is None:
         raise _ToolError("NOT_FOUND", "La tienda no tiene información registrada sobre ese tema.")
     data = {"tema": topic, **content}
-    if topic == "horario":
-        # Abierto o cerrado lo calcula el servidor con su reloj: Grok no sabe qué hora es.
+    if topic == "horario" and "dias" in content:
+        # Abierto o cerrado lo calcula el servidor con su reloj: Grok no sabe qué hora es. Una tienda que solo dio
+        # su horario en texto (Carluz) no tiene con qué calcularlo, y no se adivina.
         now = reloj.local_now()
         day = WEEKDAYS[now.weekday()]
         hours = content["dias"].get(day)
@@ -191,7 +196,8 @@ def _explore_category(arguments: dict, catalog: MockCatalog) -> dict:
     if best == 0 or len(chosen) != 1:
         names = ", ".join(item["categoria"] for item in available)
         raise _ToolError("NOT_FOUND", f"No hay una categoría con ese nombre. Categorías: {names}.")
-    return _ok({"categoria": chosen[0], "productos": catalog.category_overview(chosen[0])})
+    entries, unlisted = catalog.category_overview(chosen[0])
+    return _ok({"categoria": chosen[0], "productos": entries, "sin_listar": unlisted})
 
 
 def execute_tool(name: str, arguments: dict, *, catalog: MockCatalog) -> dict:
@@ -230,6 +236,6 @@ def execute_tool(name: str, arguments: dict, *, catalog: MockCatalog) -> dict:
         return error_envelope(
             "error",
             "CATALOG_UNAVAILABLE",
-            "No fue posible consultar el catálogo de demostración en este momento.",
+            "No fue posible consultar el catálogo en este momento.",
             SOURCE,
         )

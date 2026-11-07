@@ -22,7 +22,10 @@ from asistendero.agente.modelo.grok import (
     ALLOWED_MODEL_FAMILIES, DEFAULT_MODEL, PROMPT_VERSION, Decision, current_model, decide_with_grok, decision_from_raw,
 )
 from asistendero.agente.modelo.prompt import PROMPTS, serving
-from asistendero.datos.seed import BUSINESSES, DEFAULT_DB_PATH, upgrade_db
+from asistendero.agente.reglas.context_resolution import load_catalog_words
+from asistendero.datos.carluz import CARLUZ_BUSINESS_ID
+from asistendero.datos.importar_carluz import CARLUZ_DB_PATH
+from asistendero.datos.seed import DEFAULT_DB_PATH, KNOWN_BUSINESSES, upgrade_db
 from asistendero.evaluacion.eval_checks import record
 from asistendero.evaluacion.eval_report import comparison_markdown, record_cost, summarize
 from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock, run_clients, run_conversation, store_time, using_model
@@ -32,6 +35,8 @@ from asistendero.tienda.catalogo.catalog import MockCatalog
 
 
 DEFAULT_CASES_PATH = Path("evaluation/cases.json")
+# Sin precios ni existencias: el resultado se compara contra la base local, que nunca se sube.
+CARLUZ_CASES_PATH = DEFAULT_CASES_PATH.with_name("cases_carluz.json")
 SUITES = ("s2", "catalogo", "tienda", "seguridad", "conversacion", "ruido", "pedidos", "sesion_larga", "concurrencia",
           "extremos", "flujos", "variados", "inyeccion", "memoria", "natural", "surtido", "fallas", "ampliacion",
           "mercado", "parafrasis", "fotos")
@@ -152,9 +157,9 @@ def evaluate_cases(
     skipped = skip_ids or set()
     selected_cases = [case for case in cases if case["id"] not in skipped]
     # Un ejecutor por negocio sobre la misma base: el de la ferretería es el catálogo que se recibió.
-    executors = {kind: catalog_executor(catalog if kind == "ferreteria" else
-                                        MockCatalog(catalog.path, BUSINESSES[kind], catalog.store_id))
-                 for kind in BUSINESSES}
+    executors = {kind: catalog_executor(catalog if kind == "ferreteria" or business == catalog.business_id else
+                                        MockCatalog(catalog.path, business, catalog.store_id))
+                 for kind, business in KNOWN_BUSINESSES.items()}
     rotation = list(models or [])
     lock = threading.Lock()
     spent = {"usd": Decimal(0)}
@@ -240,6 +245,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, help="Máximo de casos; predeterminado: todos")
     parser.add_argument("--skip", nargs="*", default=[], help="IDs de casos a omitir (ej. --skip S2-02)")
     parser.add_argument("--suite", nargs="*", default=[], choices=SUITES, help="Solo estas suites")
+    parser.add_argument("--tienda", choices=("carluz",),
+                        help="Corre evaluation/cases_carluz.json sobre el inventario real de .local/carluz")
     parser.add_argument("--case", nargs="*", default=[], help="IDs específicos de casos a ejecutar (ej. --case X-22)")
     parser.add_argument("--model", help="Modelo de Grok permitido por el reto (reemplaza GROK_MODEL)")
     parser.add_argument("--models", nargs="+", metavar="MODELO",
@@ -275,14 +282,20 @@ def main() -> int:
     load_dotenv()
     if args.model:
         os.environ["GROK_MODEL"] = args.model
-    if not DEFAULT_DB_PATH.is_file():
+    if args.tienda and not CARLUZ_DB_PATH.is_file():
+        parser.error(f"No existe {CARLUZ_DB_PATH}: impórtala con python -m asistendero.datos.importar_carluz --xlsx RUTA")
+    if not args.tienda and not DEFAULT_DB_PATH.is_file():
         from asistendero.datos.seed import create_mock_db
         DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         create_mock_db(DEFAULT_DB_PATH)
     # Corrida 26: los casos de un turno leían la base sin la tabla de surtido y todo salía «sin fecha»; las
     # conversaciones sí la tenían porque el libro de pedidos actualiza su copia.
-    catalog = MockCatalog(upgrade_db(DEFAULT_DB_PATH))
-    all_cases = json.loads(DEFAULT_CASES_PATH.read_text(encoding="utf-8"))
+    if args.tienda:
+        catalog = MockCatalog(upgrade_db(CARLUZ_DB_PATH), CARLUZ_BUSINESS_ID)
+        load_catalog_words(args.tienda, catalog.word_rows())
+    else:
+        catalog = MockCatalog(upgrade_db(DEFAULT_DB_PATH))
+    all_cases = json.loads((CARLUZ_CASES_PATH if args.tienda else DEFAULT_CASES_PATH).read_text(encoding="utf-8"))
     if args.suite:
         all_cases = [case for case in all_cases if case.get("suite") in set(args.suite)]
     if requested_cases:

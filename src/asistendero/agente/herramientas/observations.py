@@ -9,11 +9,12 @@ lee este módulo (si cambian, solo hay que ajustar ``search_findings`` y ``lates
 - consultar_disponibilidad: ``{"sku", "stock", "unit", "restock", ...}``; ``restock`` es el surtido
   (``restock.py``).
 - calcular_cotizacion_informativa: ``{"lines": [{"sku", "quantity", "unit_price_cop",
-  "subtotal_cop", ...}], "total_cop", "reservation_created": false}``.
-- consultar_info_tienda: ``{"tema", "texto"}``; con ``tema="horario"``: ``{"dias": {día: [abre,
+  "subtotal_cop", ...}], "total_cop", "reservation_created": false}``, y ``"skus_no_encontrados"`` si dejó
+  alguno por fuera (cotización parcial).
+- consultar_info_tienda: ``{"tema", "texto"}``; con ``tema="horario"`` estructurado: ``{"dias": {día: [abre,
   cierra] | None}, "festivos", "zona_horaria", "ahora", "dia_actual", "abierto_ahora"}``.
 - explorar_categoria: ``{"categorias": [{"categoria", "variantes", "con_existencias"}]}`` o
-  ``{"categoria", "productos": [{"nombre", "variantes", "con_existencias"}]}``, sin precios.
+  ``{"categoria", "sin_listar", "productos": [{"nombre", "variantes", "con_existencias"}]}``, sin precios.
 - registrar_pedido, confirmar_pedido, agendar_recogida y cancelar_pedido: un pedido ``{"pedido", "estado",
   "lineas": [{"sku", "nombre", "variante", "unidad", "cantidad", "precio_unitario_cop", "subtotal_cop"}],
   "total_cop", "aparta_hasta", "recogida", "nota", "creado", "pago"}`` (``orders.OrderBook``);

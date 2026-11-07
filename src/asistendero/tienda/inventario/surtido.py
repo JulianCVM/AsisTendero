@@ -10,9 +10,10 @@ de tres formas:
 Vacío es «sin dato». Qué puede afirmar el agente de esto está en ``agente/respuesta/restock.py``.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
-from asistendero.tienda.reloj import BOGOTA, WEEKDAYS
+from asistendero.tienda import reloj
+from asistendero.tienda.reloj import WEEKDAYS
 
 DISCONTINUED = "descontinuado"
 SHOWN_WEEKDAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
@@ -34,7 +35,7 @@ def valid_plan(value: object) -> str:
         day = date.fromisoformat(text)
     except ValueError:
         raise ValueError("El surtido es un día de la semana, una fecha AAAA-MM-DD, «descontinuado» o vacío.") from None
-    today = datetime.now(BOGOTA).date()
+    today = reloj.local_now().date()
     if not today <= day <= today + timedelta(days=MAX_DAYS_AHEAD):
         raise ValueError(f"La fecha de surtido va de hoy a {MAX_DAYS_AHEAD} días adelante.")
     return day.isoformat()
@@ -51,4 +52,4 @@ def plan_of(restock: str, today: date | None = None) -> tuple[str, str]:
         day = date.fromisoformat(text)
     except ValueError:
         return "", ""
-    return ("fecha", text) if day >= (today or datetime.now(BOGOTA).date()) else ("", "")
+    return ("fecha", text) if day >= (today or reloj.local_now().date()) else ("", "")

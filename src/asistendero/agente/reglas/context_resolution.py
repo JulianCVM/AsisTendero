@@ -85,18 +85,32 @@ def _build_catalog_index(rows: list[tuple]) -> tuple[dict[str, str], dict[str, s
 
 def _rows() -> list[tuple]:
     """Productos del negocio que atiende este hilo: un turno de la tienda de mercado nunca apunta a la ferretería."""
-    return MARKET_PRODUCTS if BUSINESS_KIND.get() == "mercado" else PRODUCTS
+    kind = BUSINESS_KIND.get()
+    return _LOADED_ROWS.get(kind) or _SEEDED_ROWS.get(kind, [])
 
 
-_INDEXES = {kind: _build_catalog_index(rows) for kind, rows in (("ferreteria", PRODUCTS), ("mercado", MARKET_PRODUCTS))}
+# Una tienda sin vocabulario cargado no toma el de otra: un turno de Carluz nunca apunta a un producto ficticio.
+_SEEDED_ROWS = {"ferreteria": PRODUCTS, "mercado": MARKET_PRODUCTS}
+_INDEXES = {kind: _build_catalog_index(rows) for kind, rows in _SEEDED_ROWS.items()}
+_LOADED_ROWS: dict[str, list[tuple]] = {}
+
+
+def load_catalog_words(kind: str, rows: list[tuple]) -> None:
+    """El vocabulario de una tienda que no está en el código: sus productos los trae su base (ver word_rows)."""
+    _LOADED_ROWS[kind] = rows
+    _INDEXES[kind] = _build_catalog_index(rows)
+
+
+def has_catalog_words(kind: str) -> bool:
+    return kind in _INDEXES
 
 
 def _heads() -> dict[str, str]:
-    return _INDEXES[BUSINESS_KIND.get()][0]
+    return _INDEXES.get(BUSINESS_KIND.get(), ({}, {}))[0]
 
 
 def _families() -> dict[str, set[str]]:
-    return _INDEXES[BUSINESS_KIND.get()][1]
+    return _INDEXES.get(BUSINESS_KIND.get(), ({}, {}))[1]
 
 
 def _format_subject(head: str, materials: list[str]) -> str:

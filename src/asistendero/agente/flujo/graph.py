@@ -19,7 +19,7 @@ from asistendero.agente.herramientas.observations import (
     error_envelope, execute_safely, observation_for_model, order_results, search_findings, ToolCall, ToolExecutor,
 )
 from asistendero.agente.modelo.grok import ORDER_TOOLS, Decision, ModelError
-from asistendero.agente.modelo.prompt import active_prompt
+from asistendero.agente.modelo.prompt import BUSINESS_KIND, active_prompt
 from asistendero.agente.reglas.choices import (
     check_reference, chosen_options, pagination_group, pending_quantity_quote, unresolved_ordinal,
     without_chosen_measures,
@@ -61,6 +61,11 @@ REFERENCE_TURNS = 3
 REFUSAL_CLOSING = ("Con gusto te ayudo con productos, precios y existencias del catálogo de demostración, "
                    "o con información de la tienda.")
 PERSONAL_DATA_NOTE = "No hace falta compartir datos personales para cotizar; no los guardo."
+
+
+def _refusal_closing() -> str:
+    # Con el inventario real de Carluz, «de demostración» sería falso.
+    return REFUSAL_CLOSING.replace(" de demostración", "") if BUSINESS_KIND.get() == "carluz" else REFUSAL_CLOSING
 
 
 class AgentState(TypedDict):
@@ -467,7 +472,7 @@ def build_graph(tool_executor: ToolExecutor, planner: Planner):
         notes = [note for note in (guard.get("refusal"), PERSONAL_DATA_NOTE if guard.get("redacted") else "") if note]
         if not state["consulta"]:
             return {"prompt_version": active_prompt()[0], "model_called": False, "model_calls": 0,
-                    "estado": "refused", "respuesta": " ".join([*notes, REFUSAL_CLOSING])}
+                    "estado": "refused", "respuesta": " ".join([*notes, _refusal_closing()])}
         update = _respond(state)
         update["respuesta"] = with_reservation_note(state["consulta"], update["respuesta"], state["tool_calls"],
                                                     state.get("contexto"))
