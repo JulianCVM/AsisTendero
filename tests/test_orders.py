@@ -1039,3 +1039,16 @@ def test_a_category_that_does_not_exist_is_not_a_catalog_failure():
     assert status == "clarify" and "No pude consultar" not in text and "$" not in text
     broken = error_envelope("error", "TOOL_FAILURE", "La herramienta falló.", "agent_validation")
     assert render_answer("¿tienen tabla?", [call(broken)], context={"turnos": []})[0] == "tool_error"
+
+
+def test_a_store_topic_the_store_never_gave_is_not_a_catalog_search():
+    # Humo de Carluz (07-11, CL-25): «¿hacen domicilios?» → consultar_info_tienda NOT_FOUND pedía «qué producto buscas».
+    from asistendero.agente.herramientas.observations import error_envelope
+    from asistendero.agente.respuesta.answers import render_answer
+
+    call = {"step": 1, "requested_tool": "consultar_info_tienda", "requested_arguments": {"tema": "domicilios"},
+            "executed": True, "arguments": {"tema": "domicilios"}, "duration_ms": 1,
+            "response": error_envelope("error", "NOT_FOUND", "La tienda no tiene ese dato.", "catalog")}
+    status, text = render_answer("¿hacen domicilios?", [call], context={"turnos": []})
+    assert status == "answered" and "no lo tengo" in text
+    assert "catálogo" not in text and "producto" not in text and "$" not in text

@@ -210,6 +210,11 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         # «¿tienen tabla?» con explorar_categoria → NOT_FOUND contestaba «No pude consultar el catálogo» (cobertura,
         # C-059): el catálogo sí respondió, solo que no hay esa categoría.
         if codes and all(code == "NOT_FOUND" for code in codes):
+            missing = {call["requested_tool"] for call in calls if call["response"]["status"] == "error"}
+            if missing == {"consultar_info_tienda"}:
+                # Un tema que la tienda no ha dado («¿hacen domicilios?» en Carluz): no es un producto que buscar.
+                return "answered", _join(["Ese dato de la tienda no lo tengo; confírmalo directamente en el mostrador.",
+                                          *demo])
             return "clarify", _join(["No lo encontré con ese nombre en el catálogo. ¿Me dices qué producto buscas y, "
                                      "si la sabes, la medida o referencia?", *demo])
         if codes:
