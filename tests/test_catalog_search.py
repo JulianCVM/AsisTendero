@@ -195,3 +195,12 @@ def test_a_tube_searched_with_its_quantity_is_not_the_three_inch_one(catalog):
     said = catalog.search(ProductQuery("tubo PVC 3 metros", product="tubo", material="PVC"), limit=10)
     sized = catalog.search(ProductQuery("tubo PVC 3 pulgadas", product="tubo", material="PVC"), limit=10)
     assert said.matches[0].sku != "SAN-3" and sized.matches[0].sku == "SAN-3"
+
+
+def test_measures_understand_the_abbreviations_of_the_real_inventory():
+    # El inventario de Carluz escribe «55 cmts»: el cliente que decía «55 cm» recibía «no lo manejo así» (C-009).
+    from asistendero.tienda.catalogo.measures import measures
+    assert measures("correa de amarre negra 55 cmts") == measures("correa de amarre negra de 55 cm")
+    assert measures("manguera 3 mtrs") == measures("manguera 3 metros") == {"3m"}
+    assert measures("thinner 1 lt") == measures("thinner 1 litro")
+    assert measures("lija 80 cms") != measures("lija 80 mm")

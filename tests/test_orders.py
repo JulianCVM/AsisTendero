@@ -958,3 +958,45 @@ def test_a_registered_order_reply_that_does_not_ask_to_confirm_is_replaced(chat)
                  lambda seen: say(f"Listo, registré el pedido {seen[-1]['datos']['pedido']}. ¿Me lo confirmas con un "
                                   "«sí»? El pago es en el mostrador."))
     assert asked["respuesta"].startswith("Listo, registré el pedido")
+
+
+def _horario(book, content: dict) -> None:
+    import json
+    import sqlite3
+    with sqlite3.connect(book.path) as connection:
+        connection.execute("UPDATE store_info SET content = ? WHERE topic = 'horario'", (json.dumps(content),))
+
+
+def test_pickup_in_a_store_with_hours_only_in_text_respects_the_known_pause(store):
+    # Carluz dio su horario en texto y la pausa del mediodía; agendar fallaba con KeyError (cobertura, corrida 1).
+    book, _, _ = store
+    _horario(book, {"texto": "Cierra a las 11:55 a. m. y vuelve a abrir a las 2 p. m.", "pausa": ["11:55", "14:00"]})
+    order = book.create("sesion-a", [("PVC-050", 1)])
+    with pytest.raises(OrderError) as error:
+        book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 12, 30, tzinfo=BOGOTA), None)
+    assert error.value.code == "PICKUP_OUTSIDE_HOURS" and "pausa" in str(error.value)
+    scheduled = book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 15, 0, tzinfo=BOGOTA), None)
+    assert scheduled["recogida"] == "2026-10-22 15:00"
+
+
+def test_pickup_in_a_store_with_hours_only_in_text_and_no_pause_does_not_crash(store):
+    book, _, _ = store
+    _horario(book, {"texto": "El horario se confirma con la tienda."})
+    order = book.create("sesion-a", [("PVC-050", 1)])
+    assert book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 9, 0, tzinfo=BOGOTA), None)["recogida"]
+
+
+def test_a_failing_order_tool_never_shows_the_exception_to_the_customer():
+    # Cobertura C-004: el cliente leía «La herramienta falló (KeyError)».
+    from asistendero.agente.herramientas.observations import execute_safely
+    from asistendero.agente.respuesta.order_replies import order_reply
+
+    def broken(name, arguments):
+        raise KeyError("dias")
+
+    response = execute_safely(broken, "agendar_recogida", {"pedido": "P-0001"})
+    call = {"step": 1, "requested_tool": "agendar_recogida", "arguments": {"pedido": "P-0001"}, "executed": True,
+            "response": response, "duration_ms": 1}
+    status, text = order_reply([call])
+    assert "KeyError" not in text and "falló (" not in text
+    assert "sigue como estaba" in text and status == "order_issue"

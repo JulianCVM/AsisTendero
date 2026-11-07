@@ -215,8 +215,17 @@ class OrderBook:
             raise OrderError("PICKUP_TOO_FAR", f"La recogida puede agendarse hasta {MAX_PICKUP_DAYS} días adelante.")
         row = connection.execute("SELECT content FROM store_info WHERE business_id = ? AND store_id = ? AND topic = 'horario'",
                                  (self.business_id, self.store_id)).fetchone()
-        hours = json.loads(row["content"])["dias"].get(WEEKDAYS[pickup.astimezone(BOGOTA).weekday()]) if row else None
+        content = json.loads(row["content"]) if row else {}
         at = pickup.astimezone(BOGOTA).strftime("%H:%M")
+        if "dias" not in content:
+            # Una tienda real puede dar solo parte del horario (Carluz dio la pausa del mediodía, no la apertura ni el
+            # cierre): se respeta lo que se sabe y no se rechaza lo que no se sabe. Antes esto fallaba con KeyError.
+            pause = content.get("pausa")
+            if pause and pause[0] <= at < pause[1]:
+                raise OrderError("PICKUP_OUTSIDE_HOURS", f"A esa hora la tienda está en la pausa del mediodía "
+                                                         f"({pause[0]} a {pause[1]}); elige otra hora.")
+            return
+        hours = content["dias"].get(WEEKDAYS[pickup.astimezone(BOGOTA).weekday()])
         if not hours or not hours[0] <= at < hours[1]:
             raise OrderError("PICKUP_OUTSIDE_HOURS", "La tienda está cerrada a esa hora; revisa el horario.")
 

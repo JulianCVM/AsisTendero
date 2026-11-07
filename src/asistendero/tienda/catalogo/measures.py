@@ -13,12 +13,13 @@ UNITS = {
     "pulgada": "in", "pulgadas": "in", "pulg": "in",
     "kg": "kg", "kilo": "kg", "kilos": "kg", "kilogramo": "kg", "kilogramos": "kg",
     "g": "g", "gr": "g", "gramos": "g",
-    "m": "m", "mt": "m", "mts": "m", "metro": "m", "metros": "m",
-    "cm": "cm", "mm": "mm",
+    "m": "m", "mt": "m", "mts": "m", "mtr": "m", "mtrs": "m", "metro": "m", "metros": "m",
+    # Abreviaturas del inventario real de Carluz (07-11-2026).
+    "cm": "cm", "cms": "cm", "cmts": "cm", "centimetros": "cm", "mm": "mm", "milimetros": "mm",
     "w": "w", "vatios": "w", "watts": "w",
     "v": "v", "voltios": "v",
     "a": "a", "amperios": "a", "amp": "a",
-    "ml": "ml", "l": "l", "litro": "l", "litros": "l",
+    "ml": "ml", "l": "l", "lt": "l", "lts": "l", "litro": "l", "litros": "l",
     "oz": "oz", "onzas": "oz", "awg": "awg", "lb": "lb", "libra": "lb", "libras": "lb",
     "galon": "gal", "galones": "gal",
 }
