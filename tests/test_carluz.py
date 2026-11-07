@@ -777,3 +777,25 @@ def test_bodega_cases_run_in_the_unattended_mode(wide, tmp_path, monkeypatch):
     lines = [line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA) if line["tipo"] == "tarea"]
     assert [line["entrada"] for line in lines] == [case["mensaje"] for case in cases]
     assert all(line["exito"] for line in lines), [line["motivos"] for line in lines]
+
+
+def test_capability_matrix_compares_two_runs_without_reading_answers(tmp_path):
+    from asistendero.evaluacion import cobertura_reporte
+
+    def run(folder, outcomes):
+        folder.mkdir()
+        rows = [{"tipo": "evento", "evento": "arranque"}]
+        for index, (kind, ok, turns, usd) in enumerate(outcomes):
+            rows.append({"tipo": "tarea", "id": f"C-{index:03}", "clase": kind, "exito": ok, "costo_usd": usd,
+                         "respuesta": "te sale en $9.999", "turnos": [{"exito": t, "respuesta": "$9.999"} for t in turns]})
+        (folder / "bitacora.jsonl").write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+        return folder
+
+    before = run(tmp_path / "a", [("recogida", False, [True, False], "0.01"), ("regateo", True, [True], "0.002")])
+    after = run(tmp_path / "b", [("recogida", True, [True, True], "0.012"), ("regateo", True, [True], "0.002")])
+    table = cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(before), cobertura_reporte.tasks_of(after))
+    assert "| recogida | 0/1 (0%) | 1/1 (100%) | 1/2 (50%) | 2/2 (100%) | 0.0100 | 0.0120 |" in table
+    assert "| **Total** | 1/2 (50%) | 2/2 (100%) | 2/3 (67%) | 3/3 (100%) | 0.0120 | 0.0140 |" in table
+    # Lo que respondió el agente (con precios del inventario real) nunca llega a la tabla.
+    assert "$" not in table
+    assert table.index("recogida") < table.index("regateo")  # primero lo que más falla
