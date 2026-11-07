@@ -38,6 +38,7 @@ from asistendero.evaluacion.bitacora_carga import (
     BITACORA, COLA, DONE, ESTADO, append, done_ids, events_of, write_summary,
 )
 from asistendero.evaluacion.carga_carluz import build_queue
+from asistendero.evaluacion.eval_report import record_cost
 from asistendero.evaluacion.evaluate import evaluate_cases, git_state
 from asistendero.tienda import reloj
 from asistendero.tienda.catalogo.catalog import MockCatalog
@@ -67,8 +68,9 @@ def _codes(record: dict) -> list[str]:
     codes = [(call.get("error") or {}).get("code") for call in record.get("tool_calls", [])]
     for turn in record.get("turns", []):
         codes += [(call.get("error") or {}).get("code") for call in turn.get("tool_calls", [])]
-    if record.get("actual_status") in MODEL_FAILURES or (isinstance(record.get("actual_status"), list)
-                                                         and MODEL_FAILURES & set(record["actual_status"])):
+    # Una conversación trae un estado por turno.
+    status = record.get("actual_status")
+    if MODEL_FAILURES & (set(status) if isinstance(status, list) else {status}):
         codes.append("MODEL_FAILURE")
     return list(dict.fromkeys(code for code in codes if code))
 
@@ -103,7 +105,8 @@ def entry(task: dict, record: dict, started: datetime, state: dict) -> dict:
         "respuesta": (record.get("response") or "")[:MAX_RESPONSE_CHARS],
         "llamadas_grok": record.get("model_calls"),
         "tokens_entrada": record.get("input_tokens"), "tokens_salida": record.get("output_tokens"),
-        "costo_usd": str(record["cost"]) if record.get("cost") is not None else None,
+        # El costo de un caso es {"usd", "basis", "calls"}; la bitácora guarda solo los dólares (lo midió la API).
+        "costo_usd": str(cost) if (cost := record_cost(record)) is not None else None,
         "errores": codes, "recuperacion": recovery(codes),
         "duracion_ms": record.get("elapsed_ms"), "modelo": record.get("model") or current_model(),
         "prompt_version": record.get("prompt_version"), "commit": state["commit"],

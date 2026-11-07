@@ -551,15 +551,16 @@ def test_unattended_run_survives_an_exception_and_stops_at_the_budget(imported, 
         calls.append(task["id"])
         if len(calls) == 1:
             raise RuntimeError("se cayó")
+        # La forma real del costo de un caso: lo primero que rompió la corrida de doce horas fue suponer un número.
         return {"query": task.get("query"), "actual_status": "found", "fail_reasons": [], "response": "ok",
-                "model_calls": 1, "cost": Decimal("1"), "tool_calls": []}
+                "model_calls": 1, "cost": {"usd": "1.0000000", "basis": "api_reported", "calls": 1}, "tool_calls": []}
 
     monkeypatch.setattr(desatendido, "run_task", flaky)
     desatendido.work(folder, 0.001, Decimal("2"), sleep=lambda seconds: None, database=imported)
     tasks = [line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA) if line["tipo"] == "tarea"]
     assert tasks[0]["resultado"] == "excepcion" and tasks[0]["exito"] is False and tasks[0]["recuperacion"]
     # Tras gastar el tope, no empieza más tareas: 1 fallida + 2 de 1 USD.
-    assert len(tasks) == 3
+    assert len(tasks) == 3 and tasks[1]["costo_usd"] == "1.0000000"
     events = [line["evento"] for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA)
               if line["tipo"] == "evento"]
     assert "tope_de_gasto" in events
@@ -595,3 +596,14 @@ def test_supervisor_relaunches_a_crashed_run(tmp_path):
     assert len(launched) == 3
     events = bitacora_carga.events_of(tmp_path / bitacora_carga.BITACORA)
     assert [line["evento"] for line in events] == ["reinicio_automatico", "reinicio_automatico"]
+
+
+def test_a_conversation_record_is_logged_with_one_state_per_turn():
+    # El ensayo con la cola real lo encontró: con un estado por turno, la tarea terminaba en excepción.
+    task = {"id": "U-1", "tipo": "conversacion", "turns": [{"query": "¿tienen brocas?"}, {"query": "la de 3/8"}]}
+    record = {"query": "¿tienen brocas? / la de 3/8", "actual_status": ["clarify", "model_error"],
+              "fail_reasons": ["turno 2: estado model_error"], "response": "", "model_calls": 2,
+              "cost": {"usd": "0.0010000", "basis": "api_reported", "calls": 2}}
+    line = desatendido.entry(task, record, desatendido._now(), {"commit": "abc1234"})
+    assert line["resultado"] == ["clarify", "model_error"] and line["exito"] is False
+    assert "MODEL_FAILURE" in line["errores"] and line["costo_usd"] == "0.0010000"
