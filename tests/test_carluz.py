@@ -39,8 +39,11 @@ from asistendero.datos.seed import (
 )
 from asistendero.entregas import launcher
 from asistendero.entregas.panel import tendero
-from asistendero.evaluacion import bitacora_carga, desatendido, evaluate
+from asistendero.evaluacion import bitacora_carga, cobertura_carluz, desatendido, evaluate
 from asistendero.evaluacion.carga_carluz import build_queue
+from asistendero.evaluacion.cobertura_carluz import build_coverage
+from asistendero.agente.conversacion.handoff import asks_for_human
+from asistendero.agente.entrada.injection import detect_injection
 from asistendero.evaluacion.evaluate import CARLUZ_CASES_PATH
 from asistendero.tienda.catalogo import catalog as catalog_module
 from asistendero.tienda.catalogo.catalog import MockCatalog, tokens
@@ -607,3 +610,79 @@ def test_a_conversation_record_is_logged_with_one_state_per_turn():
     line = desatendido.entry(task, record, desatendido._now(), {"commit": "abc1234"})
     assert line["resultado"] == ["clarify", "model_error"] and line["exito"] is False
     assert "MODEL_FAILURE" in line["errores"] and line["costo_usd"] == "0.0010000"
+
+
+TOOL_WORDS = ("ALCAYATA", "ARANDELA", "BISAGRA", "BROCHA", "CANDADO", "CINCEL", "DISCO", "ESCUADRA", "FORMON", "GRAPA",
+              "LIJA", "MARTILLO", "NIVEL", "PALUSTRE", "PINZA", "RASTRILLO", "SERRUCHO", "TENAZA", "ESPATULA", "MACHETE")
+
+
+@pytest.fixture
+def wide(tmp_path) -> Path:
+    """Un inventario inventado con bastantes productos, existencias variadas y familias por medida."""
+    rows = []
+    for word in TOOL_WORDS:
+        for color in ("ROJA", "VERDE", "AZUL", "NEGRA"):
+            stock = ("1", "2", "3", "5", "8", "12")[len(rows) % 6]
+            rows.append((len(rows) + 1, f"{word} {color} DE PRUEBA", 1000, stock, 1000 * int(stock)))
+    for family in ("CODO PRUEBA", "TEE PRUEBA", "UNION PRUEBA", "BUJE PRUEBA", "TAPON PRUEBA", "NIPLE PRUEBA"):
+        for size in ("1/2", "3/4", '1"'):
+            rows.append((len(rows) + 1, f"{family} {size}", 900, "6", 5400))
+    database = tmp_path / "amplia" / "tienda.sqlite3"
+    import_inventory(_xlsx(tmp_path / "amplio.xlsx", rows), database)
+    return database
+
+
+def test_coverage_queue_covers_every_capability_with_strict_turns_and_no_prices(wide):
+    queue = build_coverage(wide, per_template=2)
+    kinds = {case["tipo"] for case in queue}
+    assert len(kinds) == 13 and len(queue) == 26 and len({case["id"] for case in queue}) == 26
+    assert not re.search(r"\$\s*\d", json.dumps(queue, ensure_ascii=False))
+    assert build_coverage(wide, per_template=2) == queue  # misma semilla, misma cola
+    catalog = MockCatalog(wide, CARLUZ_BUSINESS_ID)
+    turns = [turn for case in queue for turn in case.get("turns") or
+             [turn for client in case["clients"] for turn in client["turns"]]]
+    # Exigir el producto es justo: el buscador del servidor lo pone primero al nombrarlo así.
+    names = _products(wide)
+    for turn in turns:
+        if turn.get("expected_sku"):
+            product = names[turn["expected_sku"]]
+            spoken = f"{product['name'].lower()} de {product['variant']}" if product["variant"] else product["name"].lower()
+            assert cobertura_carluz._top(catalog, spoken) == product["sku"]
+    assert all(turn["expected_status"] for turn in turns if turn.get("query"))
+    assert all(detect_injection(turn["query"]) for turn in turns if turn.get("expected_status") == "blocked")
+    assert all(asks_for_human(turn["query"]) for turn in turns if turn.get("expected_status") == "handoff")
+    racing = [case for case in queue if case["tipo"] == "dos_clientes_ultima_unidad"]
+    assert all(case["expected_active_total"] == 1 and len(case["clients"]) == 2 for case in racing)
+    with pytest.raises(ValueError, match="no alcanza"):
+        build_coverage(wide, per_template=40)
+
+
+def test_coverage_conversations_are_logged_turn_by_turn(wide, tmp_path, monkeypatch):
+    monkeypatch.setenv("GROK_API_KEY", "llave-secreta-de-prueba")
+    queue = build_coverage(wide, per_template=1)
+    picked = [next(case for case in queue if case["tipo"] == kind)
+              for kind in ("inyeccion_y_baneo", "dos_clientes_ultima_unidad", "vencimiento")]
+    folder = tmp_path / "cobertura"
+    folder.mkdir()
+    (folder / bitacora_carga.COLA).write_text(json.dumps(picked), encoding="utf-8")
+    desatendido.work(folder, 0.001, Decimal("5"), planner=_fake_grok, sleep=lambda seconds: None, database=wide)
+    lines = {line["id"]: line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA)
+             if line["tipo"] == "tarea"}
+    injection, racing, expiry = (lines[case["id"]] for case in picked)
+    assert [turn["resultado"] for turn in injection["turnos"]][1:] == ["blocked", "SESSION_BANNED"]
+    assert injection["turnos"][1]["llamadas_grok"] == 0
+    assert {turn["cliente"] for turn in racing["turnos"]} == {1, 2}
+    assert expiry["turnos"][1]["mensaje"] == "(pasan 6 min)"
+    assert all({"mensaje", "resultado", "exito", "respuesta", "herramientas", "pedidos"} <= set(turn)
+               for line in lines.values() for turn in line["turnos"])
+    assert "llave-secreta-de-prueba" not in (folder / bitacora_carga.BITACORA).read_text(encoding="utf-8")
+
+
+def test_prepare_builds_the_coverage_queue_in_its_own_folder(wide, tmp_path, monkeypatch):
+    monkeypatch.setattr(desatendido, "CARLUZ_DB_PATH", wide)
+    monkeypatch.setattr(desatendido, "build_coverage", lambda database: build_coverage(database, per_template=1))
+    folder = tmp_path / "s4_cobertura"
+    monkeypatch.setattr("sys.argv", ["desatendido", "--carpeta", str(folder), "preparar", "--cola", "cobertura"])
+    assert desatendido.main() == 0
+    queue = json.loads((folder / bitacora_carga.COLA).read_text(encoding="utf-8"))
+    assert queue and all(case["suite"] == "cobertura" for case in queue)
