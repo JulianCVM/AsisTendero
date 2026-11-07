@@ -39,7 +39,7 @@ from asistendero.datos.seed import (
 )
 from asistendero.entregas import launcher
 from asistendero.entregas.panel import tendero
-from asistendero.evaluacion import bitacora_carga, cobertura_carluz, desatendido, evaluate
+from asistendero.evaluacion import bitacora_carga, bodega_carluz, cobertura_carluz, desatendido, evaluate
 from asistendero.evaluacion.carga_carluz import build_queue
 from asistendero.evaluacion.cobertura_carluz import build_coverage
 from asistendero.agente.conversacion.handoff import asks_for_human
@@ -686,3 +686,94 @@ def test_prepare_builds_the_coverage_queue_in_its_own_folder(wide, tmp_path, mon
     assert desatendido.main() == 0
     queue = json.loads((folder / bitacora_carga.COLA).read_text(encoding="utf-8"))
     assert queue and all(case["suite"] == "cobertura" for case in queue)
+
+
+def _ideal_shopkeeper_reading(database: Path):
+    """Un intérprete falso que entiende al tendero perfecto: lo que el caso espera, con las palabras del producto."""
+    names = _products(database)
+
+    def spoken(sku: str) -> str:
+        return f"{names[sku]['name'].lower()} {names[sku]['variant']}".strip()
+
+    def reading(case: dict) -> dict:
+        operations = []
+        for wanted in case["esperado"]:
+            operation = dict.fromkeys(("sku", "cantidad", "precio_cop", "fecha", "oc", "proveedor"))
+            operation.update(tipo=wanted["tipo"], producto=spoken(wanted["sku"]))
+            operation["cantidad"] = wanted.get("cantidad", wanted.get("stock"))
+            operation["precio_cop"] = wanted.get("precio")
+            if wanted["tipo"] == "pedido_proveedor":
+                operation["fecha"] = bodega_carluz.FRIDAY
+            if bodega_carluz.SUPPLIER in case["mensaje"]:
+                operation["proveedor"] = bodega_carluz.SUPPLIER
+            operations.append(operation)
+        if case["tipo"] == "llegada_sin_proveedor":
+            sku = case["sin_recepcion"]
+            amount = int(re.search(r"\d+", case["mensaje"]).group())
+            operations.append({**dict.fromkeys(("sku", "precio_cop", "fecha", "oc", "proveedor")), "tipo": "recepcion",
+                               "producto": spoken(sku), "cantidad": amount})
+        if case.get("consulta"):
+            operations.append({**dict.fromkeys(("sku", "cantidad", "precio_cop", "fecha", "oc", "proveedor")),
+                               "tipo": "consulta", "producto": spoken(case["consulta"])})
+        doubts = [] if operations or case["tipo"] in ("inyeccion", "llegada_futura") else ["¿Qué llegó y cuántas?"]
+        return {"operaciones": operations, "dudas": doubts}
+
+    return reading
+
+
+def test_bodega_queue_covers_every_kind_of_shopkeeper_message(wide):
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=2)
+    assert {case["tipo"] for case in cases} == {
+        "recepcion", "pedido_proveedor", "llegada_futura", "llegada_sin_proveedor", "cambio_precio", "conteo",
+        "consulta", "llegada_parcial", "dos_llegadas", "ambiguo", "inyeccion"}
+    assert len({case["mensaje"].casefold() for case in cases}) == len(cases) == len({case["id"] for case in cases})
+    assert bodega_carluz.build_bodega_cases(wide, per_type=2) == cases
+
+
+def test_bodega_applies_exactly_what_the_shopkeeper_said_and_only_after_confirming(wide, tmp_path):
+    reading = _ideal_shopkeeper_reading(wide)
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=2)
+    store_before = {sku: (row["stock"], row["price_cop"]) for sku, row in _products(wide).items()}
+    records = {case["id"]: bodega_carluz.run_bodega_case(case, wide, tmp_path, interpret=lambda text, context, c=case:
+                                                         reading(c)) for case in cases}
+    assert all(not record["fail_reasons"] for record in records.values()), {
+        key: record["fail_reasons"] for key, record in records.items() if record["fail_reasons"]}
+    applied = {case["tipo"] for case in cases if records[case["id"]]["actual_status"] == bodega_carluz.APPLIED}
+    assert applied == {"recepcion", "pedido_proveedor", "cambio_precio", "conteo", "llegada_parcial", "dos_llegadas"}
+    # La base de la tienda nunca se toca: cada caso trabaja sobre su copia.
+    assert {sku: (row["stock"], row["price_cop"]) for sku, row in _products(wide).items()} == store_before
+
+
+def test_bodega_catches_a_wrong_reading(wide, tmp_path):
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=1)
+    reading = _ideal_shopkeeper_reading(wide)
+    received = next(case for case in cases if case["tipo"] == "recepcion")
+    doubled = reading(received)
+    doubled["operaciones"][0]["cantidad"] += 5
+    record = bodega_carluz.run_bodega_case(received, wide, tmp_path, interpret=lambda text, context: doubled)
+    assert record["actual_status"] == bodega_carluz.NOT_APPLICABLE and "en vez de" in record["fail_reasons"][0]
+    future = next(case for case in cases if case["tipo"] == "llegada_futura")
+    sku = future["sin_recepcion"]
+    as_arrival = {"operaciones": [{**dict.fromkeys(("sku", "precio_cop", "fecha", "oc")), "tipo": "recepcion",
+                                   "producto": reading({**future, "esperado": [], "tipo": "x", "consulta": sku})
+                                   ["operaciones"][0]["producto"], "cantidad": 3, "proveedor": bodega_carluz.SUPPLIER}],
+                  "dudas": []}
+    (tmp_path / "f").mkdir()
+    record = bodega_carluz.run_bodega_case(future, wide, tmp_path / "f", interpret=lambda text, context: as_arrival)
+    # Aunque Grok lea «mañana llegan» como una llegada, el servidor no la suma a la bodega.
+    assert record["actual_status"] == bodega_carluz.NOT_APPLICABLE and not record["fail_reasons"]
+    assert "entrega futura" in record["response"]
+
+
+def test_bodega_cases_run_in_the_unattended_mode(wide, tmp_path, monkeypatch):
+    reading = _ideal_shopkeeper_reading(wide)
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=1)[:4]
+    by_message = {case["mensaje"]: case for case in cases}
+    monkeypatch.setattr(desatendido, "BODEGA_INTERPRET", lambda text, context: reading(by_message[text]))
+    folder = tmp_path / "bodega"
+    folder.mkdir()
+    (folder / bitacora_carga.COLA).write_text(json.dumps(cases), encoding="utf-8")
+    desatendido.work(folder, 0.001, Decimal("5"), planner=pytest.fail, sleep=lambda seconds: None, database=wide)
+    lines = [line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA) if line["tipo"] == "tarea"]
+    assert [line["entrada"] for line in lines] == [case["mensaje"] for case in cases]
+    assert all(line["exito"] for line in lines), [line["motivos"] for line in lines]

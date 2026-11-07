@@ -15,8 +15,9 @@
 - **Bitácora:** ``evaluation/s4_carga/bitacora.jsonl`` (una línea por tarea y por evento), ``bitacora.csv`` y
   ``RESUMEN.md``. Nunca lleva la llave. Una conversación guarda además cada turno (``turnos``): mensaje, respuesta,
   herramientas, errores, pedidos y avisos, para ver la memoria y el pedido, no solo el final.
-- **Cobertura:** ``--cola cobertura`` arma las conversaciones completas de ``cobertura_carluz.py``; cada carpeta
-  trabaja sobre su propia copia de la base (``--base``).
+- **Cobertura:** ``--cola cobertura`` arma las conversaciones completas de ``cobertura_carluz.py`` y ``--cola bodega``
+  los mensajes del tendero al asistente de bodega (``bodega_carluz.py``); cada carpeta trabaja sobre su propia copia
+  de la base (``--base``).
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -38,6 +40,7 @@ from asistendero.agente.reglas.context_resolution import load_catalog_words
 from asistendero.datos.carluz import CARLUZ_BUSINESS_ID
 from asistendero.datos.importar_carluz import CARLUZ_DB_PATH, CARLUZ_DIR
 from asistendero.datos.seed import upgrade_db
+from asistendero.evaluacion.bodega_carluz import build_bodega_cases, run_bodega_case
 from asistendero.evaluacion.bitacora_carga import (
     BITACORA, COLA, DONE, ESTADO, append, done_ids, events_of, write_summary,
 )
@@ -46,6 +49,7 @@ from asistendero.evaluacion.cobertura_carluz import build_coverage
 from asistendero.evaluacion.eval_report import record_cost
 from asistendero.evaluacion.evaluate import evaluate_cases, git_state
 from asistendero.tienda import reloj
+from asistendero.tienda.bodega.stock_assistant import interpret_text
 from asistendero.tienda.catalogo.catalog import MockCatalog
 
 RUN_DB = CARLUZ_DIR / "carga" / "tienda.sqlite3"
@@ -57,6 +61,8 @@ RESTART_WAIT_S = 30
 SUMMARY_EVERY = 25
 MAX_RESPONSE_CHARS = 1500
 MAX_TURN_RESPONSE_CHARS = 600
+# Quién interpreta los mensajes del tendero; las pruebas lo cambian por uno falso.
+BODEGA_INTERPRET = interpret_text
 
 
 def _now() -> datetime:
@@ -156,11 +162,16 @@ def failed_entry(task: dict, error: BaseException, started: datetime, state: dic
 
 
 def _first_query(task: dict) -> str:
+    if task.get("mensaje"):
+        return task["mensaje"]
     turns = task.get("turns") or task["clients"][0]["turns"]
     return next(turn["query"] for turn in turns if turn.get("query"))
 
 
 def run_task(task: dict, catalog: MockCatalog, planner) -> dict:
+    if task.get("suite") == "bodega":
+        with tempfile.TemporaryDirectory() as folder:
+            return run_bodega_case(task, catalog.path, Path(folder), interpret=BODEGA_INTERPRET)
     report = evaluate_cases([task], catalog=catalog, planner=planner)
     return report["cases"][0]
 
@@ -237,7 +248,7 @@ def main() -> int:
     prepare = sub.add_parser("preparar", help="Arma la cola de tareas distintas (no llama a Grok)")
     prepare.add_argument("--tareas", type=int, default=1300)
     prepare.add_argument("--semilla", type=int, default=7)
-    prepare.add_argument("--cola", choices=("carga", "cobertura"), default="carga")
+    prepare.add_argument("--cola", choices=("carga", "cobertura", "bodega"), default="carga")
     run = sub.add_parser("correr", help="Procesa la cola con Grok real (consume créditos del reto)")
     run.add_argument("--horas", type=float, default=12.25)
     run.add_argument("--budget-usd", type=Decimal, required=True)
@@ -253,8 +264,9 @@ def main() -> int:
             parser.error(f"Ya hay una bitácora en {folder}: la cola no se cambia a mitad de una corrida.")
         if not CARLUZ_DB_PATH.is_file():
             parser.error(f"No existe {CARLUZ_DB_PATH}: impórtala con python -m asistendero.datos.importar_carluz")
-        queue = (build_coverage(CARLUZ_DB_PATH) if args.cola == "cobertura"
-                 else build_queue(CARLUZ_DB_PATH, args.tareas, args.semilla))
+        builders = {"cobertura": build_coverage, "bodega": build_bodega_cases,
+                    "carga": lambda database: build_queue(database, args.tareas, args.semilla)}
+        queue = builders[args.cola](CARLUZ_DB_PATH)
         (folder / COLA).write_text(json.dumps(queue, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"{len(queue)} tareas distintas en {folder / COLA}")
         return 0
