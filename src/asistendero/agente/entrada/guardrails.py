@@ -62,6 +62,11 @@ PERSONAL_DATA = [
     re.compile(r"\b(?:c\.?\s?c\.?|c[eé]dula|nit|documento)(?:\s*(?:es|de|n[uú]mero|no\.?|#|:))*\s*[\d.\s-]{6,15}\d", re.I),
     re.compile(r"(?<![\d$.,])\d(?:[\s-]?\d){12,18}(?!\d)"),
 ]
+# El nombre con que se presenta el cliente: Grok saludó «Hola Luz Marina» tras la nota «no los guardo» (C-010,
+# cobertura sobre Carluz). Solo con mayúscula inicial: «soy de Bucaramanga» o «soy maestro de obra» orientan la
+# búsqueda. El tendero sí puede presentarse en el chat («Hola, soy Julián»): por eso va aparte.
+CUSTOMER_NAME = re.compile(r"(?:\b[Ss]oy|\b[Mm]e\s+llamo|\b[Mm]i\s+nombre\s+es)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+"
+                           r"(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3}")
 REDACTED = "[dato personal omitido]"
 
 
@@ -90,16 +95,17 @@ def sensitive_topics(text: str) -> list[str]:
     return [code for code, pattern in _TOPIC_PATTERNS.items() if pattern.search(plain)]
 
 
-def redact_personal_data(text: str) -> tuple[str, bool]:
+def redact_personal_data(text: str, *, customer: bool = False) -> tuple[str, bool]:
+    """Texto con los datos personales tapados; ``customer=True`` tapa también el nombre con que se presenta."""
     redacted = text
-    for pattern in PERSONAL_DATA:
+    for pattern in [*PERSONAL_DATA, CUSTOMER_NAME] if customer else PERSONAL_DATA:
         redacted = pattern.sub(REDACTED, redacted)
     return redacted, redacted != text
 
 
 def screen_message(message: str) -> Screening:
     """Quita las frases delicadas y tapa los datos personales; lo que queda es lo que ve Grok."""
-    text, redacted = redact_personal_data(message)
+    text, redacted = redact_personal_data(message, customer=True)
     kept, removed, codes = [], [], []
     for sentence in SENTENCE_SPLIT.split(text):
         if not sentence or not sentence.strip():

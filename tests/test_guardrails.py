@@ -76,6 +76,26 @@ def test_personal_data_is_redacted_before_grok_and_memory():
     assert redact_personal_data("2 bultos a $39.500 COP")[1] is False
 
 
+@pytest.mark.parametrize("message", ["soy Luz Marina Díaz, mi cédula es 63512874; apárteme 1 rejilla",
+                                     "Hola, me llamo Martha Rueda y necesito 2 brochas",
+                                     "mi nombre es Ana, ¿tienen cemento?", "Soy Ana, cotízame 2 bultos"])
+def test_the_name_a_customer_introduces_is_redacted(message):
+    # C-010 (cobertura sobre Carluz, corrida 5): Grok vio «soy Luz Marina Díaz» y respondió «Hola Luz Marina…»
+    # justo después de la nota «no los guardo».
+    text, redacted = redact_personal_data(message, customer=True)
+    assert redacted
+    assert screen_message(message).redacted
+    for name in ("Luz", "Marina", "Díaz", "Martha", "Rueda", "Ana"):
+        assert name not in text
+
+
+@pytest.mark.parametrize("message", ["soy de Bucaramanga, ¿hacen domicilios?", "soy maestro de obra, necesito 3 bultos",
+                                     "Soy el de ayer, ¿ya llegó el cemento?", "me llamo la atención ese taladro"])
+def test_saying_soy_without_a_name_is_not_personal_data(message):
+    # Lo que no debe pasar: tapar de dónde es o qué hace el cliente, que sí orienta la búsqueda.
+    assert redact_personal_data(message, customer=True) == (message, False)
+
+
 @pytest.mark.parametrize("message", ["¿me dan factura?", "me dan 2 brochas de 3 pulgadas",
                                      "¿cuánto me dan de descuento si llevo 10?"])
 def test_the_verb_dan_is_not_the_dan_jailbreak(message):
