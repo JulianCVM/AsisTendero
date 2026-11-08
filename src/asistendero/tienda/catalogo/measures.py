@@ -60,6 +60,8 @@ def canonical_text(value: str) -> str:
         (r"\bcincuenta\s+kilos?\b", "50 kg"),
         (r"\b([0-9]+(?:/[0-9]+)?)\s*\"", r"\1 pulgada"),
         (r"\b(\d+(?:/\d+)?)(kg|cm|mm)\b", r"\1 \2"),
+        # El inventario de Carluz escribe «#40» y el cliente dice «número 40» (CL-18). «no 40» sin punto es negación.
+        (r"(?:\b(?:numero|nro|num|no\.)|\bn°|#)\s*(?=\d)", ""),
     ):
         text = re.sub(pattern, replacement, text)
     text = _SPOKEN_MEASURE.sub(lambda match: f"{1000 if match.group(1) == 'mil' else NUMBER_WORDS[match.group(1)]} ", text)

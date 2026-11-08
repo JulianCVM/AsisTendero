@@ -88,7 +88,7 @@ propio.
    - `reply_is_grounded` (`answers.py`); `found_sentence`, `item_line`, `quote_block` y
      `short_stock_text` (`reply_text.py`); `next_node` (`graph.py`).
    - `list_lines`, `usable_lines`, `updated_list`, `removed_now` y `missing_from_quote` (`shopping_list.py`);
-     `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount` y `without_negated`
+     `quantity_of_other`, `session_phrase`, `naming_numbers`, `fractional_amount`, `sold_as` y `without_negated`
      (`validation.py`); `without_quantities` y `negated_words` (`search.py`).
    - `shown_options`, `chosen_options`, `ambiguous_reference`, `check_reference`, `pagination_group`,
      `pending_quantity_quote` y `coherent_option_turn` (`choices.py`); `is_elliptical_turn`,

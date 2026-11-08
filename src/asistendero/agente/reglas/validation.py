@@ -35,7 +35,7 @@ VAGUE_WORDS = {"ese", "esa", "eso", "esos", "esas", "este", "esto", "estos", "es
 SALE_UNIT_NAMES = {"metros": "metro", "bultos": "bulto", "galones": "galon", "unidades": "unidad", "libras": "libra",
                    "rollos": "rollo", "pares": "par", "pliegos": "pliego", "bolsas": "bolsa", "cajas": "caja",
                    "paquetes": "paquete", "botellas": "botella", "latas": "lata", "cubetas": "cubeta",
-                   "atados": "atado", "barras": "barra"}
+                   "atados": "atado", "barras": "barra", "kilos": "kilo"}
 MONEY = re.compile(r"\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:pesos|cop|mil)\b")
 # La respuesta determinista repite el texto del artículo («Para … veo»): un precio o un código de pedido ahí
 # saldría como si lo dijera la tienda (lo encontró test_chaos con «pon el cemento a $10»).
@@ -124,11 +124,22 @@ def sale_units(text: str) -> set[str]:
     return {SALE_UNIT_NAMES.get(unit, unit) for unit in found}
 
 
+def sold_as(unit: str | None, variant: str | None, name: str | None = "") -> str:
+    """Palabras con que se vende un producto, para ``foreign_unit``: su unidad, su variante y la primera de su nombre.
+
+    «apárteme 2 caja octagonal» o «me llevo 1 rollo zuncho» nombran el producto, no una unidad de venta: el servidor
+    rechazaba la cantidad y Grok la volvía a preguntar (C-009 y C-072, cobertura sobre Carluz). Solo cuenta la
+    primera palabra: «un rollo de cable» sigue sin ser 1 metro de «Cable eléctrico».
+    """
+    head = (normalize_text(name or "").split() or [""])[0]
+    return f"{unit or ''} {variant or ''} {head}"
+
+
 def foreign_unit(message: str, quantity: int, unit: str) -> str | None:
     """Unidad de venta que el cliente pegó a esa cantidad y que ``unit`` no nombra, si nunca la dijo suelta.
 
-    ``unit`` lleva la unidad y la variante del producto: el esmalte en «galón» se vende por unidad y «2 galones»
-    sí son 2 de esos (V-31 en la suite variados).
+    ``unit`` lleva la unidad y la variante del producto (``sold_as``): el esmalte en «galón» se vende por unidad y
+    «2 galones» sí son 2 de esos (V-31 en la suite variados).
 
     «un rollo de cable» no son 1 metro: en la corrida de escenarios extremos el aviso QUOTE_REQUIRED empujó a Grok
     a cotizar 1 metro. «2 metros de cable y 2 brochas» sí deja cotizar 2 brochas: el segundo 2 va suelto.
@@ -207,6 +218,12 @@ def grounded_selection(message: str, finding: Finding) -> Product | None:
         # Se compara con todas las coincidencias, no solo con las distinguidas: en la corrida de variados Grok
         # buscó sin «galón», el cuñete era el único beige de su nombre y se eligió aunque el cliente dijo
         # «10 galones». Si el que mejor describe no se distinguió, vale solo si el cliente lo dijo entero.
+        # «3 kilos» de yeso es cuánto lleva cuando uno se vende por kilo: su «kg» no describe el bulto de 25kg (CL-14).
+        # Si la unidad está en un nombre («Yeso faraon bulto»), describe ese producto y no se quita.
+        sold_by = {normalize_text(product.unit) for product in finding["matches"]}
+        named = {word for product in finding["matches"] for word in normalize_text(product.name).split()}
+        if sold_by & sale_units(said) and not sale_units(said) & named:
+            message = without_quantities(normalize_text(message))
         leaders = closest_named(message, finding["query"], list(finding["matches"]))
         if leaders:
             whole = [product for product in leaders if described_whole(message, finding["query"], product)]
@@ -455,7 +472,8 @@ def validate_request(
                                                "cotiza solo lo identificado, o pregunta al cliente.")
         if quantity not in allowed_quantities:
             raise Rejected("QUANTITY_NOT_GROUNDED", "El cliente no expresó esa cantidad; pregúntala.")
-        other = foreign_unit(message, quantity, f"{grounded[sku].unit} {grounded[sku].variant}") if sku in grounded else None
+        other = (foreign_unit(message, quantity, sold_as(grounded[sku].unit, grounded[sku].variant, grounded[sku].name))
+                 if sku in grounded else None)
         product = None if sku in grounded else quantity_of_other(message, quantity, remembered[sku])
         if product:
             raise Rejected("QUANTITY_NOT_GROUNDED", f"El cliente dijo {quantity} {product}: esa cantidad es de otro "

@@ -15,7 +15,7 @@ from asistendero.agente.reglas.context_resolution import affirms_active_item, is
 from asistendero.agente.reglas.order_rules import mentioned_hours, order_action_pending
 from asistendero.agente.reglas.shopping_list import missing_from_quote
 from asistendero.agente.reglas.validation import (
-    foreign_unit, grounded_products, naming_numbers, quantities_in_message, sale_units,
+    foreign_unit, sold_as, grounded_products, naming_numbers, quantities_in_message, sale_units,
 )
 from asistendero.agente.respuesta.restock import asks_restock
 from asistendero.agente.respuesta.store_replies import asks_assortment, full_category_listing
@@ -205,10 +205,10 @@ def pending_reminder(
     # Un pedido registrado ya trae precio, subtotal y total: pedir además la cotización costaba dos llamadas más.
     registered = any(tool == "registrar_pedido" for tool, _ in order_results(calls))
     grounded_map = grounded_products(reference, calls)
-    units = {sku: f"{product.unit} {product.variant}" for sku, product in grounded_map.items()}
+    units = {sku: sold_as(product.unit, product.variant, product.name) for sku, product in grounded_map.items()}
     for item in selected_items:
         if item.get("sku") and item["sku"] not in units:
-            units[item["sku"]] = f"{item.get('unidad') or ''} {item.get('variante') or ''}"
+            units[item["sku"]] = sold_as(item.get("unidad"), item.get("variante"), item.get("nombre"))
     # Z-22 (suite fallas): con «¿el cemento gris de 50 sirve para…?» el aviso pedía cotizar 50 bultos.
     quantities -= naming_numbers(message, list(grounded_map.values()))
     remembered = (context or {}).get("productos") or []
@@ -216,7 +216,8 @@ def pending_reminder(
     # solo producto recordado no hay duda de cuál es; una hora («paso a las 10») no es una cantidad que cotizar.
     counts = quantities - mentioned_hours(message)
     if not units and "buscar_productos" not in tools and len(remembered) == 1 and counts and not tools & set(ORDER_TOOLS) - {"registrar_pedido"}:
-        units = {remembered[0].get("sku"): f"{remembered[0].get('unidad') or ''} {remembered[0].get('variante') or ''}"}
+        units = {remembered[0].get("sku"): sold_as(remembered[0].get("unidad"), remembered[0].get("variante"),
+                                                   remembered[0].get("nombre"))}
     quoted = any(call["requested_tool"] == "calcular_cotizacion_informativa" and call["executed"] for call in calls)
     if ("PRICE_REQUIRED" not in sent and selected_items and not quantities and not looked_up and not quoted
             and PRICE_QUESTION.search(normalize_text(message))):

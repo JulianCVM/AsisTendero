@@ -261,3 +261,55 @@ def test_a_comma_inside_a_product_name_does_not_cut_what_the_customer_said():
     assert grounded_selection(message, finding).sku == "CLZ-1"
     # Dos artículos separados por coma siguen siendo dos partes: cada uno se lee solo con lo suyo.
     assert said_about("brocha de 2 pulgadas, y un rodillo de 9 pulgadas", "rodillo de 9 pulgadas").strip().startswith("un rodillo")
+
+
+@pytest.mark.parametrize("said", ["candado dorado número 40", "candado dorado nro 40", "candado dorado No. 40",
+                                  "candado dorado n° 40", "candado dorado #40"])
+def test_a_spoken_number_sign_is_the_inventory_hash(said):
+    # CL-18 y CL-31 (humo de Carluz): el inventario escribe «#40» y «número 40» quedaba como opción cercana porque
+    # «numero» no estaba en ningún nombre.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product, tokens
+
+    padlocks = [Product("CLZ-40", "Candado dorado", "#40", "unidad", 1, 5, ""),
+                Product("CLZ-20", "Candado dorado", "#20", "unidad", 1, 5, "")]
+    assert tokens(said) == tokens("Candado dorado #40")
+    finding = {"query": said, "request": {"text": said, "product": "candado"}, "matches": padlocks, "nearby": []}
+    assert grounded_selection(f"necesito 1 {said}", finding).sku == "CLZ-40"
+
+
+def test_no_followed_by_a_number_is_still_a_negation():
+    # Lo que no debe pasar: «no 40, el de 20» pierde el «no» y queda como si pidiera el 40.
+    from asistendero.tienda.catalogo.measures import canonical_text
+
+    assert "no 40" in canonical_text("no 40, el de 20")
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("3 kilos de yeso faraón", "CLZ-KILO"),
+    ("un kilo de yeso faraón", "CLZ-KILO"),
+    # Grok buscó sin «bulto»: se pregunta, pero nunca se elige el yeso por kilo.
+    ("1 bulto de yeso faraón", None),
+    ("2 bultos de yeso faraón", None),
+])
+def test_kilos_said_choose_the_product_sold_by_kilo(message, expected):
+    # CL-14 (humo de Carluz): «3 kilos de yeso faraón» mostraba el bulto de 25 kg y el yeso por kilo como opciones,
+    # aunque el cliente dijo la unidad.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product
+
+    plaster = [Product("CLZ-BULTO", "Yeso faraon bulto", "25kg", "bulto", 1, 5, ""),
+               Product("CLZ-KILO", "Yeso faraon", "", "kilo", 1, 5, "")]
+    finding = {"query": "yeso faraón", "request": {"text": "yeso faraón", "product": "yeso"}, "matches": plaster,
+               "nearby": []}
+    chosen = grounded_selection(message, finding)
+    assert (chosen.sku if chosen else None) == expected
+
+
+def test_kilos_of_the_measure_are_not_a_quantity():
+    # Lo que no debe pasar: «cemento de 50 kilos» o «2 bultos de cemento de 50 kilos» no piden 50 de nada.
+    from asistendero.agente.reglas.validation import foreign_unit, sale_units
+
+    assert sale_units("cemento de 50 kilos") <= {"kilo"}
+    assert foreign_unit("2 bultos de cemento de 50 kilos", 2, "bulto 50kg") is None
+    assert foreign_unit("3 kilos de clavos", 3, "libra 2 pulgada") == "kilo"

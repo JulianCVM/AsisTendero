@@ -33,7 +33,7 @@ from asistendero.agente.reglas.order_rules import (
 )
 from asistendero.agente.reglas.shopping_list import list_lines, usable_lines
 from asistendero.agente.reglas.validation import (
-    MAX_QUANTITY, foreign_unit, fractional_amount, grounded_selection, naming_numbers, quantities_in_message,
+    MAX_QUANTITY, foreign_unit, sold_as, fractional_amount, grounded_selection, naming_numbers, quantities_in_message,
     quantity_of_other, Rejected, sale_units, validate_request, without_negated,
 )
 from asistendero.agente.respuesta.answers import (
@@ -186,7 +186,7 @@ def _partial_auto_quote_lines(consulta: str, said_ref: str, raw_findings: list, 
             return None
         quantity = valid_q[0]
         if (
-            foreign_unit(clause, quantity, f"{match.unit} {match.variant}")
+            foreign_unit(clause, quantity, sold_as(match.unit, match.variant, match.name))
             or quantity_of_other(clause, quantity, f"{match.name} {match.variant} {match.unit}")
             or match.sku in seen_skus
         ):
@@ -251,7 +251,7 @@ def _auto_quote_call(
             return None
         quantity = valid_quantities[0]
         if (
-            foreign_unit(consulta, quantity, f"{match.unit} {match.variant}")
+            foreign_unit(consulta, quantity, sold_as(match.unit, match.variant, match.name))
             or quantity_of_other(consulta, quantity, f"{match.name} {match.variant} {match.unit}")
         ):
             return None

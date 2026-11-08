@@ -16,7 +16,7 @@ from asistendero.agente.reglas.context_resolution import (
     offered_short_quantity, pending_quantity_target, remembered_spec_for_item,
 )
 from asistendero.agente.reglas.validation import (
-    MAX_QUANTITY, SALE_UNIT, foreign_unit, fractional_amount, grounded_products, grounded_selection,
+    MAX_QUANTITY, SALE_UNIT, foreign_unit, sold_as, fractional_amount, grounded_products, grounded_selection,
     quantities_in_message, Rejected, without_negated,
 )
 from asistendero.agente.respuesta.reply_text import MAX_NEARBY, MAX_OPTIONS, gender_of, in_sentence, label
@@ -296,7 +296,7 @@ def pending_quantity_quote(message: str, context: dict | None) -> tuple[dict, in
     if len(valid) != 1:
         return None
     quantity = valid[0]
-    target_unit = f"{target.get('unidad') or ''} {target.get('variante') or ''}".strip()
+    target_unit = sold_as(target.get("unidad"), target.get("variante"), target.get("nombre")).strip()
     if target_unit and foreign_unit(message, quantity, target_unit):
         return None
     return target, quantity

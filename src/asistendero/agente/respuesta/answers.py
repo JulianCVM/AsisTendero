@@ -15,7 +15,7 @@ from asistendero.agente.reglas.context_resolution import (
     affirms_active_item, filter_matches_by_spec, pending_quantity_target, remembered_spec_for_item,
 )
 from asistendero.agente.reglas.validation import (
-    foreign_unit, fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message,
+    foreign_unit, sold_as, fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message,
     without_negated,
 )
 from asistendero.agente.respuesta.order_replies import order_allowances, order_reply, rushes_the_customer
@@ -471,7 +471,7 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     # X-06 (corrida 39): el cable se vende por metro y Grok escribió «un rollo … te sale a $2.700 el metro», como si
     # el rollo costara eso. Con la cantidad en otra unidad de venta, la respuesta determinista pregunta.
     asked_now = message if current is None else current
-    if not quote and any(foreign_unit(asked_now, quantity, f"{product.unit} {product.variant}")
+    if not quote and any(foreign_unit(asked_now, quantity, sold_as(product.unit, product.variant, product.name))
                          for product in selected.values() for quantity in quantities_in_message(asked_now)):
         return False
     if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:

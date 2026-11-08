@@ -1052,3 +1052,30 @@ def test_a_store_topic_the_store_never_gave_is_not_a_catalog_search():
     status, text = render_answer("¿hacen domicilios?", [call], context={"turnos": []})
     assert status == "answered" and "no lo tengo" in text
     assert "catálogo" not in text and "producto" not in text and "$" not in text
+
+
+def test_a_product_named_like_a_sale_unit_takes_the_quantity_said(tmp_path):
+    # C-009 y C-072 (cobertura sobre Carluz, corrida 3): «apárteme 2 caja octagonal» o «me llevo 1 rollo zuncho»
+    # nombran el producto, no una unidad de venta; el servidor rechazaba la cantidad y Grok la volvía a preguntar.
+    from asistendero.agente.reglas.order_rules import validate_order_request
+    from asistendero.agente.reglas.validation import Rejected, foreign_unit, sold_as
+
+    box = {"sku": "CLZ-0001", "nombre": "Caja octagonal", "unidad": "unidad", "variante": ""}
+    context = {"productos": [box], "pedidos": [], "turnos": []}
+    clean = validate_order_request("registrar_pedido", {"lines": [{"sku": "CLZ-0001", "quantity": 2}]},
+                                   current="apárteme 2 caja octagonal", reference="apárteme 2 caja octagonal",
+                                   calls=[], context=context)
+    assert clean["lines"] == [{"sku": "CLZ-0001", "quantity": 2}]
+    assert foreign_unit("me llevo 1 rollo zuncho", 1, sold_as("unidad", "", "Rollo zuncho")) is None
+    # Lo que no debe pasar: «un rollo de cable» sigue sin ser 1 metro, ni «2 cajas de tornillos» 2 tornillos.
+    assert foreign_unit("un rollo de cable", 1, sold_as("metro", "12 AWG", "Cable eléctrico")) == "rollo"
+    assert foreign_unit("2 cajas de tornillos", 2, sold_as("unidad", "1/4", "Tornillo drywall")) == "caja"
+    cable = {"sku": "CLZ-0002", "nombre": "Cable de prueba", "unidad": "metro", "variante": "2x12"}
+    try:
+        validate_order_request("registrar_pedido", {"lines": [{"sku": "CLZ-0002", "quantity": 1}]},
+                               current="apárteme un rollo de cable", reference="apárteme un rollo de cable",
+                               calls=[], context={"productos": [cable], "pedidos": [], "turnos": []})
+    except Rejected as rejected:
+        assert rejected.code == "QUANTITY_NOT_GROUNDED"
+    else:
+        raise AssertionError("un rollo de cable no son 1 metro")
