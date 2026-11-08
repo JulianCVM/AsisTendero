@@ -1079,3 +1079,24 @@ def test_a_product_named_like_a_sale_unit_takes_the_quantity_said(tmp_path):
         assert rejected.code == "QUANTITY_NOT_GROUNDED"
     else:
         raise AssertionError("un rollo de cable no son 1 metro")
+
+
+def test_a_session_reply_never_offers_a_bargain_even_with_the_real_price(chat):
+    # C-115 y C-117 (cobertura sobre Carluz, corrida 4): tras cotizar, «¿en cuánto me lo deja de contado?» recibió
+    # «De contado te lo dejo en $2.800 la unidad». La cifra era la del catálogo y pasaba la verificación, pero la
+    # frase ofrece una rebaja que la tienda no da.
+    import re
+
+    from asistendero.tienda.vocabulario import format_cop, normalize_text
+
+    turn, sessions, _, catalog, _ = chat
+    session = sessions.create()
+    price = format_cop(catalog.get("PVC-050").price_cop)
+    turn(session, "¿cuánto vale el tubo PVC de 1/2 para agua?", tool("buscar_productos", items=[PVC_HALF]),
+         say(f"Sí, tenemos tubo PVC de 1/2 para agua a {price} el metro. ¿Cuántos metros necesitas?", "productos"))
+    asked = turn(session, "¿en cuánto me lo deja de contado?", tool("buscar_productos", items=[PVC_HALF]),
+                 say(f"De contado te lo dejo en {price} el metro. ¿Cuántos metros te llevo?", "productos"))
+    reply = normalize_text(asked["respuesta"])
+    assert "dejo en" not in reply and "de contado" not in reply and "rebaj" not in reply
+    # Lo que no debe pasar tampoco: una cifra distinta a la del catálogo.
+    assert set(re.findall(r"\$[\d.]+", asked["respuesta"])) <= {price}

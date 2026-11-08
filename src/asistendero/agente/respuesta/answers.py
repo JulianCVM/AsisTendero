@@ -39,7 +39,9 @@ FORBIDDEN_CLAIMS = re.compile(
     r"\b(reservad|apartad|separad|registrad|confirmad|agendad|programad|pagad|despachad|entregad|facturad|descuent"
     r"|compatib|equivalen|abiert|cerrad)\w*"
     r"|\b(?:apart|reserv)ar\w*"
-    r"|\bpedido\s+(?:creado|registrado|confirmado|listo)",
+    r"|\bpedido\s+(?:creado|registrado|confirmado|listo)"
+    # «De contado te lo dejo en $2.800» ofrece una rebaja aunque la cifra sea la del catálogo (C-115, corrida 4).
+    r"|\b(?:te|se)\s+lo\s+(?:dejo|rebajo|pongo)\s+en\b|\bde\s+contado\b|\brebaj\w*",
     re.I,
 )
 
