@@ -79,7 +79,7 @@ propio.
    El alcance del corte vigente está en el plan del corte del vault PulsoTienda, fuera del repositorio (S3: nota
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
-   - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
+   - `tokens`, `category_stems` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
    - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
      (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
    - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
@@ -113,7 +113,7 @@ propio.
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
-   - `asks_assortment` y `full_category_listing` (`store_replies.py`).
+   - `asks_assortment`, `full_category_listing` y `explored_unnamed_category` (`store_replies.py`).
    - `Payments` y `check_payment` (`payments.py`); `sales_history` y `sales_summary` (`sales_history.py`);
      `review_reasons` (`sales.py`).
    - `Purchasing` (`purchasing.py`); `receive_stock` y `set_restock` (`inventory.py`); `CatalogAdmin`

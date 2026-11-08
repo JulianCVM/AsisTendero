@@ -18,7 +18,7 @@ from asistendero.agente.reglas.validation import (
     MONEY, foreign_unit, sold_as, grounded_products, naming_numbers, quantities_in_message, sale_units,
 )
 from asistendero.agente.respuesta.restock import asks_restock
-from asistendero.agente.respuesta.store_replies import asks_assortment, full_category_listing
+from asistendero.agente.respuesta.store_replies import asks_assortment, explored_unnamed_category, full_category_listing
 from asistendero.tienda.catalogo.catalog import tokens
 from asistendero.tienda.vocabulario import normalize_text
 
@@ -168,7 +168,9 @@ def pending_reminder(
         return "CATALOG_REQUIRED"
     # M-20 y M-35 (corrida 41): «¿venden cerveza?» y «¿qué yogures tienen?» nombran un producto; Grok listó las
     # categorías y la respuesta fue la lista entera, que no dice si hay ese producto. Se busca.
-    if ("SEARCH_REQUIRED" not in sent and not assortment and full_category_listing(calls)
+    # Corrida de 12 h (U-0224, U-1034): igual con una categoría que no existe o que el cliente no nombró.
+    listed_instead = full_category_listing(calls) or explored_unnamed_category(message, calls)
+    if ("SEARCH_REQUIRED" not in sent and not assortment and listed_instead
             and not tools & {"buscar_productos", "consultar_disponibilidad"}):
         return "SEARCH_REQUIRED"
     if "LIST_QUOTE_REQUIRED" not in sent and missing_from_quote(message, calls, context):

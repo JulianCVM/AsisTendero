@@ -4,7 +4,7 @@ import re
 
 from asistendero.agente.herramientas.observations import ToolCall, category_listings, store_info_by_topic
 from asistendero.agente.modelo.prompt import BUSINESS_KIND
-from asistendero.tienda.catalogo.catalog import tokens
+from asistendero.tienda.catalogo.catalog import category_stems, tokens
 
 
 DAY_NAMES = {"lunes": "lunes", "martes": "martes", "miercoles": "miércoles", "jueves": "jueves",
@@ -103,6 +103,18 @@ def asks_assortment(normalized_message: str) -> bool:
 def full_category_listing(calls: list[ToolCall]) -> bool:
     """Se observó la lista completa de categorías (explorar_categoria sin argumentos)."""
     return any("categorias" in listing for listing in category_listings(calls))
+
+
+def explored_unnamed_category(message: str, calls: list[ToolCall]) -> bool:
+    """Grok exploró una categoría que no existe o que el mensaje no nombra: «¿qué varilla tienen?» pide un producto."""
+    said = category_stems(message)
+    for call in calls:
+        if call["requested_tool"] != "explorar_categoria" or not (call.get("arguments") or {}).get("categoria"):
+            continue
+        data = call["response"].get("data") or {}
+        if call["response"]["status"] == "error" or not said & category_stems(str(data.get("categoria") or "")):
+            return True
+    return False
 
 
 def _hour(value: str) -> str:

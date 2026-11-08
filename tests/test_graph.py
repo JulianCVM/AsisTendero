@@ -1394,6 +1394,42 @@ def test_a_named_product_is_searched_even_after_listing_every_category():
     assert "categorías" in listing["respuesta"]
 
 
+@pytest.mark.parametrize("errors", [{}, {"explorar_categoria": "NOT_FOUND"}])
+def test_a_named_product_is_searched_after_exploring_a_category_the_customer_never_named(errors):
+    # Corrida de 12 h sobre Carluz (U-0224, U-1034): «¿qué varilla tienen?» o «¿qué bisagra común tienen?» terminaban en
+    # «No pude consultar el catálogo» (la categoría no existía) o en la lista de otra categoría, sin buscar el producto.
+    executor = FakeExecutor(PVC_SEARCH, errors=errors)
+    planner = Script(tool("explorar_categoria", categoria="tubo"), say("Mira lo que hay en plomería."),
+                     tool("buscar_productos", items=[PVC]), say("x"))
+    result = run(executor, planner, "¿qué tubo PVC de 1/2 para agua tienen?")
+    assert [name for name, _ in executor.calls] == ["explorar_categoria", "buscar_productos"]
+    assert any("SEARCH_REQUIRED" in json.dumps(seen["observations"]) for seen in planner.seen)
+    assert "PVC" in result["respuesta"] and "No pude consultar" not in result["respuesta"]
+
+
+def test_an_empty_optional_field_from_grok_does_not_reject_the_search():
+    # Cobertura y corrida de 12 h sobre Carluz: Grok manda los campos que no usa vacíos ("presentation": "",
+    # "brand": "") y la búsqueda entera se rechazaba con INVALID_ARGUMENT («No pude verificar ese producto»).
+    executor = FakeExecutor(PVC_SEARCH)
+    planner = Script(tool("buscar_productos", items=[{**PVC, "presentation": "", "brand": "  "}]), say("x"))
+    result = run(executor, planner, "¿tienen 2 metros de PVC de 1/2 para agua?")
+    assert executor.calls[0][0] == "buscar_productos"
+    sent = executor.calls[0][1]["items"][0]
+    assert "presentation" not in sent and "brand" not in sent and sent["material"] == "PVC"
+    assert "PVC" in result["respuesta"]
+    # Un campo que no existe sigue rechazándose: no se inventa dónde va.
+    strict = FakeExecutor(PVC_SEARCH)
+    run(strict, Script(tool("buscar_productos", items=[{**PVC, "type": "tipo 1"}]), say("x")), "tubo PVC de 1/2")
+    assert strict.calls == []
+
+
+def test_a_category_the_customer_named_is_listed_without_searching():
+    executor = FakeExecutor()
+    result = run(executor, Script(tool("explorar_categoria", categoria="plomería"), say("x")), "¿qué tienen de plomería?")
+    assert [name for name, _ in executor.calls] == ["explorar_categoria"]
+    assert "Tubo PVC" in result["respuesta"]
+
+
 def test_a_roll_of_something_sold_by_the_meter_is_never_priced_by_grok():
     # X-06 (corrida 39): «un rollo de cable» y Grok respondió «un rollo … te sale a $2.700 el metro».
     executor = FakeExecutor({"rollo de tubo PVC de 1/2 para agua": (["PVC-050"], [])})

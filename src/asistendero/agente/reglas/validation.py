@@ -369,8 +369,12 @@ def validate_request(
             fields = {}
             for field in QUERY_FIELDS:
                 value = item.get(field)
+                # Grok manda vacíos los campos que no usa ("brand": ""); vacío no dice nada y se toma como no dado.
+                # Antes rechazaba la búsqueda entera (cobertura y corrida de 12 h sobre Carluz).
+                if isinstance(value, str) and not value.strip():
+                    continue
                 if value is not None:
-                    if not isinstance(value, str) or not value.strip() or len(value) > 80:
+                    if not isinstance(value, str) or len(value) > 80:
                         raise Rejected("INVALID_ARGUMENT", f"Atributo {field} inválido.")
                     fields[field] = value.strip()
             # En la primera corrida S3 Grok puso use="galones" y la búsqueda solo dejó el cuñete de 5 galones.

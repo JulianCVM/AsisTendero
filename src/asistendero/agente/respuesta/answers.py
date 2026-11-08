@@ -211,15 +211,18 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         codes = [(call["response"].get("error") or {}).get("code") for call in calls if call["response"]["status"] == "error"]
         # «¿tienen tabla?» con explorar_categoria → NOT_FOUND contestaba «No pude consultar el catálogo» (cobertura,
         # C-059): el catálogo sí respondió, solo que no hay esa categoría.
-        if codes and all(code == "NOT_FOUND" for code in codes):
-            missing = {call["requested_tool"] for call in calls if call["response"]["status"] == "error"}
+        # Un argumento inválido es un pedido mal armado de Grok, no una caída: con él, el catálogo también respondió
+        # (corrida de 12 h, U-0744: «¿tienen sofá?» decía «No pude consultar el catálogo en este momento»).
+        if codes and "NOT_FOUND" in codes and set(codes) <= {"NOT_FOUND", "INVALID_ARGUMENT"}:
+            missing = {call["requested_tool"] for call in calls
+                       if (call["response"].get("error") or {}).get("code") == "NOT_FOUND"}
             if missing == {"consultar_info_tienda"}:
                 # Un tema que la tienda no ha dado («¿hacen domicilios?» en Carluz): no es un producto que buscar.
                 return "answered", _join(["Ese dato de la tienda no lo tengo; confírmalo directamente en el mostrador.",
                                           *demo])
             return "clarify", _join(["No lo encontré con ese nombre en el catálogo. ¿Me dices qué producto buscas y, "
                                      "si la sabes, la medida o referencia?", *demo])
-        if codes:
+        if codes and set(codes) != {"INVALID_ARGUMENT"}:
             return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
                                   "existencias verificados. Intenta de nuevo en unos minutos.")
         return "not_verified", ("No pude verificar ese producto en el catálogo. ¿Me dices qué producto y qué "
