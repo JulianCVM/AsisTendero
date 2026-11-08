@@ -116,6 +116,22 @@ def _join(parts: list[str]) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+def _plain_words(text: str) -> str:
+    return " ".join(re.findall(r"[\w/.]+", normalize_text(text)))
+
+
+def _part_of_found(query: str, found: list[Product], asked: str) -> bool:
+    """La búsqueda es un pedazo del nombre de un producto ya encontrado y el cliente lo dijo una sola vez.
+
+    Reintento de las fallas de la carga (U-0915, U-1288): los nombres reales llevan comas («Destornillador de golpe,
+    pala de 3/16») y Grok los partía en dos búsquedas; la segunda salía como otra lista de opciones. Dicho dos veces
+    («cemento blanco y cemento gris») son dos productos y no se omite.
+    """
+    part = _plain_words(query)
+    return bool(part) and _plain_words(asked).count(part) == 1 and any(
+        f" {part} " in f" {_plain_words(f'{item.name} {item.variant}')} " for item in found)
+
+
 def _option_to_product(item: dict) -> Product:
     return Product(
         sku=item.get("sku") or "",
@@ -246,6 +262,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     suitability = asks_suitability(asked)
     sentences, questions, statuses, products = [], [], [], {}
     last_selected: Product | None = None
+    chosen_before: list[Product] = []
     seen = set()
     for index, finding in enumerate(findings):
         finding = without_negated(asked, finding)
@@ -257,7 +274,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         # dos veces; Z-33: «tubo PVC de 1/2» y «tubo PVC de 1/2 para agua» repetían las mismas opciones).
         same = (tuple(item.sku for item in matches), tuple(item.sku for item in nearby)) if matches or nearby else (
             finding["query"],)
-        if same in seen:
+        if same in seen or _part_of_found(finding["query"], chosen_before, asked):
             continue
         seen.add(same)
         for product in matches + nearby:
@@ -287,6 +304,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             statuses.append("not_found")
         elif selected:
             last_selected = selected
+            chosen_before.append(selected)
             stock = availability.get(selected.sku, {}).get("stock", selected.stock)
             first = not any(status == "found" for status in statuses)
             restock = restock_sentence(in_sentence(label(selected.name, selected.variant)),

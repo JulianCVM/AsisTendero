@@ -1476,6 +1476,23 @@ def test_a_product_named_with_its_category_is_searched_not_listed():
     assert result["respuesta"].startswith("Sí, tenemos tubo PVC")
 
 
+def test_a_search_that_is_only_a_piece_of_a_found_name_adds_no_options():
+    # Reintento de las fallas de la carga (U-0915): «destornillador de golpe, pala de 3/16» es un solo producto, pero
+    # Grok buscó también «pala de 3/16» y la respuesta agregaba «De pala de 3/16 tengo estas opciones».
+    piece = {"text": "presión", "product": "presión"}
+    executor = FakeExecutor({PVC["text"]: (["PVC-050"], []), "presión": (["PVC-050", "PVC-075", "COD-050"], [])})
+    planner = Script(tool("buscar_productos", items=[PVC, piece]), say(""))
+    result = run(executor, planner, "necesito 2 metros de PVC de 1/2 para agua, presión")
+    assert "opciones" not in result["respuesta"] and "Codo" not in result["respuesta"]
+    assert "$8.500" in result["respuesta"]
+    # Otro producto en el mismo mensaje sí se pregunta: «codo PVC presión» no es parte del nombre del tubo.
+    elbow = {"text": "codo PVC presión", "product": "codo"}
+    executor = FakeExecutor({PVC["text"]: (["PVC-050"], []), elbow["text"]: (["COD-050", "COD-075", "COD-100"], [])})
+    result = run(executor, Script(tool("buscar_productos", items=[PVC, elbow]), say("")),
+                 "necesito 2 metros de PVC de 1/2 para agua y un codo PVC presión")
+    assert "De codo PVC presión 90 grados tengo estas opciones" in result["respuesta"]
+
+
 def test_a_roll_of_something_sold_by_the_meter_is_never_priced_by_grok():
     # X-06 (corrida 39): «un rollo de cable» y Grok respondió «un rollo … te sale a $2.700 el metro».
     executor = FakeExecutor({"rollo de tubo PVC de 1/2 para agua": (["PVC-050"], [])})
