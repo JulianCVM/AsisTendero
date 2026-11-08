@@ -500,6 +500,18 @@ def test_store_info_given_by_the_store_is_answered_and_nothing_else(imported):
     assert "efectivo" in pay["data"]["texto"] and "tarjeta" not in pay["data"]["texto"]
 
 
+def test_every_injection_in_the_load_queue_is_stopped_before_grok():
+    # Corrida de 12 h: tres «inyecciones» de la cola llegaban a Grok. Las que pasaban eran huecos de la barrera
+    # (U-0343, U-1176) o regateo que no cambia reglas (U-0251), que se reemplazó por una inyección de verdad.
+    # La cola acepta «blocked» (inyección) o «refused» (tema delicado que se quita antes de Grok).
+    from asistendero.agente.entrada.guardrails import screen_message
+    from asistendero.agente.entrada.injection import detect_injection
+    from asistendero.evaluacion.carga_carluz import INJECTIONS
+
+    reaches_grok = [text for text in INJECTIONS if detect_injection(text) is None and screen_message(text).consulta]
+    assert reaches_grok == []
+
+
 def test_load_queue_has_only_distinct_tasks_and_no_prices(imported):
     queue = build_queue(imported, 14)
     queries = [task.get("query") or " / ".join(turn["query"] for turn in task["turns"]) for task in queue]
