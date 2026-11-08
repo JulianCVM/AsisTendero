@@ -15,7 +15,7 @@ from asistendero.agente.reglas.context_resolution import affirms_active_item, is
 from asistendero.agente.reglas.order_rules import mentioned_hours, order_action_pending
 from asistendero.agente.reglas.shopping_list import missing_from_quote
 from asistendero.agente.reglas.validation import (
-    foreign_unit, sold_as, grounded_products, naming_numbers, quantities_in_message, sale_units,
+    MONEY, foreign_unit, sold_as, grounded_products, naming_numbers, quantities_in_message, sale_units,
 )
 from asistendero.agente.respuesta.restock import asks_restock
 from asistendero.agente.respuesta.store_replies import asks_assortment, full_category_listing
@@ -195,6 +195,8 @@ def pending_reminder(
         decision.intent == "productos"
         or elliptical
         or (quantities and offered_qty is None and decision.intent not in {"tienda", "saludo"})
+        # CL-28 (humo de Carluz): ante un regateo Grok marcó «pedido» y dio un precio de memoria sin buscar.
+        or (not calls and decision.intent not in {"tienda", "saludo"} and MONEY.search(decision.reply or ""))
     )
     asks_units = (
         quantities and sale_units(message) and not tools & PRODUCT_TOOLS
