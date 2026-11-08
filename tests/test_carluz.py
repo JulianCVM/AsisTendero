@@ -524,6 +524,50 @@ def test_load_queue_has_only_distinct_tasks_and_no_prices(imported):
         build_queue(imported, 400)
 
 
+def test_the_load_queue_accepts_any_copy_of_a_product_the_inventory_repeats(imported):
+    # U-0253 (reintento de las fallas de la carga): el Excel real trae «Disco corte metal macho» en «4 1/2» y en
+    # «4 1/2"». El agente cotizó la segunda copia y la carga lo contó como «eligió otro producto».
+    connection = sqlite3.connect(imported)
+    try:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(products)")]
+        copied = ", ".join("sku || '-B'" if c == "sku" else "variant || '\"'" if c == "variant" else c for c in columns)
+        connection.execute(f"INSERT INTO products ({', '.join(columns)}) SELECT {copied} FROM products WHERE variant != ''")
+        connection.commit()
+    finally:
+        connection.close()
+    with_variant = {sku for sku, row in _products(imported).items() if row["variant"]}
+    asked = [task for task in build_queue(imported, 14) if set(task.get("productos") or []) & with_variant]
+    assert asked
+    for task in asked:
+        assert any(sku.endswith("-B") for sku in task["productos"]) and any(not sku.endswith("-B") for sku in task["productos"])
+
+
+@pytest.mark.parametrize("stock", [0, 50])
+def test_a_load_conversation_expects_no_order_when_no_presentation_covers_it(imported, stock):
+    # U-0008, U-0017 (reintento de las fallas de la carga): pedían 3 con 1 en bodega y luego «sí, apártemelo». El
+    # agente preguntó cuántas, que es lo correcto, y la cola lo contaba como falla porque esperaba un pedido.
+    from asistendero.evaluacion.carga_carluz import CONVERSATION_STATES, SHORT_ORDER_STATES
+
+    connection = sqlite3.connect(imported)
+    try:
+        connection.execute("UPDATE products SET stock = ?", (stock,))
+        connection.commit()
+    finally:
+        connection.close()
+    for total in range(14, 120):
+        try:
+            queue = build_queue(imported, total)
+        except ValueError:
+            break
+        reserving = [task["turns"][-1] for task in queue if len(task.get("turns") or []) == 4]
+        if reserving:
+            break
+    assert reserving
+    assert "order_pending" not in SHORT_ORDER_STATES and "order_issue" in SHORT_ORDER_STATES
+    expected = SHORT_ORDER_STATES if stock == 0 else CONVERSATION_STATES
+    assert all(turn["expected_status"] == expected for turn in reserving)
+
+
 def _fake_grok(message, observations, remaining, context=None):
     if observations or "hora" in message:
         return Decision("respond", "productos", None, None, "")
