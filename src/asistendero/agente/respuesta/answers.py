@@ -479,7 +479,9 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     if not quote and any(foreign_unit(asked_now, quantity, sold_as(product.unit, product.variant, product.name))
                          for product in selected.values() for quantity in quantities_in_message(asked_now)):
         return False
-    if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:
+    # El código interno no es para el cliente: ni uno observado (C-108, cobertura sobre Carluz: «(CLZ-1574)»). Decisión
+    # de Julian del 08-11-2026; las respuestas deterministas tampoco lo muestran.
+    if re.search(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply) or any(sku in reply for sku in allowed_skus):
         return False
     counts = re.findall(r"\b(\d+)\s+(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?|libras?|rollos?|par(?:es)?|pliegos?|bolsas?|cajas?)\b", normalized)
     if any(int(count) not in allowed_counts for count in counts):

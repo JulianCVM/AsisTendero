@@ -34,7 +34,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
   Si la rechaza, la herramienta no corre y Grok recibe el código.
 - Si falta una variante, pide precisión; si la medida no existe, muestra opciones cercanas sin tratarlas como equivalentes; si no hay existencias suficientes, dice cuánto hay.
 - Responde preguntas generales que no necesitan catálogo. Horario, pagos, domicilios o garantías solo se afirman si se consultaron con `consultar_info_tienda` en esa ejecución.
-- Usa la redacción de Grok solo si cada precio, SKU, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt ni datos internos; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
+- Usa la redacción de Grok solo si cada precio, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt, datos internos ni el código interno (SKU) de un producto; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
 - Muestra en el visor el resultado de cada prueba para evaluarla (estado, quién redactó, herramientas pedidas, ejecutadas y rechazadas, costo y latencia), un castillo animado del harness (cada edificio es un nodo o una barrera del flujo), un mapa interactivo del flujo de decisión y la traza en paneles legibles con el JSON a un clic.
 
@@ -262,7 +262,7 @@ La página `/inicio` habla en lenguaje de negocio y no reproduce detalles técni
 
 | Garantía de la página | Dónde se cumple |
 |---|---|
-| Una cifra que no coincide con el catálogo no se envía | `reply_is_grounded` (`answers.py`): la redacción de Grok se usa solo si cada `$`, SKU y cantidad sale de las observaciones de esa ejecución; si no, responde la salida determinista del servidor. |
+| Una cifra que no coincide con el catálogo no se envía | `reply_is_grounded` (`answers.py`): la redacción de Grok se usa solo si cada `$` y cantidad sale de las observaciones de esa ejecución y no muestra ningún SKU; si no, responde la salida determinista del servidor. |
 | Con una medida ambigua se pregunta y no se elige por el cliente | `validate_request` (`validation.py`) y las opciones mostradas de `choices.py`; una opción cercana no es equivalente. |
 | Un intento de manipulación se bloquea antes de llegar al modelo | `detect_injection` y `blocked_reply` (`injection.py`): no llama a Grok y la conversación queda bloqueada hasta que el tendero la desbloquee. |
 | El pedido se confirma con el «sí» del cliente y lo apartado se libera a los 5 minutos | `validate_order_request` (`order_rules.py`) y `HOLD_MINUTES` (`orders.py`). |

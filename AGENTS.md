@@ -233,7 +233,8 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
   `search_findings` y `latest_quote` de `observations.py` y su docstring.
 - **Negocio y sede los fija el servidor.** Ni el mensaje ni Grok pueden elegirlos.
 - **Precio y existencias salen solo del catálogo**: nunca del mensaje del cliente ni de una cifra propuesta por Grok.
-  La redacción de Grok se usa solo si cada `$`, SKU y cantidad coincide con las observaciones de esa ejecución; si no,
+  La redacción de Grok se usa solo si cada `$` y cantidad coincide con las observaciones de esa ejecución y no muestra
+  ningún SKU (el código interno no es para el cliente; decisión de Julian del 08-11-2026); si no,
   se responde con la salida determinista.
 - **La cotización es informativa**: no crea pedido, reserva, pago ni factura (`reservation_created=false`).
 - **Un pedido solo existe si el cliente lo pidió** y `registrar_pedido` lo creó en su conversación. Confirmar exige su

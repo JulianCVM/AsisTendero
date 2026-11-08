@@ -828,7 +828,7 @@ def test_sale_unit_as_use_is_not_a_search_filter():
 
 
 # Sin «12 metros disponibles»: nadie preguntó cuánto queda y desde el visor del 23-10 eso no se dice de golpe.
-QUOTED_REPLY = ("Tubo PVC presión para agua 1/2 pulgada (SKU PVC-050): $8.500 COP por metro. "
+QUOTED_REPLY = ("Tubo PVC presión para agua 1/2 pulgada: $8.500 COP por metro. "
                 "Total informativo: $17.000 COP. Datos simulados.")
 
 
@@ -867,6 +867,19 @@ def test_reservation_or_credit_requests_always_get_the_informative_note(message,
     assert result["respuesta"].startswith(QUOTED_REPLY)
     assert ("No es un pedido ni una reserva" in result["respuesta"]) is noted
     assert "apartad" not in result["respuesta"] and "reservad" not in result["respuesta"]
+
+
+@pytest.mark.parametrize("code", ["(SKU PVC-050)", "(PVC-050)", "código PVC-050"])
+def test_an_observed_sku_never_reaches_the_customer(code):
+    # C-108 (cobertura sobre Carluz): Grok escribió «(CLZ-1574)» con el SKU que devolvió la búsqueda y el contrato lo
+    # dejaba pasar. Decisión de Julian (08-11-2026): el código interno no se le muestra al cliente.
+    planner = Script(
+        tool("buscar_productos", items=[PVC]),
+        tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 2}]),
+        say(QUOTED_REPLY.replace("1/2 pulgada:", f"1/2 pulgada {code}:")),
+    )
+    result = run(FakeExecutor({PVC["text"]: (["PVC-050"], [])}), planner, "Necesito 2 metros de PVC de 1/2 para agua")
+    assert "PVC-050" not in result["respuesta"] and "$17.000" in result["respuesta"]
 
 
 def test_sale_quantity_in_presentation_keeps_only_the_unit():
