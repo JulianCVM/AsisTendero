@@ -4,6 +4,31 @@
 corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es el informado por la API
 (`api_reported`). Los reportes completos quedan en `.local/` (ignorado por git).
 
+## Corrida desatendida de 12 horas sobre el inventario real de Carluz (07 y 08-11-2026)
+
+Esta sección, a diferencia del resto del documento, usa el inventario real de Ferretería Carluz, importado con permiso
+de la tienda. Las consultas de los clientes son simuladas y todas distintas (`s4_carga/cola.json`). La corrida usó el
+modo desatendido (`python -m asistendero.evaluacion.desatendido correr --horas 12.25 --supervisar`) con el commit
+`970dbd5`, el modelo `grok-4.20-0309-non-reasoning` y el prompt `carluz-v1`. Corrió del 07-11-2026 a las 15:35 UTC al
+08-11-2026 a las 03:49 UTC, sin intervención.
+
+| Medida | Valor |
+|---|---|
+| Unidades de trabajo terminadas | **1300** |
+| Exitosas | **1227 (94.4 %)** |
+| Costo total, informado por la API | **2.994178 USD** |
+| Costo por tarea | **0.002303 USD** |
+| Horas entre la primera y la última tarea | **12.24** |
+| Llamadas a Grok | 3278 |
+| Eventos del proceso | 1 arranque, 1 fin, 2 pausas automáticas |
+
+- **Las dos pausas** fueron por una caída de internet del equipo hacia las 03:08 UTC. Tras 3 y 4 fallos de Grok
+  seguidos, el proceso esperó 60 y 120 s y reanudó solo a las 03:11 UTC.
+- **Ninguna tarea se repitió.** En toda la corrida, 6 terminaron con `MODEL_FAILURE` y quedan como fallas.
+- **El detalle por clase y por motivo de falla** está en [`s4_carga/RESUMEN.md`](s4_carga/RESUMEN.md).
+- **La bitácora publicada** (`s4_carga/bitacora.jsonl`) muestra cada precio y existencia de la tienda como `$[valor]`
+  o `[n]`. La copia completa se queda en `.local/`, que no se sube.
+
 ## Qué se mide
 
 214 casos nuevos en doce suites (ver `docs/HARNESS.md`, «Evaluación»), que se suman a los 43 de S2 y S3:
