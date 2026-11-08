@@ -76,6 +76,38 @@ La regresión válida corrió sola y con concurrencia 2.
 
 Costo de esta revisión: 1.922899 USD.
 
+### Segunda ronda sobre las fallas restantes (08-11-2026)
+
+Las 24 tareas que siguieron fallando se revisaron otra vez. De ahí salieron cuatro arreglos del agente y uno del
+evaluador, cada uno con su prueba:
+
+| Commit | Arreglo |
+|---|---|
+| `e5c0cbe` | La redacción de Grok nunca muestra un SKU, ni uno observado. Lo decidió Julian el 08-11, por C-108 de la cobertura; las respuestas deterministas y el asistente de bodega ya no lo mostraban. |
+| `714ce2f` | El rechazo de un campo que no existe dice cuál es, para que Grok corrija la búsqueda (U-0050) |
+| `9f482eb` | Si el mensaje nombra la categoría y un producto de su lista («¿manejan extensión eléctrica?», U-0330), Grok tiene que buscarlo |
+| `e6fa46a` | Una búsqueda que es solo un pedazo del nombre de un producto ya encontrado no agrega otra lista. Los nombres reales llevan comas (U-0915, U-1288). |
+| `125a529` | La cola de carga ya no cuenta como falla preguntar cuántas cuando ninguna presentación alcanza (U-0008, U-0017, U-0476, U-0541, U-1217); con la misma semilla los textos no cambian. Tampoco cuenta elegir la otra copia de un artículo que el Excel repite (U-0253). |
+
+**Corridas con Grok real**, una vez cada una, sobre copias nuevas de la base:
+
+| Corrida | Commit | Resultado | USD |
+|---|---|---|---|
+| Cobertura, corrida 7 ([`s4_cobertura/corrida_7/`](s4_cobertura/corrida_7/RESUMEN.md)) | `e5c0cbe` | 172/182 y 521/546 turnos (la 6: 169/182 y 517/546) | 1.344730 |
+| Asistente de bodega, corrida 5 ([`s4_bodega/corrida_5/`](s4_bodega/corrida_5/RESUMEN.md)) | `e6fa46a` | 100/101 | 0.082761 |
+| Humo de Carluz | `e6fa46a` | 30/32 | 0.062554 |
+
+- **C-108 ya pasa:** ninguna respuesta de la corrida 7 muestra un SKU.
+- **Las fallas de la cobertura y de la bodega:**
+  - Varias vienen de nombres mal escritos en el propio Excel: «Spliter fino de ías», «Semicodo cxe sanitrio 2» y
+    «Regadera ducha ag ua» (B-079). Grok los corrige al buscar y la búsqueda ya no los encuentra.
+  - Arreglarlo exige volver a importar la base real con términos de búsqueda corregidos; queda pendiente.
+- **Humo:** fallan CL-14 (los kilos se toman como medida, abierta desde la cobertura) y CL-22 (preguntó entre
+  opciones en vez de decir que está agotado).
+- **El humo y la bodega corrieron con los cinco arreglos; la cobertura, solo con `e5c0cbe`.** No se repitió para no
+  acercarse al tope de créditos.
+- **Costo de esta segunda ronda:** 1.490045 USD. Las dos rondas sobre las fallas de la carga suman 3.412944 USD.
+
 ## Qué se mide
 
 214 casos nuevos en doce suites (ver `docs/HARNESS.md`, «Evaluación»), que se suman a los 43 de S2 y S3:
