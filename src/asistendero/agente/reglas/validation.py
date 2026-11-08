@@ -341,8 +341,14 @@ def validate_request(
         clean = []
         for item in items:
             # quantity se tolera porque Grok la extrae con el artículo, pero la búsqueda no la usa.
-            if not isinstance(item, dict) or not set(item) <= {"text", "quantity", *QUERY_FIELDS}:
+            if not isinstance(item, dict):
                 raise Rejected("INVALID_ARGUMENT", "Artículo con campos no permitidos.")
+            if extra := set(item) - {"text", "quantity", *QUERY_FIELDS}:
+                # U-0050: sin el nombre del campo, Grok no sabía qué corregir y respondió sin buscar. Solo se repite
+                # un nombre corto de letras: lo demás llega del modelo y no se le devuelve tal cual.
+                named = sorted(field for field in extra if isinstance(field, str) and re.fullmatch(r"[a-z_]{1,20}", field))
+                raise Rejected("INVALID_ARGUMENT", f"Campo no permitido: {', '.join(named) or 'desconocido'}. "
+                                                   f"Usa solo text, quantity, {', '.join(QUERY_FIELDS)}.")
             text = item.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 180:
                 raise Rejected("INVALID_ARGUMENT", "Cada artículo necesita un texto breve.")
