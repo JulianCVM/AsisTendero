@@ -1,6 +1,7 @@
 """Lectura acotada del catálogo mock; el modelo no construye SQL."""
 
 from dataclasses import dataclass, replace
+from functools import lru_cache
 import json
 from pathlib import Path
 import re
@@ -14,6 +15,11 @@ from asistendero.tienda.vocabulario import normalize_text
 
 # Tope de coincidencias que ve Grok cuando hay variantes empatadas (ver search).
 MAX_MATCHES = 8
+# Una categoría real tiene cientos de nombres (370 en la plomería de Carluz, unos 10.000 tokens por llamada): pasado
+# este tope se lista por familia, y solo las más grandes. Cuántas quedan sin listar se dice en ``sin_listar``.
+MAX_CATEGORY_ENTRIES = 40
+# Holgado para dos o tres catálogos de miles de productos: cada producto aporta unos pocos textos distintos.
+TOKEN_CACHE_SIZE = 50_000
 # Lo apartado en pedidos pendientes o confirmados (orders.py) no está disponible para otro cliente.
 RESERVED_SQL = (
     "COALESCE((SELECT SUM(l.quantity) FROM order_lines l JOIN orders o ON o.id = l.order_id "
@@ -93,9 +99,19 @@ def _forms(word: str, synonyms: bool = True) -> set[str]:
     return forms
 
 
+@lru_cache(maxsize=TOKEN_CACHE_SIZE)
+def _cached_tokens(value: str, synonyms: bool = True) -> frozenset[str]:
+    return frozenset().union(*(_forms(word, synonyms) for word in _raw_words(value)))
+
+
+@lru_cache(maxsize=TOKEN_CACHE_SIZE)
+def _cached_measures(value: str) -> frozenset[str]:
+    return frozenset(measures(value))
+
+
 def tokens(value: str, synonyms: bool = True) -> set[str]:
     """Palabras normalizadas con su singular; ``synonyms=False`` sirve para comparar variantes entre sí."""
-    return set().union(*(_forms(word, synonyms) for word in _raw_words(value)))
+    return set(_cached_tokens(value, synonyms))
 
 
 def covers(value: str, words: set[str]) -> bool:
@@ -162,8 +178,9 @@ class MockCatalog:
         exact = []
         nearby = []
         for row in rows:
-            name_words = tokens(f"{row['name']} {row['variant']} {row['unit']}")
-            alias_words = tokens(row["search_terms"].replace("|", " "))
+            # Cada búsqueda recorre todo el catálogo: sin la caché, tokenizar 2.000 filas son unos 50 ms por artículo.
+            name_words = _cached_tokens(f"{row['name']} {row['variant']} {row['unit']}")
+            alias_words = _cached_tokens(row["search_terms"].replace("|", " "))
             product_words = name_words | alias_words
             if not (anchor_words & product_words):
                 continue
@@ -182,13 +199,13 @@ class MockCatalog:
             missing = [
                 field for field, (value, words) in constraints.items()
                 if value and not covers(value, words)
-                and not (field == "measure" and atoms and atoms <= measures(f"{row['name']} {row['variant']}"))
+                and not (field == "measure" and atoms and atoms <= _cached_measures(f"{row['name']} {row['variant']}"))
             ]
             score = 3 * len(query_words & name_words) + len(query_words & alias_words)
             score += 4 * (sum(bool(value) for value, _ in constraints.values()) - len(missing))
             # La misma medida exacta («1/4x2», «50kg») pesa más que palabras sueltas: entre 16 pernos, sube
             # el que el cliente pidió al top de matches.
-            score += 5 * len(query_measures & measures(f"{row['name']} {row['variant']}"))
+            score += 5 * len(query_measures & _cached_measures(f"{row['name']} {row['variant']}"))
             product = Product(**{key: row[key] for key in Product.__dataclass_fields__})
             entry = (score, product)
             if missing:
@@ -264,15 +281,36 @@ class MockCatalog:
         return [{"categoria": row["category"], "variantes": row["variants"], "con_existencias": row["available"]}
                 for row in rows]
 
-    def category_overview(self, category: str) -> list[dict]:
-        """Productos de una categoría con cuántas variantes tienen; sin precios, que salen de la búsqueda."""
+    def word_rows(self) -> list[tuple]:
+        """(sku, nombre, variante, unidad, precio, existencias, términos) de la tienda: el vocabulario de sus turnos."""
+        return [tuple(row) for row in self._rows(
+            """SELECT sku, name, variant, unit, price_cop, stock, search_terms FROM products
+               WHERE business_id = ? AND store_id = ? ORDER BY sku""", ())]
+
+    def category_overview(self, category: str) -> tuple[list[dict], int]:
+        """Productos de una categoría y cuántos quedaron sin listar; sin precios, que salen de la búsqueda.
+
+        Hasta ``MAX_CATEGORY_ENTRIES`` nombres van completos. Si son más, se agrupan por su primera palabra («Tornillo»
+        con sus 105 variantes) y se listan las familias más grandes: un cliente que explora no lee 370 nombres.
+        """
         rows = self._rows(
             """SELECT name, COUNT(*) AS variants, SUM({stock} > 0) AS available FROM products
                WHERE business_id = ? AND store_id = ? AND category = ? GROUP BY name ORDER BY name""",
             (category,),
         )
-        return [{"nombre": row["name"], "variantes": row["variants"], "con_existencias": row["available"]}
-                for row in rows]
+        entries = [{"nombre": row["name"], "variantes": row["variants"], "con_existencias": row["available"]}
+                   for row in rows]
+        if len(entries) <= MAX_CATEGORY_ENTRIES:
+            return entries, 0
+        families: dict[str, dict] = {}
+        for entry in entries:
+            head = entry["nombre"].split()[0].capitalize()
+            family = families.setdefault(head, {"nombre": head, "variantes": 0, "con_existencias": 0})
+            family["variantes"] += entry["variantes"]
+            family["con_existencias"] += entry["con_existencias"]
+        largest = sorted(families.values(), key=lambda family: (-family["variantes"], family["nombre"]))
+        shown = sorted(largest[:MAX_CATEGORY_ENTRIES], key=lambda family: family["nombre"])
+        return shown, len(largest) - len(shown)
 
     def store_info(self, topic: str) -> dict | None:
         rows = self._rows(

@@ -162,8 +162,35 @@ def _market_prompt() -> str:
 
 
 MARKET_PROMPT = _market_prompt()
+
+# Ferretería Carluz: inventario real, sin imágenes ni datos de la tienda todavía. Lo que dice el catálogo es de verdad
+# y su cifra es un valor de inventario, no un precio de venta (datos/carluz.py).
+CARLUZ_PROMPT_VERSION = "carluz-v1"
+_CARLUZ_CHANGES = (
+    ("""agente de una ferretería colombiana de demostración. Catálogo, precios,
+existencias, pedidos e información de la tienda son FICTICIOS.""",
+     """agente de Ferretería Carluz, una ferretería colombiana. Catálogo y existencias salen del inventario
+real de la tienda; cada cifra es el valor con que está inventariado y el precio final se confirma en el mostrador."""),
+    ("""Solo en el primer mensaje de la conversación aclara que los
+precios son de demostración.""",
+     """Solo en el primer mensaje de la conversación aclara que los
+valores salen del inventario de la tienda y que el precio final se confirma en el mostrador."""),
+)
+
+
+def _carluz_prompt() -> str:
+    text = AGENT_PROMPT
+    for old, new in _CARLUZ_CHANGES:
+        if text.count(old) != 1:
+            raise ValueError(f"El prompt de la ferretería ya no trae: {old[:40]!r}")
+        text = text.replace(old, new)
+    return text
+
+
+CARLUZ_PROMPT = _carluz_prompt()
 # Versión e instrucciones por negocio; el servidor elige el negocio (nunca el cliente ni Grok).
-PROMPTS = {"ferreteria": (PROMPT_VERSION, AGENT_PROMPT), "mercado": (MARKET_PROMPT_VERSION, MARKET_PROMPT)}
+PROMPTS = {"ferreteria": (PROMPT_VERSION, AGENT_PROMPT), "mercado": (MARKET_PROMPT_VERSION, MARKET_PROMPT),
+           "carluz": (CARLUZ_PROMPT_VERSION, CARLUZ_PROMPT)}
 BUSINESS_KIND: ContextVar[str] = ContextVar("tipo_de_negocio", default="ferreteria")
 
 

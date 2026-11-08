@@ -25,6 +25,9 @@ MAX_STOCK = 100_000
 MAX_TEXT_CHARS = 80
 MAX_TERMS_CHARS = 300
 MAX_LISTED = 500
+# La lista de productos del panel: el inventario real de Carluz tiene 2.033; con 500 se escondían sin aviso, porque
+# se ordena por categoría y las últimas nunca aparecían. El tope solo frena un catálogo fuera de escala.
+MAX_PRODUCTS_LISTED = 20_000
 LOW_STOCK = 5
 UNITS = ("unidad", "metro", "bulto", "galón", "libra", "rollo", "par", "pliego", "bolsa", "caja")
 INVENTORY_SCHEMA = """
@@ -111,7 +114,7 @@ class Inventory:
             sql += " AND category = ?"
             params.append(category)
         sql += " ORDER BY category, name, variant LIMIT ?"
-        params.append(MAX_LISTED)
+        params.append(MAX_PRODUCTS_LISTED)
         rows = self._run(lambda connection: connection.execute(sql, params).fetchall())
         result = [{"sku": row["sku"], "nombre": row["name"], "variante": row["variant"], "unidad": row["unit"],
                    "precio_cop": row["price_cop"], "stock": row["stock"], "apartado": row["reserved"],

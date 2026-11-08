@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sqlite3
 
+from asistendero.datos.carluz import CARLUZ_BUSINESS_ID
 from asistendero.datos.catalog_data import build_products
 from asistendero.datos.catalog_mercado import MARKET_BUSINESS_ID, MARKET_FAMILIES, MARKET_RESTOCKS, MARKET_STORE_INFO
 
@@ -58,6 +59,21 @@ UPGRADED_TOPICS = ("contacto", "pedidos", "facturacion")
 
 # Los dos negocios de demostración, por el nombre con que los elige el servidor (nunca el cliente ni Grok).
 BUSINESSES = {"ferreteria": DEMO_BUSINESS_ID, "mercado": MARKET_BUSINESS_ID}
+# Todos los que el servidor sabe atender. Carluz tiene datos reales en su propia base: nunca se siembra (BUSINESSES).
+KNOWN_BUSINESSES = {**BUSINESSES, "carluz": CARLUZ_BUSINESS_ID}
+
+
+def business_kind(business_id: str) -> str:
+    """El tipo de negocio (prompt y textos) de un ``business_id``; uno desconocido se atiende como la ferretería."""
+    return next((kind for kind, known in KNOWN_BUSINESSES.items() if known == business_id), "ferreteria")
+
+
+def store_identity(business_id: str) -> dict:
+    """Cómo se presenta la tienda en el panel y el visor: una tienda real nunca se rotula «datos simulados»."""
+    if business_kind(business_id) == "carluz":
+        return {"nombre": "Ferretería Carluz", "real": True,
+                "nota": "Inventario real de la tienda, importado de su Excel. El precio final se confirma en el mostrador."}
+    return {"nombre": "Ferretería La Esquina", "real": False, "nota": ""}
 
 
 def _seed_rows(business_id: str) -> tuple[list[tuple], dict, dict, dict]:
@@ -119,7 +135,58 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 CREATE INDEX IF NOT EXISTS orders_by_status ON orders (business_id, store_id, status);
 CREATE INDEX IF NOT EXISTS orders_by_session ON orders (session_id);
+-- Lo apartado se calcula por cada producto de cada búsqueda: sin este índice, cada una recorre todas las líneas.
+CREATE INDEX IF NOT EXISTS order_lines_by_sku ON order_lines (sku);
 """
+
+
+# Marca una base con datos reales (datos/importar_carluz.py): cada fila del Excel tal como venía y su SKU. Con esta tabla,
+# upgrade_db nunca le agrega productos ni información ficticios.
+REAL_IMPORT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS real_import (
+    item INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    source_value REAL NOT NULL,
+    source_quantity REAL NOT NULL,
+    sku TEXT,
+    source_file TEXT NOT NULL,
+    imported_at TEXT NOT NULL
+);
+"""
+
+
+def create_tables(connection: sqlite3.Connection) -> None:
+    """Las tablas del catálogo, vacías; las comparten la tienda ficticia y la real."""
+    connection.execute(
+        """CREATE TABLE products (
+            business_id TEXT NOT NULL,
+            store_id TEXT NOT NULL,
+            sku TEXT NOT NULL,
+            name TEXT NOT NULL,
+            variant TEXT NOT NULL,
+            unit TEXT NOT NULL,
+            price_cop INTEGER NOT NULL CHECK (price_cop >= 0),
+            stock INTEGER NOT NULL CHECK (stock >= 0),
+            search_terms TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            category TEXT NOT NULL,
+            PRIMARY KEY (business_id, store_id, sku)
+        )"""
+    )
+    connection.execute(
+        """CREATE TABLE store_info (
+            business_id TEXT NOT NULL,
+            store_id TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            content TEXT NOT NULL,
+            PRIMARY KEY (business_id, store_id, topic)
+        )"""
+    )
+
+
+def _is_real_store(connection: sqlite3.Connection) -> bool:
+    return bool(connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'real_import'").fetchone())
 
 
 def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
@@ -131,6 +198,10 @@ def upgrade_db(path: Path = DEFAULT_DB_PATH) -> Path:
     try:
         with connection:
             connection.executescript(ORDER_SCHEMA)
+            if _is_real_store(connection):
+                # Una tienda real solo recibe las tablas: nada ficticio se puede mezclar con su inventario.
+                connection.executescript(RESTOCK_SCHEMA)
+                return path
             # Los surtidos de demostración entran solo al crear la tabla: si el tendero borra uno, no vuelve.
             if not connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'restocks'").fetchone():
                 connection.executescript(RESTOCK_SCHEMA)
@@ -191,31 +262,7 @@ def create_mock_db(path: Path = DEFAULT_DB_PATH) -> Path:
         # «with connect()» solo confirma: closing() suelta el archivo, que en Windows quedaba tomado y hacía
         # fallar el borrado de una base a medio crear.
         with closing(sqlite3.connect(path)) as connection, connection:
-            connection.execute(
-                """CREATE TABLE products (
-                    business_id TEXT NOT NULL,
-                    store_id TEXT NOT NULL,
-                    sku TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    variant TEXT NOT NULL,
-                    unit TEXT NOT NULL,
-                    price_cop INTEGER NOT NULL CHECK (price_cop >= 0),
-                    stock INTEGER NOT NULL CHECK (stock >= 0),
-                    search_terms TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    PRIMARY KEY (business_id, store_id, sku)
-                )"""
-            )
-            connection.execute(
-                """CREATE TABLE store_info (
-                    business_id TEXT NOT NULL,
-                    store_id TEXT NOT NULL,
-                    topic TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    PRIMARY KEY (business_id, store_id, topic)
-                )"""
-            )
+            create_tables(connection)
             connection.executemany(
                 "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [

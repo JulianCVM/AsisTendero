@@ -4,6 +4,31 @@
 corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es el informado por la API
 (`api_reported`). Los reportes completos quedan en `.local/` (ignorado por git).
 
+## Corrida desatendida de 12 horas sobre el inventario real de Carluz (07 y 08-11-2026)
+
+Esta sección, a diferencia del resto del documento, usa el inventario real de Ferretería Carluz, importado con permiso
+de la tienda. Las consultas de los clientes son simuladas y todas distintas (`s4_carga/cola.json`). La corrida usó el
+modo desatendido (`python -m asistendero.evaluacion.desatendido correr --horas 12.25 --supervisar`) con el commit
+`970dbd5`, el modelo `grok-4.20-0309-non-reasoning` y el prompt `carluz-v1`. Corrió del 07-11-2026 a las 15:35 UTC al
+08-11-2026 a las 03:49 UTC, sin intervención.
+
+| Medida | Valor |
+|---|---|
+| Unidades de trabajo terminadas | **1300** |
+| Exitosas | **1227 (94.4 %)** |
+| Costo total, informado por la API | **2.994178 USD** |
+| Costo por tarea | **0.002303 USD** |
+| Horas entre la primera y la última tarea | **12.24** |
+| Llamadas a Grok | 3278 |
+| Eventos del proceso | 1 arranque, 1 fin, 2 pausas automáticas |
+
+- **Las dos pausas** fueron por una caída de internet del equipo hacia las 03:08 UTC. Tras 3 y 4 fallos de Grok
+  seguidos, el proceso esperó 60 y 120 s y reanudó solo a las 03:11 UTC.
+- **Ninguna tarea se repitió.** En toda la corrida, 6 terminaron con `MODEL_FAILURE` y quedan como fallas.
+- **El detalle por clase y por motivo de falla** está en [`s4_carga/RESUMEN.md`](s4_carga/RESUMEN.md).
+- **La bitácora publicada** (`s4_carga/bitacora.jsonl`) muestra cada precio y existencia de la tienda como `$[valor]`
+  o `[n]`. La copia completa se queda en `.local/`, que no se sube.
+
 ## Qué se mide
 
 214 casos nuevos en doce suites (ver `docs/HARNESS.md`, «Evaluación»), que se suman a los 43 de S2 y S3:
@@ -26,6 +51,39 @@ corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es
 Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guionizado y `tests/test_chaos.py` corre
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
+
+## Inventario real de Ferretería Carluz: importado, todavía sin corrida con Grok (07-11-2026)
+
+**Esta sección no afirma un resultado con Grok real, porque aún no se ha hecho esa corrida.** Lo que sigue se midió sin
+llamar al modelo. Las secciones de abajo siguen siendo sobre datos ficticios. Aquí solo van conteos: los precios, las
+existencias y el Excel se quedan en `.local/carluz/`, que no se sube.
+
+| Medida de la importación | Valor |
+|---|---|
+| Filas de la hoja | 2.041 |
+| Productos en la base | 2.032 |
+| Filas excluidas por no ser mercancía | 3 |
+| Filas repetidas unidas | 6 |
+| Reconciliación con la hoja | Exacta: mercancía + excluido = total de la hoja |
+| Cantidades fraccionarias, guardadas enteras | 87 |
+| Productos sin una unidad entera disponible | 15 |
+| Sin categoría reconocida (`Otros artículos`) | 92 (4,5 %) |
+| Con imagen | 0: el Excel no trae |
+
+**Lo que falta para cumplir lo que pidió el jurado:**
+
+- Permiso del tendero por escrito. Sin él, el nombre de la tienda y los casos no deberían publicarse.
+- La corrida real de `evaluation/cases_carluz.json` (31 casos), registrada aquí con commit, fecha, `PROMPT_VERSION` y costo.
+- El precio de venta: la columna de valor del Excel parece costo con IVA (126 de 134 pares cruzados dan exactamente
+  costo × 1,19). El agente la presenta como valor del inventario, a confirmar en el mostrador.
+
+**Límite conocido, visto con un guion sin Grok:** a «¿venden neveras?» el agente ofrece «Bombillo para nevera» como
+opción, porque la palabra está en el nombre. La respuesta no inventa nada y el nombre deja claro qué es, pero no es lo
+que el cliente pidió. El caso CL-19 lo cubre.
+
+**Vencimiento del surtido de M-27:** `MLPO-400` tiene fecha fija 2026-11-04. Desde `surtido.py` con `reloj.local_now`, la
+prueba con guion fija el día y vuelve a pasar; pero una corrida `--live` usa el reloj real, y M-27 ya no encontrará una
+fecha futura. Hay que resolverlo antes de la próxima corrida completa.
 
 ## Corridas 45 a 48: los 345 casos con Grok real hasta el commit de la entrega (01-11-2026)
 

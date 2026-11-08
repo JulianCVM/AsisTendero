@@ -18,6 +18,7 @@ import re
 import sqlite3
 from urllib.parse import parse_qs, urlsplit
 
+from asistendero.datos.seed import store_identity
 from asistendero.agente.conversacion.sessions import SessionError, SessionStore
 from asistendero.agente.entrada.injection import INJECTION_CODES
 from asistendero.agente.modelo.grok import ModelError
@@ -69,6 +70,7 @@ CONFLICTS = {"ORDER_CLOSED", "ORDER_EXPIRED", "DUPLICATE_SKU", "STOCK_BELOW_RESE
              "ATTENTION_BANNED", "PROPOSAL_STALE", "PROPOSAL_CLOSED", "PROPOSAL_EXPIRED"}
 READS = {
     "/api/inventario": lambda views, params: views.inventory_page(params),
+    "/api/tienda": lambda views, params: store_identity(views.inventory.business_id),
     "/api/movimientos": lambda views, params: {"movimientos": views.inventory.history(
         100, (params.get("sku") or "")[:40] or None)},
     "/api/pedidos": lambda views, params: views.board(params),
@@ -203,10 +205,12 @@ def make_server(port: int, inventory: Inventory | None = None, orders: OrderBook
     path = server.inventory.path
     server.orders = orders or OrderBook(path)
     server.sessions = sessions or SessionStore()
-    server.payments = Payments(path, server.orders.clock)
-    server.purchasing = Purchasing(path, server.orders.clock)
-    server.admin = CatalogAdmin(path)
-    server.assistant = assistant or StockAssistant(path, server.orders.clock)
+    # El negocio lo fija el inventario que se abrió: el panel nunca mezcla los módulos de una tienda con otra.
+    store = {"business_id": server.inventory.business_id, "store_id": server.inventory.store_id}
+    server.payments = Payments(path, server.orders.clock, **store)
+    server.purchasing = Purchasing(path, server.orders.clock, **store)
+    server.admin = CatalogAdmin(path, **store)
+    server.assistant = assistant or StockAssistant(path, server.orders.clock, **store)
     server.views = PanelViews(server.inventory, server.orders, server.sessions, server.payments, server.purchasing,
                               server.admin, server.assistant)
     return server

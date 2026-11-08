@@ -11,6 +11,7 @@ si quedan pocas o si no alcanzan; un producto se cotiza en una frase y varios, e
 
 import re
 
+from asistendero.agente.modelo.prompt import BUSINESS_KIND
 from asistendero.tienda.catalogo.catalog import Product
 from asistendero.tienda.vocabulario import format_cop
 
@@ -18,12 +19,27 @@ from asistendero.tienda.vocabulario import format_cop
 PLURAL = {"metro": "metros", "unidad": "unidades", "bulto": "bultos", "galón": "galones", "libra": "libras",
           "rollo": "rollos", "par": "pares", "pliego": "pliegos", "bolsa": "bolsas", "caja": "cajas",
           "paquete": "paquetes", "botella": "botellas", "lata": "latas", "cubeta": "cubetas", "atado": "atados",
-          "barra": "barras"}
+          "barra": "barras", "kilo": "kilos", "tramo": "tramos"}
 FEMININE = {"unidad", "libra", "bolsa", "caja", "botella", "lata", "cubeta", "barra"}
 # Sustantivos femeninos del catálogo que no terminan en «a».
 FEMININE_NOUNS = {"llave", "lija", "cerradura"}
 # Una vez por conversación (el primer mensaje) o en cada consulta suelta: el catálogo es ficticio.
 DEMO_NOTE = "Precios y existencias de demostración."
+# La hoja de Carluz trae el costo de compra con IVA, no un precio de venta (``datos/carluz.py``): decir «precio» a
+# secas afirmaría lo que la tienda no ha dicho.
+STORE_NOTES = {"carluz": "Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."}
+# Lo que debe nombrar una redacción de Grok para contar como esa aclaración.
+NOTE_WORDS = {"carluz": r"inventario|mostrador"}
+DEMO_WORDS = r"simulad|demostracion|fictici|de prueba"
+
+
+def store_note() -> str:
+    """La aclaración del primer mensaje, según el negocio que atiende este hilo."""
+    return STORE_NOTES.get(BUSINESS_KIND.get(), DEMO_NOTE)
+
+
+def note_words() -> str:
+    return NOTE_WORDS.get(BUSINESS_KIND.get(), DEMO_WORDS)
 MAX_OPTIONS = 3
 # Lo cercano no es lo pedido: se muestran pocas opciones.
 MAX_NEARBY = 2

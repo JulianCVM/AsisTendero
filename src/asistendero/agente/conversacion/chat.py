@@ -6,6 +6,7 @@ hablar con una persona, el turno se responde con un texto fijo y no se llama a G
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+from functools import wraps
 from time import perf_counter
 from uuid import uuid4
 
@@ -20,17 +21,19 @@ from asistendero.agente.flujo.graph import MAX_MESSAGE_CHARS, Planner
 from asistendero.agente.herramientas.executor import catalog_executor
 from asistendero.agente.herramientas.observations import ToolExecutor
 from asistendero.agente.modelo.grok import ModelError, decide_with_grok
-from asistendero.agente.modelo.prompt import BUSINESS_KIND, active_prompt
+from asistendero.agente.modelo.prompt import BUSINESS_KIND, active_prompt, serving
 from asistendero.agente.reglas.choices import chosen_options, coherent_option_turn, shown_options
-from asistendero.agente.reglas.context_resolution import affirms_active_item, updated_specs
+from asistendero.agente.reglas.context_resolution import (
+    affirms_active_item, has_catalog_words, load_catalog_words, updated_specs,
+)
 from asistendero.agente.reglas.shopping_list import updated_list
 from asistendero.agente.respuesta.reply_photos import reply_photos
 from asistendero.agente.vision.attributes import BASE64_DATA_URI, ImageAttributePayload, sanitize_image_text
 from asistendero.agente.vision.look import look_at
 from asistendero.agente.vision.photo import PhotoRejected
 from asistendero.agente.vision.photo_planner import PhotoPlanner, backed_payload, fixed_reply
+from asistendero.datos.seed import business_kind
 from asistendero.observabilidad.tracing import run_traced
-from asistendero.datos.seed import BUSINESSES
 from asistendero.tienda.catalogo.catalog import MockCatalog
 from asistendero.tienda.catalogo.search import ProductQuery
 from asistendero.tienda.pedidos.orders import OrderBook
@@ -118,8 +121,7 @@ def _look(store: SessionStore, session_id: str, message: str, image: ImageAttrib
     turns = context.get("turnos") or []
     if detect_injection(message, turns[-1]["cliente"] if turns else ""):
         return None
-    business = BUSINESS_KIND.get() if orders is None else (
-        "mercado" if orders.business_id == BUSINESSES["mercado"] else "ferreteria")
+    business = BUSINESS_KIND.get() if orders is None else business_kind(orders.business_id)
     shown = message.strip() or "[foto]"
     try:
         seen = look_at(image, business)
@@ -142,6 +144,21 @@ def _look(store: SessionStore, session_id: str, message: str, image: ImageAttrib
     return f"{message.strip()} {summary}".strip(), planner, vision
 
 
+def _in_store_business(turn: Callable) -> Callable:
+    """El turno corre con el prompt y los textos del negocio de su libro de pedidos, y con el vocabulario de esa tienda."""
+    @wraps(turn)
+    def run(*args, orders: OrderBook | None = None, **kwargs) -> dict:
+        if orders is None:
+            return turn(*args, orders=orders, **kwargs)
+        kind = business_kind(orders.business_id)
+        if not has_catalog_words(kind):
+            load_catalog_words(kind, MockCatalog(orders.path, orders.business_id, orders.store_id).word_rows())
+        with serving(kind):
+            return turn(*args, orders=orders, **kwargs)
+    return run
+
+
+@_in_store_business
 def run_turn(
     store: SessionStore,
     session_id: str,

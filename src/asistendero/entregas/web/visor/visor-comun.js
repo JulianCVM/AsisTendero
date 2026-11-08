@@ -43,6 +43,16 @@ export const GROUP_TONES = {verified: 'success', clarify: 'warning', human: 'war
 export const harnessInfo = fetch('/api/harness')
   .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)));
 
+// La página trae el rótulo de la demostración: una tienda real no puede decir «datos simulados».
+harnessInfo.then(({tienda}) => {
+  if (!tienda?.real) return;
+  const tag = document.querySelector('.env-tag');
+  tag.title = tienda.nota;
+  tag.querySelector('.env-text').textContent = 'Entorno local · ' + tienda.nombre;
+  const footer = document.querySelector('.app-footer');
+  footer.textContent = footer.textContent.replace('catálogo y tienda ficticios', 'inventario real de ' + tienda.nombre);
+}).catch(() => {});
+
 // Estado y grupo de un estado final, con la clasificación del servidor si ya llegó.
 export function outcomeOf(estado, info) {
   for (const [group, data] of Object.entries(info?.outcomes || {})) {

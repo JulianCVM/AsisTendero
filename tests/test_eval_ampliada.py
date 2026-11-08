@@ -16,6 +16,7 @@ from asistendero.datos.seed import create_mock_db
 from asistendero.evaluacion import evaluate
 from asistendero.evaluacion.eval_sessions import SIM_START
 from asistendero.tienda.catalogo.catalog import MockCatalog
+from asistendero.tienda import reloj
 
 SUITES = {"ampliacion", "mercado", "parafrasis"}
 MODEL = "grok-4.20-0309-non-reasoning"
@@ -212,7 +213,9 @@ def _cases():
     return [case for case in cases if case["suite"] in SUITES]
 
 
-def test_every_new_case_passes_with_a_scripted_grok(tmp_path):
+def test_every_new_case_passes_with_a_scripted_grok(tmp_path, monkeypatch):
+    # El surtido con fecha (M-27) se compara con el reloj de la tienda: con el real, la prueba venció el 04-11-2026.
+    monkeypatch.setattr(reloj, "local_now", lambda: SIM_START)
     cases = _cases()
     assert {case["suite"] for case in cases} == SUITES and len(cases) >= 70
     catalog = MockCatalog(create_mock_db(tmp_path / "catalog.sqlite3"))
