@@ -1464,6 +1464,18 @@ def test_a_category_the_customer_named_is_listed_without_searching():
     assert "Tubo PVC" in result["respuesta"]
 
 
+def test_a_product_named_with_its_category_is_searched_not_listed():
+    # Reintento de las fallas de la carga (U-0330): «¿manejan extensión eléctrica?» exploró Eléctricos, porque
+    # «eléctrica» la nombra, y respondió con la lista de la categoría, donde estaba «Extension», sin buscarla.
+    executor = FakeExecutor(PVC_SEARCH)
+    planner = Script(tool("explorar_categoria", categoria="plomería"), say("En Plomería hay: Tubo PVC."),
+                     tool("buscar_productos", items=[PVC]), say("x"))
+    result = run(executor, planner, "¿manejan tubo de plomería?")
+    assert [name for name, _ in executor.calls] == ["explorar_categoria", "buscar_productos"]
+    assert any("SEARCH_REQUIRED" in json.dumps(seen["observations"]) for seen in planner.seen)
+    assert result["respuesta"].startswith("Sí, tenemos tubo PVC")
+
+
 def test_a_roll_of_something_sold_by_the_meter_is_never_priced_by_grok():
     # X-06 (corrida 39): «un rollo de cable» y Grok respondió «un rollo … te sale a $2.700 el metro».
     executor = FakeExecutor({"rollo de tubo PVC de 1/2 para agua": (["PVC-050"], [])})

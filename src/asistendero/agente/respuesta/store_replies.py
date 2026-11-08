@@ -106,13 +106,21 @@ def full_category_listing(calls: list[ToolCall]) -> bool:
 
 
 def explored_unnamed_category(message: str, calls: list[ToolCall]) -> bool:
-    """Grok exploró una categoría que no existe o que el mensaje no nombra: «¿qué varilla tienen?» pide un producto."""
+    """Grok exploró una categoría que no existe o que el mensaje no nombra: «¿qué varilla tienen?» pide un producto.
+
+    También si el mensaje nombra un producto de la lista que la categoría no explica: en «¿manejan extensión
+    eléctrica?» (U-0330 de la carga) «eléctrica» lleva a Eléctricos, pero «Extension» es lo que se busca.
+    """
     said = category_stems(message)
     for call in calls:
         if call["requested_tool"] != "explorar_categoria" or not (call.get("arguments") or {}).get("categoria"):
             continue
         data = call["response"].get("data") or {}
-        if call["response"]["status"] == "error" or not said & category_stems(str(data.get("categoria") or "")):
+        named = category_stems(str(data.get("categoria") or ""))
+        if call["response"]["status"] == "error" or not said & named:
+            return True
+        listed = {stem for entry in data.get("productos") or [] for stem in category_stems(str(entry.get("nombre") or ""))}
+        if (said - named) & listed:
             return True
     return False
 
