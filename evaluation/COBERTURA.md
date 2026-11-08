@@ -57,7 +57,7 @@ verificación solo exigía haber consultado el tema. `658a0a8` exige que cada me
 la tienda. La corrida 3 se detuvo en 48 conversaciones para incluir ese arreglo (`corrida_3_interrumpida/`, 0,338 USD)
 y se repitió completa.
 
-**Corrida 3** (`658a0a8`, código final): **169 de 182 conversaciones (93 %) y 514 de 546 turnos (94 %)**, por 1.1868 USD.
+**Corrida 3** (`658a0a8`): **169 de 182 conversaciones (93 %) y 514 de 546 turnos (94 %)**, por 1.1868 USD.
 
 ### Matriz de capacidades
 
@@ -118,15 +118,84 @@ Ninguna de las 13 falla por afirmar algo falso: sus motivos son de estado, de SK
 precios sin respaldo en cada respuesta (`unbacked_prices`, independiente de `answers.py`) no marcó ninguno en los 546
 turnos.
 
+## Ronda de pulido: corridas 4 a 6
+
+Con la carga todavía en marcha, Julian pidió seguir puliendo. Las corridas 4, 5 y 6 usan **la misma cola de 182
+conversaciones que la corrida 3**, sobre una copia nueva de la base. Así, cada diferencia es del código o del modelo, no
+de la cola.
+
+| Arreglo | Falla que lo pidió | Commit |
+|---|---|---|
+| «apárteme 2 caja octagonal» ya no vuelve a preguntar la cantidad: el nombre empieza por una unidad de venta (`sold_as`) | C-009, C-072 | `69dbd0d` |
+| «número 40», «nro 40», «No. 40» y «n° 40» se leen como «#40»; «no 40» sigue siendo negación | CL-18, CL-31 | `69dbd0d` |
+| «3 kilos de yeso» elige el yeso por kilo y no el bulto de 25 kg | CL-14 | `69dbd0d` |
+| Si Grok responde un precio sin buscar, recibe el aviso de búsqueda | CL-28 | `658a3ab` |
+| La redacción de Grok nunca ofrece una rebaja («te lo dejo en», «de contado») | C-115, C-117 (corrida 4) | `484b002` |
+| El nombre con que se presenta el cliente se tapa antes de Grok, de la traza y de la memoria | C-010 (corrida 5) | `423c993` |
+
+Corrección del evaluador, aparte: CL-22 esperaba «found» para un vinilo con existencia 0 en el inventario real; ahora
+acepta también «agotado», como los casos curados.
+
+Dos de los arreglos salieron de las propias corridas de la ronda:
+
+- **La rebaja la provocó un arreglo de esta misma ronda.** Con `658a3ab` Grok ya buscaba antes de responder un precio,
+  y en la corrida 4 escribió «De contado te lo dejo en $[valor]» con el precio del catálogo. La cifra pasaba la
+  verificación, pero la frase ofrece una rebaja.
+- **El nombre ya se filtraba antes.** Ante «soy Luz Marina Díaz, mi cédula es …», el celular y la cédula se tapaban,
+  pero el nombre no. En la corrida 5 Grok saludó «Hola Luz Marina», justo después de la nota «no los guardo».
+
+| Corrida | Commit | Conversaciones | Turnos | USD |
+|---|---|---|---|---|
+| 3 | `658a0a8` | 169/182 | 514/546 | 1.1868 |
+| 4 | `658a3ab` | 169/182 | 520/546 | 1.2660 |
+| 5 | `484b002` | 169/182 | 518/546 | 1.1984 |
+| **6 (código final)** | **`423c993`** | **169/182** | **517/546** | **1.2081** |
+
+**El total de conversaciones no se movió, pero cambió cuáles fallan.** Frente a la corrida 3, la corrida 6:
+
+- **Gana cinco conversaciones, todas por los arreglos:** C-009, C-072, C-082, C-165 y C-177.
+- **Pierde cinco, ninguna por una regresión del código:**
+  - **C-048:** Grok mandó la búsqueda con argumentos inválidos siete veces seguidas y el agente terminó en un estado
+    seguro.
+  - **C-097:** Grok buscó con otras palabras («codo sanitario cxe 4»). Con el mismo código de selección pasó en las
+    corridas 3 y 5.
+  - **C-161:** Grok devolvió un JSON inválido.
+  - **C-059:** el agente escribió «3m 25cm» y el evaluador esperaba «3mtr 25cm».
+  - **C-108:** la redacción de Grok mostró «(CLZ-1574)». El contrato de `AGENTS.md` deja pasar un SKU observado y
+    el evaluador marca cualquier código. Queda como decisión pendiente, no como arreglo.
+
+Con 182 conversaciones, la variación del modelo entre corridas del mismo código es de unas tres conversaciones. Por
+eso el avance se lee por caso arreglado, no por el total.
+
+Corrida 6 frente a la 3, por capacidad:
+
+| Capacidad | Antes | Después | Turnos antes | Turnos después | Costo antes | Costo después |
+|---|---|---|---|---|---|---|
+| agendar_recogida | 12/14 (86%) | 13/14 (93%) | 36/42 (86%) | 39/42 (93%) | 0.0982 | 0.0987 |
+| lista_con_no_manejado | 12/14 (86%) | 12/14 (86%) | 12/14 (86%) | 12/14 (86%) | 0.0551 | 0.0592 |
+| pedido_cambio_cancelacion | 12/14 (86%) | 11/14 (79%) | 60/70 (86%) | 59/70 (84%) | 0.1578 | 0.1597 |
+| tienda_en_medio | 12/14 (86%) | 11/14 (79%) | 39/42 (93%) | 37/42 (88%) | 0.0824 | 0.0880 |
+| datos_personales | 13/14 (93%) | 14/14 (100%) | 26/28 (93%) | 28/28 (100%) | 0.0757 | 0.0733 |
+| dos_clientes_ultima_unidad | 13/14 (93%) | 14/14 (100%) | 26/28 (93%) | 28/28 (100%) | 0.1153 | 0.1187 |
+| mas_de_lo_que_hay | 13/14 (93%) | 13/14 (93%) | 26/28 (93%) | 26/28 (93%) | 0.0583 | 0.0609 |
+| regateo | 13/14 (93%) | 14/14 (100%) | 27/28 (96%) | 28/28 (100%) | 0.0454 | 0.0508 |
+| vencimiento | 13/14 (93%) | 13/14 (93%) | 52/56 (93%) | 52/56 (93%) | 0.1058 | 0.0990 |
+| inyeccion_y_baneo | 14/14 (100%) | 14/14 (100%) | 42/42 (100%) | 42/42 (100%) | 0.0571 | 0.0537 |
+| lista_editable | 14/14 (100%) | 14/14 (100%) | 84/84 (100%) | 84/84 (100%) | 0.1966 | 0.2020 |
+| opciones_y_memoria | 14/14 (100%) | 12/14 (86%) | 56/56 (100%) | 54/56 (96%) | 0.1112 | 0.1134 |
+| pide_una_persona | 14/14 (100%) | 14/14 (100%) | 28/28 (100%) | 28/28 (100%) | 0.0280 | 0.0309 |
+| **Total** | 169/182 (93%) | 169/182 (93%) | 514/546 (94%) | 517/546 (95%) | 1.1868 | 1.2081 |
+
 ## Asistente de bodega
 
 | Corrida | Commit | Resultado | USD | USD por mensaje |
 |---|---|---|---|---|
 | 1 | `8627203` | 100/101 | 0.0788 | 0.00078 |
 | 2 | `2f059cb` | 100/101 | 0.0836 | 0.00083 |
-| **3 (final)** | **`658a0a8`** | **100/101** | **0.0505** | **0.00050** |
+| 3 | `658a0a8` | 100/101 | 0.0505 | 0.00050 |
+| **4 (final)** | **`423c993`** | **100/101** | **0.0762** | **0.00075** |
 
-En las tres corridas pasó lo mismo:
+En las cuatro corridas pasó lo mismo:
 
 - **Antes de confirmar**, nada cambió en la base.
 - **Al confirmar**, la bodega, el precio y lo pendiente al proveedor quedaron exactamente como dijo el tendero.
@@ -147,15 +216,33 @@ fallos controlados:
 |---|---|---|---|---|
 | 48 (entrega S3 y S4 previa) | `bef4913` | 344/345 | 3/3 | 0.967176 |
 | Regresión intermedia | `2f059cb` | 345/345 | 3/3 | 1.155397 |
-| **Regresión final** | **`658a0a8`** | **345/345** | **3/3** | **0.987507** |
+| Regresión | `658a0a8` | 345/345 | 3/3 | 0.987507 |
+| Detenida a los 190 casos al llegar `658a3ab` | `69dbd0d` | 190/190 | — | 0.659862 |
+| Regresión | `658a3ab` | 345/345 | 3/3 | 1.067310 |
+| Regresión | `484b002` | 345/345 | 3/3 | 1.247056 |
+| **Regresión final** | **`423c993`** | **344/345** | **3/3** | **1.208592** |
 
-Los 32 casos de humo de Carluz (`cases_carluz.json`) pasaron de 25/32 (`2f059cb`) a **27/32** (`658a0a8`, 0.053327
-USD). Los dos casos ganados son el de la tarjeta (CL-32) y «¿hacen domicilios?» (CL-25). Siguen fallando:
+En la final falló Z-12, «¿cuánto cuesta el tubo?». Grok preguntó cuál tubo sin buscar: no dio precio y la
+pregunta era razonable, pero el caso espera la lista de opciones. `423c993` solo cambia cómo se tapa el nombre
+del cliente, y este mensaje no trae nombre, así que no se volvió a correr.
 
-- **CL-14:** «3 kilos de yeso» muestra el bulto y el yeso por kilo, en vez de elegir por la unidad.
-- **CL-18 y CL-31:** «número 40» no se reconoce como «#40».
-- **CL-22:** el vinilo está agotado y el caso esperaba otro estado.
-- **CL-28:** ante un regateo con un precio inventado, el agente pregunta qué busca. No inventa nada, pero tampoco contesta.
+Los 32 casos de humo de Carluz (`cases_carluz.json`):
+
+| Commit | Resultado | USD |
+|---|---|---|
+| `2f059cb` | 25/32 | 0.055022 |
+| `658a0a8` | 27/32 | 0.053327 |
+| `69dbd0d` | 29/32 | 0.060671 |
+| `658a3ab` | 30/32 | 0.056822 |
+| `484b002` | 31/32 | 0.057551 |
+| **`423c993` (final)** | **30/32** | **0.056519** |
+
+En la corrida final fallan dos casos:
+
+- **CL-14:** con «3 kilos de yeso faraón» el agente ya elige el yeso por kilo y da su precio, pero vuelve a preguntar
+  cuántos kilos. «kilos» todavía cuenta como medida y no como cantidad, igual que en «cemento de 50 kilos».
+- **CL-19:** a «¿venden neveras?» Grok respondió con la lista de categorías. No inventa nada, pero el caso espera
+  «no lo manejo».
 
 ## Costo
 
@@ -166,20 +253,25 @@ USD). Los dos casos ganados son el de la tarjeta (CL-32) y «¿hacen domicilios?
 | Asistente de bodega: tres corridas | 0.2130 |
 | Regresión de 345 casos: dos corridas | 2.1429 |
 | Humo de Carluz: dos corridas | 0.1083 |
-| **Total de la cobertura** | **6.5671** |
+| Subtotal hasta la corrida 3 | 6.5671 |
+| Ronda de pulido: corridas 4 a 6 | 3.6725 |
+| Ronda de pulido: regresión de 345, cuatro corridas (una detenida) | 4.1828 |
+| Ronda de pulido: humo de Carluz, cuatro corridas | 0.2316 |
+| Ronda de pulido: asistente de bodega, corrida 4 | 0.0762 |
+| **Total de la cobertura** | **14.7302** |
 
 Por unidad, en las corridas finales:
 
-- **Conversación completa:** 0.0065 USD, con 3 turnos de promedio.
-- **Turno:** 0.00217 USD.
-- **Mensaje al asistente de bodega:** 0.0005 USD, con una llamada a Grok.
+- **Conversación completa:** 0.0066 USD, con 3 turnos de promedio.
+- **Turno:** 0.00221 USD.
+- **Mensaje al asistente de bodega:** 0.00075 USD, con una llamada a Grok.
 
 ## Cómo se reproduce
 
 ```powershell
-.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_3 preparar --cola cobertura
-.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_3 correr --horas 0.01 --budget-usd 4 --base COPIA_DE_LA_BASE
-.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_bodega/corrida_3 preparar --cola bodega
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_6 preparar --cola cobertura
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_6 correr --horas 0.01 --budget-usd 4 --base COPIA_DE_LA_BASE
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_bodega/corrida_4 preparar --cola bodega
 .\.venv\Scripts\python.exe -m asistendero.evaluacion.cobertura_reporte evaluation/s4_cobertura/corrida_1 evaluation/s4_cobertura/corrida_2
 .\.venv\Scripts\python.exe -m asistendero.evaluacion.publicar_bitacora CARPETA_COMPLETA CARPETA_PUBLICA
 ```
