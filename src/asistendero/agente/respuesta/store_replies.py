@@ -29,6 +29,30 @@ POLICY_CLAIMS = {
     "facturacion": re.compile(r"\b(?:iva|impuestos?|factura\s+electronica|facturamos|facturar\w*|emit\w+\s+factura)\b"),
 }
 
+# Cada medio de pago que la redacción afirme debe estar en lo que dijo la tienda. Consultar el tema no bastaba: en la
+# corrida de humo sobre Carluz (07-11, CL-32) Grok leyó «efectivo y transferencia» y respondió «Sí, en el mostrador
+# aceptamos tarjeta». Si lo niega en la misma frase («no recibimos tarjeta») no es una afirmación.
+PAYMENT_METHODS = {
+    "tarjeta": r"tarjetas?|datafono|debito|credito", "nequi": r"nequi", "daviplata": r"daviplata",
+    "transferencia": r"transferencias?", "efectivo": r"efectivo", "contraentrega": r"contraentrega",
+}
+_DENIAL = re.compile(r"\b(?:no|ni|sin|tampoco)\b")
+
+
+def unbacked_payment_method(normalized_reply: str, calls: list[ToolCall]) -> bool:
+    """La redacción afirma un medio de pago que la tienda no dijo (o la tienda no se consultó)."""
+    said = (store_info_by_topic(calls).get("medios_pago") or {}).get("texto", "")
+    store_text = said.casefold().translate(str.maketrans("áéíóú", "aeiou"))
+    for pattern in PAYMENT_METHODS.values():
+        if re.search(rf"\b(?:{pattern})\b", store_text):
+            continue
+        for match in re.finditer(rf"\b(?:{pattern})\b", normalized_reply):
+            sentence = re.split(r"[.?!;]", normalized_reply[:match.start()])[-1]
+            if not _DENIAL.search(sentence[-40:]):
+                return True
+    return False
+
+
 # Fiar nunca se puede prometer: no hay tema de la tienda que lo permita y el pago es en el mostrador. En la corrida
 # 39 (M-33), ante «anótemelo en el cuaderno que el viernes le pago», Grok respondió «Listo, te lo anoto en el
 # cuaderno… El viernes me pagas» sin herramientas y el servidor lo dejó pasar.
@@ -158,6 +182,8 @@ def store_reply_is_consistent(
     if any(topic not in consulted and pattern.search(normalized_reply) for topic, pattern in POLICY_CLAIMS.items()):
         return False, amounts
     if IVA_CLAIM.search(normalized_reply) or promises_credit(normalized_reply):
+        return False, amounts
+    if unbacked_payment_method(normalized_reply, calls):
         return False, amounts
     said_hours = {_hour(value) for value in re.findall(r"\b\d{1,2}:\d{2}\b", normalized_reply)}
     if not said_hours <= hours:

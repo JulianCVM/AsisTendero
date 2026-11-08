@@ -20,7 +20,7 @@ from asistendero.agente.herramientas.observations import latest_quote, order_res
 from asistendero.agente.modelo.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, ORDER_TOOLS
 from asistendero.agente.reglas.shopping_list import WHOLE_LIST, asks_whole_list, list_lines, removed_now
 from asistendero.agente.reglas.validation import (
-    MAX_QUANTITY, MONEY, foreign_unit, grounded_products, quantities_in_message, Rejected,
+    MAX_QUANTITY, MONEY, foreign_unit, grounded_products, quantities_in_message, Rejected, sold_as,
 )
 from asistendero.tienda.pedidos.orders import MAX_NOTE_CHARS, ORDER_ID
 from asistendero.tienda.reloj import WEEKDAYS
@@ -51,6 +51,9 @@ EXPLICIT_PURCHASE = re.compile(
     r"|crea(?:me)?\s+(?:el\s+|un\s+)?pedido"
     r")"
 )
+TAKES_WHAT_IS_LEFT = re.compile(
+    r"\b(?:(?:los|las|lo)\s+que\s+(?:tenga\w*|tiene\w*|haya|hay|queden?|quede)|todo\s+lo\s+que\s+(?:tenga\w*|haya|hay|quede))\b")
+LEFT_IN_STOCK = re.compile(r"\bquedan?\s+(\d+)\b")
 # Un supuesto en pregunta («¿y si llevo 10…?», «¿si compro 3 me rebaja?»): sin coma tras el «si», no es el «sí».
 HYPOTHETICAL = re.compile(r"\bsi\s+(?:me\s+)?(?:llev|compr|pid)\w*\b[^.!]*\?")
 # «agrégale 2 brochas» suma a un pedido activo (Q-10). Sin pedido es sumar a la lista que se cotiza: con «agrega una
@@ -203,10 +206,12 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
     # Los productos de la sesión los identificó el cliente en turnos anteriores; el precio se relee al registrar.
     grounded |= {item.get("sku") for item in (context or {}).get("productos") or []}
     # Con la variante: el esmalte en «galón» se vende por unidad y «2 galones» son 2 de esos.
-    units = {item.get("sku"): f"{item.get('unidad') or ''} {item.get('variante') or ''}"
+    units = {item.get("sku"): sold_as(item.get("unidad"), item.get("variante"), item.get("nombre"))
              for item in (context or {}).get("productos") or []}
-    units |= {line["sku"]: f"{line.get('unit') or ''} {line.get('variant') or ''}" for line in (quote or {}).get("lines", [])}
-    units |= {sku: f"{product.unit} {product.variant}" for sku, product in grounded_products(reference, calls).items()}
+    units |= {line["sku"]: sold_as(line.get("unit"), line.get("variant"), line.get("name"))
+              for line in (quote or {}).get("lines", [])}
+    units |= {sku: sold_as(product.unit, product.variant, product.name)
+              for sku, product in grounded_products(reference, calls).items()}
     named = [{"sku": item.get("sku"), "nombre": item.get("nombre") or "", "variante": item.get("variante") or ""}
              for item in (context or {}).get("productos") or []]
     named += [{"sku": line["sku"], "nombre": line.get("name") or "", "variante": line.get("variant") or ""}
@@ -215,6 +220,11 @@ def _lines(arguments: dict, reference: str, calls: list[ToolCall], context: dict
               for sku, product in grounded_products(reference, calls).items()]
     removed = removed_now([item for item in named if item["nombre"]], current)
     allowed = order_quantities(reference) | added_quantities(current, context)
+    # «bueno, apárteme los que tenga» tras «solo me quedan 2»: esa cantidad la acaba de leer el servidor de la bodega
+    # (cobertura, C-027: se rechazaba y se preguntaba «¿cuántos?»). registrar_pedido vuelve a mirar las existencias.
+    turns = (context or {}).get("turnos") or []
+    if turns and TAKES_WHAT_IS_LEFT.search(normalize_text(current)):
+        allowed |= {int(number) for number in LEFT_IN_STOCK.findall(normalize_text(turns[-1].get("asistente") or ""))}
     # «me llevo todo»: las líneas de la lista ya las dijo el cliente, con su cantidad.
     listed = list_lines(context)
     from asistendero.agente.herramientas.observations import search_findings

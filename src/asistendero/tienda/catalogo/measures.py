@@ -13,12 +13,13 @@ UNITS = {
     "pulgada": "in", "pulgadas": "in", "pulg": "in",
     "kg": "kg", "kilo": "kg", "kilos": "kg", "kilogramo": "kg", "kilogramos": "kg",
     "g": "g", "gr": "g", "gramos": "g",
-    "m": "m", "mt": "m", "mts": "m", "metro": "m", "metros": "m",
-    "cm": "cm", "mm": "mm",
+    "m": "m", "mt": "m", "mts": "m", "mtr": "m", "mtrs": "m", "metro": "m", "metros": "m",
+    # Abreviaturas del inventario real de Carluz (07-11-2026).
+    "cm": "cm", "cms": "cm", "cmts": "cm", "centimetros": "cm", "mm": "mm", "milimetros": "mm",
     "w": "w", "vatios": "w", "watts": "w",
     "v": "v", "voltios": "v",
     "a": "a", "amperios": "a", "amp": "a",
-    "ml": "ml", "l": "l", "litro": "l", "litros": "l",
+    "ml": "ml", "l": "l", "lt": "l", "lts": "l", "litro": "l", "litros": "l",
     "oz": "oz", "onzas": "oz", "awg": "awg", "lb": "lb", "libra": "lb", "libras": "lb",
     "galon": "gal", "galones": "gal",
 }
@@ -59,6 +60,8 @@ def canonical_text(value: str) -> str:
         (r"\bcincuenta\s+kilos?\b", "50 kg"),
         (r"\b([0-9]+(?:/[0-9]+)?)\s*\"", r"\1 pulgada"),
         (r"\b(\d+(?:/\d+)?)(kg|cm|mm)\b", r"\1 \2"),
+        # El inventario de Carluz escribe «#40» y el cliente dice «número 40» (CL-18). «no 40» sin punto es negación.
+        (r"(?:\b(?:numero|nro|num|no\.)|\bn°|#)\s*(?=\d)", ""),
     ):
         text = re.sub(pattern, replacement, text)
     text = _SPOKEN_MEASURE.sub(lambda match: f"{1000 if match.group(1) == 'mil' else NUMBER_WORDS[match.group(1)]} ", text)

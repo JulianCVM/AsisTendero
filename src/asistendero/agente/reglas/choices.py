@@ -16,7 +16,7 @@ from asistendero.agente.reglas.context_resolution import (
     offered_short_quantity, pending_quantity_target, remembered_spec_for_item,
 )
 from asistendero.agente.reglas.validation import (
-    MAX_QUANTITY, SALE_UNIT, foreign_unit, fractional_amount, grounded_products, grounded_selection,
+    MAX_QUANTITY, SALE_UNIT, foreign_unit, sold_as, fractional_amount, grounded_products, grounded_selection,
     quantities_in_message, Rejected, without_negated,
 )
 from asistendero.agente.respuesta.reply_text import MAX_NEARBY, MAX_OPTIONS, gender_of, in_sentence, label
@@ -296,7 +296,7 @@ def pending_quantity_quote(message: str, context: dict | None) -> tuple[dict, in
     if len(valid) != 1:
         return None
     quantity = valid[0]
-    target_unit = f"{target.get('unidad') or ''} {target.get('variante') or ''}".strip()
+    target_unit = sold_as(target.get("unidad"), target.get("variante"), target.get("nombre")).strip()
     if target_unit and foreign_unit(message, quantity, target_unit):
         return None
     return target, quantity
@@ -356,5 +356,12 @@ def check_reference(tool: str, arguments: object, message: str, calls: list[Tool
     options = ambiguous_reference(message, context)
     said = grounded_products(message, calls)
     lines = arguments.get("lines") if isinstance(arguments.get("lines"), list) else []
+    # «listo, me llevo eso» tras quitar algo de la lista: «eso» es la lista entera como quedó. El producto quitado
+    # seguía nombrado en la respuesta anterior («quité los bujes») y contaba como otra opción (cobertura, C-024).
+    from asistendero.agente.reglas.shopping_list import list_lines
+    listed = list_lines(context)
+    asked = {line.get("sku"): line.get("quantity") for line in lines if isinstance(line, dict)}
+    if listed and asked == listed:
+        return
     if options and any(isinstance(line, dict) and line.get("sku") not in said for line in lines):
         raise Rejected("AMBIGUOUS_REFERENCE", f"«ese» puede ser {' o '.join(options)}: pregúntale al cliente cuál.")

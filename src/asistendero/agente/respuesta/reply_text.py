@@ -149,7 +149,11 @@ def option_lines(products: list[Product]) -> list[str]:
     ambigua se pregunta), y lo cercano no es lo pedido.
     """
     same_name = len({item.name for item in products}) == 1
-    return [f"• {item.variant if same_name else label(item.name, item.variant)}" for item in products]
+    texts = [item.variant if same_name else label(item.name, item.variant) for item in products]
+    if not all(texts) or len(set(texts)) < len(texts):
+        # El inventario real tiene «Regla metálica» por metro y por tramo, sin variante: salían «•  •» (C-076).
+        texts = [f"{text or item.name} (por {item.unit})" for text, item in zip(texts, products)]
+    return [f"• {text}" for text in texts]
 
 
 def sold_as(unit: str, variant: str) -> tuple[str, str]:

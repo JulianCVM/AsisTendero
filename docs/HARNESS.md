@@ -58,7 +58,8 @@ La firma del ejecutor real es `execute_tool(name, arguments, *, catalog)` en `to
 El prompt (`s3-conversacion-v2`) le dice a Grok qué nunca revela, pero la defensa decisiva está en el código (`guardrails.py`):
 
 - **Antes de Grok**, `screen_message` parte el mensaje en frases y quita las que piden algo que el agente nunca entrega: sus instrucciones o configuración (`PROMPT_DISCLOSURE`), llaves y contraseñas (`CREDENTIALS`), detalles técnicos internos (`INTERNAL_DATA`), datos de otros clientes o del personal (`THIRD_PARTY_DATA`) y cifras privadas del negocio, como costos, márgenes, proveedores o ventas (`BUSINESS_PRIVATE`). Esas frases no llegan a Grok, a la traza de la decisión ni a la memoria de la sesión, y el cliente recibe una respuesta fija por cada tema. Si el resto del mensaje pide algo de la ferretería, se atiende normalmente. Las palabras de ferretería que se parecen («llave inglesa», «llave de paso», «candado con clave») no se filtran.
-- **Datos personales:** celulares, correos, cédulas y números de tarjeta se reemplazan por `[dato personal omitido]` antes de Grok y de la memoria, y la respuesta aclara que no hacen falta para cotizar.
+- **Datos personales:** celulares, correos, cédulas, números de tarjeta y el nombre con que se presenta el cliente («soy Luz Marina Díaz», «me llamo…», con mayúscula inicial) se reemplazan por `[dato personal omitido]` antes de Grok y de la memoria, y la respuesta aclara que no hacen falta para cotizar. El nombre del tendero en sus respuestas del panel no se tapa.
+- **Ninguna rebaja:** la redacción de Grok que dice «te lo dejo en», «de contado» o «rebaja» se cambia por la determinista, aunque la cifra sea la del catálogo.
 - **Después de Grok**, `leaks` descarta la redacción si trae siete palabras seguidas del prompt, la llave configurada o un dato interno (nombres de herramientas, de la base o de la pasarela). En ese caso se usa la respuesta determinista.
 
 Es un filtro por reglas: reduce el riesgo, pero no detecta toda reformulación. Por eso la regla que importa sigue siendo que precio, existencias y horario solo salen de las herramientas.
@@ -227,6 +228,14 @@ Desde S3, la base `.local/mock_catalog_s3.sqlite3` contiene **435 variantes fict
 - El panel y el visor piden cómo rotularse (`store_identity`): una tienda real no dice «Datos simulados».
 - La tienda dio el 07-11-2026 su dirección, la pausa del mediodía (11:55 a. m. a 2:00 p. m.) y los medios de pago (efectivo y transferencia). El horario llegó en texto, así que `consultar_info_tienda` no calcula «abierto ahora» para ella. Julian decidió usar como precio el valor del inventario mientras la tienda no dé su lista de venta.
 - **Semana de carga (S4):** `evaluacion/desatendido.py` procesa una cola de consultas distintas sobre esta base (`carga_carluz.py`) a ritmo fijo durante 12 horas y deja la bitácora en `evaluation/s4_carga/` (`docs/DESPLIEGUE.md`).
+- **Cobertura (S4):** el mismo modo corre otras dos colas:
+  - **Conversaciones completas** (`cobertura_carluz.py`): cada turno se califica por separado, con estado, SKU,
+    pedidos, recogida y avisos, y la bitácora registra cada turno.
+  - **Mensajes del tendero al asistente de bodega** (`bodega_carluz.py`): cada caso corre sobre una copia de la base y
+    se compara la bodega, el precio y lo pendiente al proveedor con lo que dijo el tendero, antes y después de
+    confirmar.
+
+  `cobertura_reporte.py` arma la matriz de capacidades sin leer las respuestas.
 
 Para que 2.032 productos no pesen: `explorar_categoria` lista por familias cuando una categoría pasa de `MAX_CATEGORY_ENTRIES` (40) y dice cuántas quedaron sin listar (`sin_listar`), `tokens` y `measures` usan caché, y `order_lines` tiene índice por SKU. Las mediciones y el plan de contenedor y modo desatendido están en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 

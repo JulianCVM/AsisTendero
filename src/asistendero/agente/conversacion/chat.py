@@ -55,7 +55,7 @@ def session_context(store: SessionStore, session_id: str, orders: OrderBook | No
 def ban_session(store: SessionStore, session_id: str, injection: dict, message: str,
                 orders: OrderBook | None) -> list[str]:
     """Banea la sesión y cancela sus pedidos activos: un cliente baneado no deja unidades apartadas."""
-    store.ban(session_id, injection["code"], injection["technique"], redact_personal_data(message)[0])
+    store.ban(session_id, injection["code"], injection["technique"], redact_personal_data(message, customer=True)[0])
     return cancel_active(orders, session_id, "servidor tras un intento de inyección")
 
 

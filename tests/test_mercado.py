@@ -263,3 +263,26 @@ def test_a_quote_of_the_wrong_presentation_gets_another_chance_with_the_identifi
     # La cubeta nunca se cotizó: la validación la rechazó y no llegó a la herramienta.
     assert [call["requested_tool"] for call in result["tool_calls"] if call["executed"]] == [
         "buscar_productos", "calcular_cotizacion_informativa"]
+
+
+def _payment_info(text):
+    return [{"step": 1, "requested_tool": "consultar_info_tienda", "requested_arguments": {"tema": "medios_pago"},
+             "executed": True, "arguments": {"tema": "medios_pago"}, "duration_ms": 1,
+             "response": {"status": "ok", "data": {"tema": "medios_pago", "texto": text}, "error": None,
+                          "source": "catalog", "observed_at": "2026-11-07T00:00:00+00:00"}}]
+
+
+@pytest.mark.parametrize(("reply", "consistent"), [
+    ("si, en el mostrador aceptamos tarjeta. ¿en que mas te puedo ayudar?", False),  # CL-32, Grok real
+    ("puedes pagar con nequi al recoger", False),
+    ("en el mostrador se recibe efectivo y transferencia", True),
+    ("con tarjeta no; en el mostrador se recibe efectivo y transferencia", False),  # dudosa: se usa el texto fijo
+    ("no recibimos tarjeta, solo efectivo y transferencia", True),
+])
+def test_a_payment_method_the_store_did_not_give_is_never_affirmed(reply, consistent):
+    calls = _payment_info("En el mostrador se recibe efectivo y transferencia. Este asistente no cobra ni recibe pagos.")
+    assert store_reply_is_consistent(reply, calls)[0] is consistent
+
+
+def test_naming_a_payment_method_without_asking_the_store_is_not_backed():
+    assert not store_reply_is_consistent("si, aceptamos tarjeta", [], paid_at_pickup=True)[0]

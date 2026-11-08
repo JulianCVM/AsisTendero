@@ -39,8 +39,11 @@ from asistendero.datos.seed import (
 )
 from asistendero.entregas import launcher
 from asistendero.entregas.panel import tendero
-from asistendero.evaluacion import bitacora_carga, desatendido, evaluate
+from asistendero.evaluacion import bitacora_carga, bodega_carluz, cobertura_carluz, desatendido, evaluate
 from asistendero.evaluacion.carga_carluz import build_queue
+from asistendero.evaluacion.cobertura_carluz import build_coverage
+from asistendero.agente.conversacion.handoff import asks_for_human
+from asistendero.agente.entrada.injection import detect_injection
 from asistendero.evaluacion.evaluate import CARLUZ_CASES_PATH
 from asistendero.tienda.catalogo import catalog as catalog_module
 from asistendero.tienda.catalogo.catalog import MockCatalog, tokens
@@ -607,3 +610,283 @@ def test_a_conversation_record_is_logged_with_one_state_per_turn():
     line = desatendido.entry(task, record, desatendido._now(), {"commit": "abc1234"})
     assert line["resultado"] == ["clarify", "model_error"] and line["exito"] is False
     assert "MODEL_FAILURE" in line["errores"] and line["costo_usd"] == "0.0010000"
+
+
+TOOL_WORDS = ("ALCAYATA", "ARANDELA", "BISAGRA", "BROCHA", "CANDADO", "CINCEL", "DISCO", "ESCUADRA", "FORMON", "GRAPA",
+              "LIJA", "MARTILLO", "NIVEL", "PALUSTRE", "PINZA", "RASTRILLO", "SERRUCHO", "TENAZA", "ESPATULA", "MACHETE")
+
+
+@pytest.fixture
+def wide(tmp_path) -> Path:
+    """Un inventario inventado con bastantes productos, existencias variadas y familias por medida."""
+    rows = []
+    for word in TOOL_WORDS:
+        for color in ("ROJA", "VERDE", "AZUL", "NEGRA"):
+            stock = ("1", "2", "3", "5", "8", "12")[len(rows) % 6]
+            rows.append((len(rows) + 1, f"{word} {color} DE PRUEBA", 1000, stock, 1000 * int(stock)))
+    for family in ("CODO PRUEBA", "TEE PRUEBA", "UNION PRUEBA", "BUJE PRUEBA", "TAPON PRUEBA", "NIPLE PRUEBA"):
+        for size in ("1/2", "3/4", '1"'):
+            rows.append((len(rows) + 1, f"{family} {size}", 900, "6", 5400))
+    database = tmp_path / "amplia" / "tienda.sqlite3"
+    import_inventory(_xlsx(tmp_path / "amplio.xlsx", rows), database)
+    return database
+
+
+def test_coverage_queue_covers_every_capability_with_strict_turns_and_no_prices(wide):
+    queue = build_coverage(wide, per_template=2)
+    kinds = {case["tipo"] for case in queue}
+    assert len(kinds) == 13 and len(queue) == 26 and len({case["id"] for case in queue}) == 26
+    assert not re.search(r"\$\s*\d", json.dumps(queue, ensure_ascii=False))
+    assert build_coverage(wide, per_template=2) == queue  # misma semilla, misma cola
+    catalog = MockCatalog(wide, CARLUZ_BUSINESS_ID)
+    turns = [turn for case in queue for turn in case.get("turns") or
+             [turn for client in case["clients"] for turn in client["turns"]]]
+    # Exigir el producto es justo: el buscador del servidor lo pone primero al nombrarlo así.
+    names = _products(wide)
+    for turn in turns:
+        if turn.get("expected_sku"):
+            product = names[turn["expected_sku"]]
+            spoken = f"{product['name'].lower()} de {product['variant']}" if product["variant"] else product["name"].lower()
+            assert cobertura_carluz._top(catalog, spoken) == product["sku"]
+    assert all(turn["expected_status"] for turn in turns if turn.get("query"))
+    assert all(detect_injection(turn["query"]) for turn in turns if turn.get("expected_status") == "blocked")
+    assert all(asks_for_human(turn["query"]) for turn in turns if turn.get("expected_status") == "handoff")
+    racing = [case for case in queue if case["tipo"] == "dos_clientes_ultima_unidad"]
+    assert all(case["expected_active_total"] == 1 and len(case["clients"]) == 2 for case in racing)
+    with pytest.raises(ValueError, match="no alcanza"):
+        build_coverage(wide, per_template=40)
+
+
+def test_coverage_conversations_are_logged_turn_by_turn(wide, tmp_path, monkeypatch):
+    monkeypatch.setenv("GROK_API_KEY", "llave-secreta-de-prueba")
+    queue = build_coverage(wide, per_template=1)
+    picked = [next(case for case in queue if case["tipo"] == kind)
+              for kind in ("inyeccion_y_baneo", "dos_clientes_ultima_unidad", "vencimiento")]
+    folder = tmp_path / "cobertura"
+    folder.mkdir()
+    (folder / bitacora_carga.COLA).write_text(json.dumps(picked), encoding="utf-8")
+    desatendido.work(folder, 0.001, Decimal("5"), planner=_fake_grok, sleep=lambda seconds: None, database=wide)
+    lines = {line["id"]: line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA)
+             if line["tipo"] == "tarea"}
+    injection, racing, expiry = (lines[case["id"]] for case in picked)
+    assert [turn["resultado"] for turn in injection["turnos"]][1:] == ["blocked", "SESSION_BANNED"]
+    assert injection["turnos"][1]["llamadas_grok"] == 0
+    assert {turn["cliente"] for turn in racing["turnos"]} == {1, 2}
+    assert expiry["turnos"][1]["mensaje"] == "(pasan 6 min)"
+    assert all({"mensaje", "resultado", "exito", "respuesta", "herramientas", "pedidos"} <= set(turn)
+               for line in lines.values() for turn in line["turnos"])
+    assert "llave-secreta-de-prueba" not in (folder / bitacora_carga.BITACORA).read_text(encoding="utf-8")
+
+
+def test_prepare_builds_the_coverage_queue_in_its_own_folder(wide, tmp_path, monkeypatch):
+    monkeypatch.setattr(desatendido, "CARLUZ_DB_PATH", wide)
+    monkeypatch.setattr(desatendido, "build_coverage", lambda database: build_coverage(database, per_template=1))
+    folder = tmp_path / "s4_cobertura"
+    monkeypatch.setattr("sys.argv", ["desatendido", "--carpeta", str(folder), "preparar", "--cola", "cobertura"])
+    assert desatendido.main() == 0
+    queue = json.loads((folder / bitacora_carga.COLA).read_text(encoding="utf-8"))
+    assert queue and all(case["suite"] == "cobertura" for case in queue)
+
+
+def _ideal_shopkeeper_reading(database: Path):
+    """Un intérprete falso que entiende al tendero perfecto: lo que el caso espera, con las palabras del producto."""
+    names = _products(database)
+
+    def spoken(sku: str) -> str:
+        return f"{names[sku]['name'].lower()} {names[sku]['variant']}".strip()
+
+    def reading(case: dict) -> dict:
+        operations = []
+        for wanted in case["esperado"]:
+            operation = dict.fromkeys(("sku", "cantidad", "precio_cop", "fecha", "oc", "proveedor"))
+            operation.update(tipo=wanted["tipo"], producto=spoken(wanted["sku"]))
+            operation["cantidad"] = wanted.get("cantidad", wanted.get("stock"))
+            operation["precio_cop"] = wanted.get("precio")
+            if wanted["tipo"] == "pedido_proveedor":
+                operation["fecha"] = bodega_carluz.FRIDAY
+            if bodega_carluz.SUPPLIER in case["mensaje"]:
+                operation["proveedor"] = bodega_carluz.SUPPLIER
+            operations.append(operation)
+        if case["tipo"] == "llegada_sin_proveedor":
+            sku = case["sin_recepcion"]
+            amount = int(re.search(r"\d+", case["mensaje"]).group())
+            operations.append({**dict.fromkeys(("sku", "precio_cop", "fecha", "oc", "proveedor")), "tipo": "recepcion",
+                               "producto": spoken(sku), "cantidad": amount})
+        if case.get("consulta"):
+            operations.append({**dict.fromkeys(("sku", "cantidad", "precio_cop", "fecha", "oc", "proveedor")),
+                               "tipo": "consulta", "producto": spoken(case["consulta"])})
+        doubts = [] if operations or case["tipo"] in ("inyeccion", "llegada_futura") else ["¿Qué llegó y cuántas?"]
+        return {"operaciones": operations, "dudas": doubts}
+
+    return reading
+
+
+def test_bodega_queue_covers_every_kind_of_shopkeeper_message(wide):
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=2)
+    assert {case["tipo"] for case in cases} == {
+        "recepcion", "pedido_proveedor", "llegada_futura", "llegada_sin_proveedor", "cambio_precio", "conteo",
+        "consulta", "llegada_parcial", "dos_llegadas", "ambiguo", "inyeccion"}
+    assert len({case["mensaje"].casefold() for case in cases}) == len(cases) == len({case["id"] for case in cases})
+    assert bodega_carluz.build_bodega_cases(wide, per_type=2) == cases
+
+
+def test_bodega_applies_exactly_what_the_shopkeeper_said_and_only_after_confirming(wide, tmp_path):
+    reading = _ideal_shopkeeper_reading(wide)
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=2)
+    store_before = {sku: (row["stock"], row["price_cop"]) for sku, row in _products(wide).items()}
+    records = {case["id"]: bodega_carluz.run_bodega_case(case, wide, tmp_path, interpret=lambda text, context, c=case:
+                                                         reading(c)) for case in cases}
+    assert all(not record["fail_reasons"] for record in records.values()), {
+        key: record["fail_reasons"] for key, record in records.items() if record["fail_reasons"]}
+    applied = {case["tipo"] for case in cases if records[case["id"]]["actual_status"] == bodega_carluz.APPLIED}
+    assert applied == {"recepcion", "pedido_proveedor", "cambio_precio", "conteo", "llegada_parcial", "dos_llegadas"}
+    # La base de la tienda nunca se toca: cada caso trabaja sobre su copia.
+    assert {sku: (row["stock"], row["price_cop"]) for sku, row in _products(wide).items()} == store_before
+
+
+def test_bodega_catches_a_wrong_reading(wide, tmp_path):
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=1)
+    reading = _ideal_shopkeeper_reading(wide)
+    received = next(case for case in cases if case["tipo"] == "recepcion")
+    doubled = reading(received)
+    doubled["operaciones"][0]["cantidad"] += 5
+    record = bodega_carluz.run_bodega_case(received, wide, tmp_path, interpret=lambda text, context: doubled)
+    assert record["actual_status"] == bodega_carluz.NOT_APPLICABLE and "en vez de" in record["fail_reasons"][0]
+    future = next(case for case in cases if case["tipo"] == "llegada_futura")
+    sku = future["sin_recepcion"]
+    as_arrival = {"operaciones": [{**dict.fromkeys(("sku", "precio_cop", "fecha", "oc")), "tipo": "recepcion",
+                                   "producto": reading({**future, "esperado": [], "tipo": "x", "consulta": sku})
+                                   ["operaciones"][0]["producto"], "cantidad": 3, "proveedor": bodega_carluz.SUPPLIER}],
+                  "dudas": []}
+    (tmp_path / "f").mkdir()
+    record = bodega_carluz.run_bodega_case(future, wide, tmp_path / "f", interpret=lambda text, context: as_arrival)
+    # Aunque Grok lea «mañana llegan» como una llegada, el servidor no la suma a la bodega.
+    assert record["actual_status"] == bodega_carluz.NOT_APPLICABLE and not record["fail_reasons"]
+    assert "entrega futura" in record["response"]
+
+
+def test_bodega_cases_run_in_the_unattended_mode(wide, tmp_path, monkeypatch):
+    reading = _ideal_shopkeeper_reading(wide)
+    cases = bodega_carluz.build_bodega_cases(wide, per_type=1)[:4]
+    by_message = {case["mensaje"]: case for case in cases}
+    monkeypatch.setattr(desatendido, "BODEGA_INTERPRET", lambda text, context: reading(by_message[text]))
+    folder = tmp_path / "bodega"
+    folder.mkdir()
+    (folder / bitacora_carga.COLA).write_text(json.dumps(cases), encoding="utf-8")
+    desatendido.work(folder, 0.001, Decimal("5"), planner=pytest.fail, sleep=lambda seconds: None, database=wide)
+    lines = [line for line in bitacora_carga.events_of(folder / bitacora_carga.BITACORA) if line["tipo"] == "tarea"]
+    assert [line["entrada"] for line in lines] == [case["mensaje"] for case in cases]
+    assert all(line["exito"] for line in lines), [line["motivos"] for line in lines]
+
+
+def test_capability_matrix_compares_two_runs_without_reading_answers(tmp_path):
+    from asistendero.evaluacion import cobertura_reporte
+
+    def run(folder, outcomes):
+        folder.mkdir()
+        rows = [{"tipo": "evento", "evento": "arranque"}]
+        for index, (kind, ok, turns, usd) in enumerate(outcomes):
+            rows.append({"tipo": "tarea", "id": f"C-{index:03}", "clase": kind, "exito": ok, "costo_usd": usd,
+                         "respuesta": "te sale en $9.999", "turnos": [{"exito": t, "respuesta": "$9.999"} for t in turns]})
+        (folder / "bitacora.jsonl").write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+        return folder
+
+    before = run(tmp_path / "a", [("recogida", False, [True, False], "0.01"), ("regateo", True, [True], "0.002")])
+    after = run(tmp_path / "b", [("recogida", True, [True, True], "0.012"), ("regateo", True, [True], "0.002")])
+    table = cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(before), cobertura_reporte.tasks_of(after))
+    assert "| recogida | 0/1 (0%) | 1/1 (100%) | 1/2 (50%) | 2/2 (100%) | 0.0100 | 0.0120 |" in table
+    assert "| **Total** | 1/2 (50%) | 2/2 (100%) | 2/3 (67%) | 3/3 (100%) | 0.0120 | 0.0140 |" in table
+    # Lo que respondió el agente (con precios del inventario real) nunca llega a la tabla.
+    assert "$" not in table
+    assert table.index("recogida") < table.index("regateo")  # primero lo que más falla
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Sí, tenemos caja octagonal, a $655 c/u. Ojo, solo me queda 1 unidad.",
+     "Sí, tenemos caja octagonal, a $[valor] c/u. Ojo, solo me queda [n] unidad."),
+    ("Uy, del vinilo t1 solo me quedan 2 galones y necesitas 6. ¿Te cotizo los 2?",
+     "Uy, del vinilo t1 solo me quedan [n] galones y necesitas 6. ¿Te cotizo los 2?"),
+    ("Total: $86.205", "Total: $[valor]"),
+    ("sube tornillo carriaje de 3/8 x 4\" a 29.500", "sube tornillo carriaje de 3/8 x 4\" a [valor]"),
+    ("conté y hay 7 chazo caiman de 1/4", "conté y hay [n] chazo caiman de 1/4"),
+    ("hice inventario: 12 tapa ciega de 10x10", "hice inventario: [n] tapa ciega de 10x10"),
+    ("necesito 3 t sanitario de 4x2 4\"", "necesito 3 t sanitario de 4x2 4\""),
+])
+def test_published_copy_hides_real_prices_and_stock(text, expected):
+    from asistendero.evaluacion.publicar_bitacora import mask_text
+
+    assert mask_text(text) == expected
+
+
+def test_published_run_keeps_the_measurements_and_hides_the_store_figures(tmp_path):
+    from asistendero.evaluacion import cobertura_reporte, publicar_bitacora
+
+    full = tmp_path / "completa"
+    full.mkdir()
+    entry = {"tipo": "tarea", "id": "B-001", "clase": "conteo", "exito": False, "costo_usd": "0.0008",
+             "entrada": "en la bodega quedan 9 rodillo", "respuesta": "Rodillo a $12.400",
+             "motivos": ["CLZ-0042: bodega 3 → 5, debía sumar 2", "sin recogida «2026-10-22 15:00»"],
+             "turnos": [{"exito": True, "mensaje": "¿cuánto vale?", "respuesta": "a $5.140 c/u; quedan 4"}]}
+    (full / "bitacora.jsonl").write_text(json.dumps(entry, ensure_ascii=False) + "\n", encoding="utf-8")
+    (full / "cola.json").write_text(json.dumps([{"id": "B-001", "mensaje": "sube rodillo a 13.400",
+                                                 "esperado": [{"sku": "CLZ-0042", "precio": 13400, "cantidad": 2}]}]),
+                                    encoding="utf-8")
+    with (full / "bitacora.csv").open("w", encoding="utf-8", newline="") as handle:
+        handle.write("id,motivos,respuesta,costo_usd\nB-001,bodega 3 → 5,Rodillo a $12.400,0.0008\n")
+    public = tmp_path / "publica"
+    publicar_bitacora.publish(full, public)
+    published = (public / "bitacora.jsonl").read_text(encoding="utf-8") + (public / "cola.json").read_text(
+        encoding="utf-8") + (public / "bitacora.csv").read_text(encoding="utf-8")
+    for figure in ("12.400", "5.140", "13.400", "13400", "quedan 9", "quedan 4", "bodega 3", "→ 5"):
+        assert figure not in published
+    assert "CLZ-0042" in published and "2026-10-22 15:00" in published and "0.0008" in published
+    assert '"cantidad": 2' in published  # lo que dijo el tendero no es un dato de la tienda
+    # La matriz de capacidades sale igual de la copia publicable.
+    assert cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(full)) == \
+        cobertura_reporte.comparison_markdown(cobertura_reporte.tasks_of(public))
+
+
+def test_coverage_conversations_run_on_the_simulated_store_day(monkeypatch):
+    # Corrida 2: «paso mañana a las 3» se agendó bien con el reloj real (domingo 08/11) y el caso, que espera el
+    # 22-10 como evaluate --live, fallaba. Las conversaciones fijan la hora de la tienda; la carga no.
+    from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
+
+    seen = {}
+
+    def fake_evaluate(cases, *, catalog, planner, clock=None):
+        seen[cases[0]["suite"]] = clock
+        return {"cases": [{"id": cases[0]["id"]}]}
+
+    monkeypatch.setattr(desatendido, "evaluate_cases", fake_evaluate)
+    desatendido.run_task({"id": "C-001", "suite": "cobertura", "turns": []}, catalog=None, planner=None)
+    desatendido.run_task({"id": "U-0001", "suite": "carga", "query": "¿tienen tubo?"}, catalog=None, planner=None)
+    assert isinstance(seen["cobertura"], StoreClock) and seen["cobertura"].start == SIM_START
+    assert abs((seen["cobertura"]() - SIM_START).total_seconds()) < 60
+    assert seen["carga"] is None
+
+
+def test_coverage_never_takes_a_product_sold_in_two_units_as_clear(wide, monkeypatch):
+    # Corrida 2: «Regla metálica» por metro y por tramo, sin variante, es ambigua de verdad; el agente preguntó bien.
+    import random
+
+    rows = [{"sku": "CLZ-9001", "name": "Regla metálica", "variant": "", "unit": "metro", "stock": 5},
+            {"sku": "CLZ-9002", "name": "Regla metálica", "variant": "", "unit": "tramo", "stock": 5},
+            {"sku": "CLZ-9003", "name": "Nivel de burbuja", "variant": "", "unit": "unidad", "stock": 5}]
+    monkeypatch.setattr(cobertura_carluz, "_products", lambda database: [dict(row) for row in rows])
+    monkeypatch.setattr(cobertura_carluz, "_top", lambda catalog, text: {"regla metálica": "CLZ-9001",
+                                                                        "nivel de burbuja": "CLZ-9003"}.get(text))
+    monkeypatch.setattr(cobertura_carluz, "_spoken", lambda product: product["name"].lower())
+    clear, _ = cobertura_carluz._pools(wide, random.Random(1))
+    assert [product["sku"] for product in clear] == ["CLZ-9003"]
+
+
+def test_choosing_an_option_may_ask_how_many_but_must_name_it(wide):
+    # Corrida 1: tras «la de 1/4x5/16» el agente preguntó «¿cuántas … de 1/4x5/16?», que es correcto; el SKU se
+    # comprueba en la cotización del turno siguiente.
+    cases = [case for case in cobertura_carluz.build_coverage(wide, per_template=3) if case["tipo"] == "opciones_y_memoria"]
+    assert cases
+    for case in cases:
+        chosen = case["turns"][1]
+        assert "clarify" in chosen["expected_status"] and "expected_sku" not in chosen
+        assert chosen["must_include"] and chosen["query"].endswith(chosen["must_include"][0])
+        assert case["turns"][2]["expected_sku"]

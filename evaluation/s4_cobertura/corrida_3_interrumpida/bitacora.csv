@@ -1,0 +1,91 @@
+id,clase,inicio,fin,entrada,resultado,exito,motivos,costo_usd,llamadas_grok,tokens_entrada,tokens_salida,errores,recuperacion,duracion_ms,modelo,prompt_version,commit,respuesta
+C-001,pide_una_persona,2026-11-07T20:42:30.646254+00:00,2026-11-07T20:42:35.040378+00:00,¿tienen gafas transparentes caucho? / páseme con una persona por favor,"['found', 'handoff']",True,,0.0015664500,2,5577,96,,,4305,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Le aviso al tendero para que te atienda por aquí. Mientras tanto, si quieres, te sigo ayudando con precios y existencias."
+C-002,lista_con_no_manejado,2026-11-07T20:42:35.060187+00:00,2026-11-07T20:42:48.161447+00:00,necesito 2 t sanitaria reducida de 3x2 y también nevera,['partial'],True,,0.0076355500,6,18963,454,SKU_NOT_GROUNDED,"La herramienta devolvió SKU_NOT_GROUNDED: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",12968,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Sí, tenemos T sanitaria reducida de 3x2, a $[valor] c/u.
+
+De nevera tengo estas opciones:
+• Bombillo para nevera a15 de 25w
+• Bombillo para nevera e14
+• Bombillo para nevera/maquina coser e27
+¿Cuál te sirve?
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."
+C-003,regateo,2026-11-07T20:42:48.163433+00:00,2026-11-07T20:42:53.473330+00:00,¿cuánto vale correas de amarre negra de 20 cmts? / ¿me lo deja más barato si llevo varios?,"['found', 'answered']",True,,0.0052058000,3,8456,166,,,5212,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¿Qué estás buscando? Te doy precio y disponibilidad de lo que necesites.
+C-004,agendar_recogida,2026-11-07T20:42:53.474957+00:00,2026-11-07T20:43:05.806001+00:00,"me llevo 1 nylon 40 / sí, confirmo / paso mañana a las 3 de la tarde","['order_pending', 'order_confirmed', 'pickup_scheduled']",True,,0.0070375500,7,20827,358,,,12222,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Perfecto, te esperamos el jueves 22/10 a las 15:00 con tu pedido P-DBDF7B."
+C-005,lista_editable,2026-11-07T20:43:05.807640+00:00,2026-11-07T20:43:31.426506+00:00,"necesito 3 llave taladro de 1/2 / agrégale 3 codo pvc de 1"" / ¿cuánto es todo? / quítale llave taladro / listo, me llevo eso / sí, confirmo","['quoted', 'quoted', 'quoted', 'answered', 'order_pending', 'order_confirmed']",True,,0.0147469000,13,39634,812,,,25451,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¡Listo! Confirmé el pedido P-476D8F por $[valor]: quedó confirmado y te lo guardo hasta el jueves 22/10 a las 09:00. ¿Más o menos a qué hora pasas por él?
+C-006,pide_una_persona,2026-11-07T20:43:31.428680+00:00,2026-11-07T20:43:35.664938+00:00,"¿tienen sifón canastilla paquete x 4 ref 93530 de 4""? / necesito hablar con un humano","['found', 'handoff']",True,,0.0017214500,2,5629,132,,,4142,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Le aviso al tendero para que te atienda por aquí. Mientras tanto, si quieres, te sigo ayudando con precios y existencias."
+C-007,pedido_cambio_cancelacion,2026-11-07T20:43:35.666445+00:00,2026-11-07T20:43:55.346694+00:00,"me llevo 1 dilatador de enchape de 1,5mm / mejor que sean 2 / sí, confirmo / ¿cómo va mi pedido? / ya no lo necesito, cancélalo","['order_pending', 'order_pending', 'order_confirmed', 'order_status', 'order_cancelled']",True,,0.0125472000,11,34356,582,CHANGE_BY_REGISTERING,"La herramienta devolvió CHANGE_BY_REGISTERING: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",19537,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, cancelé el pedido P-9252D6. Si lo vuelves a necesitar, me dices."
+C-008,dos_clientes_ultima_unidad,2026-11-07T20:43:55.348555+00:00,2026-11-07T20:44:09.763357+00:00,me llevo 1 llave lavaplatos balta 8 con griferia ref 415040 / me llevo 1 llave lavaplatos balta 8 con griferia ref 415040,"['order_issue', 'order_pending']",True,,0.0143117500,14,42473,885,INVALID_ARGUMENT; INSUFFICIENT_STOCK,"La herramienta devolvió INVALID_ARGUMENT, INSUFFICIENT_STOCK: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",24911,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Sí, tenemos llave lavaplatos balta 8 con griferia ref 415040, a $[valor] c/u. Ojo, solo me queda [n] unidad.
+
+Listo, registré tu pedido P-F5AB35 para recoger en la tienda:
+• Llave lavaplatos balta 8 con griferia ref 415040: $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío.
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."
+C-009,vencimiento,2026-11-07T20:44:09.764905+00:00,2026-11-07T20:44:32.738212+00:00,"apárteme 2 caja octagonal / (pasan 6 min) / uy, ¿todavía me lo tienen? / entonces apártemelo otra vez","['found', 'espera', 'answered', 'order_issue']",False,turno 1: estado found; turno 1: pedidos []; turno 2: pedidos []; turno 2: sin aviso «liberé lo apartado»; turno 3: pedidos []; turno 4: estado order_issue; turno 4: pedidos [],0.0115048000,12,35876,534,QUANTITY_NOT_GROUNDED,"La herramienta devolvió QUANTITY_NOT_GROUNDED: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",22859,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"¿Cuántas unidades te llevas? Dímelo y registro el pedido.
+Todavía no hay nada apartado: si lo quieres llevar, dime cuántas unidades y registro el pedido."
+C-010,datos_personales,2026-11-07T20:44:32.741689+00:00,2026-11-07T20:44:42.198294+00:00,"soy Luz Marina Díaz, mi cédula es 63512874 y mi celular 3156789012; apárteme 1 rejilla con sosco anticucaracha siplas de 4x3 / sí, confirmo","['order_pending', 'order_confirmed']",True,,0.0053942500,5,14965,320,,,9344,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¡Listo! Confirmé el pedido P-689073 por $[valor]: quedó confirmado y te lo guardo hasta el jueves 22/10 a las 09:00. ¿Más o menos a qué hora pasas por él?
+C-011,vencimiento,2026-11-07T20:44:42.200020+00:00,2026-11-07T20:44:55.248401+00:00,"apárteme 2 tenaza corneta de 8"" / (pasan 6 min) / uy, ¿todavía me lo tienen? / entonces apártemelo otra vez","['order_pending', 'espera', 'answered', 'order_pending']",True,,0.0076182000,7,20980,460,,,12915,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, registré tu pedido P-0A1B49 para recoger en la tienda:
+• 2 unidades de tenaza corneta de 8"" (a $[valor] c/u): $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
+C-012,pide_una_persona,2026-11-07T20:44:55.250352+00:00,2026-11-07T20:45:02.241842+00:00,"¿tienen cancamo abierto de 1""? / prefiero que me atienda una persona","['found', 'handoff']",True,,0.0032747500,4,11413,173,NOT_FOUND,"La herramienta devolvió NOT_FOUND: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",6896,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Le aviso al tendero para que te atienda por aquí. Mientras tanto, si quieres, te sigo ayudando con precios y existencias."
+C-013,datos_personales,2026-11-07T20:45:02.243421+00:00,2026-11-07T20:45:13.587217+00:00,"soy Luz Marina Díaz, mi cédula es 63512874 y mi celular 3156789012; apárteme 1 tornillo milimetrico de x1/2 de 5mm / sí, confirmo","['order_pending', 'order_confirmed']",True,,0.0060318000,6,17824,382,,,11237,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¡Listo! Confirmé el pedido P-0B7943 por $[valor]: quedó confirmado y te lo guardo hasta el jueves 22/10 a las 09:00. ¿Más o menos a qué hora pasas por él?
+C-014,lista_con_no_manejado,2026-11-07T20:45:13.588912+00:00,2026-11-07T20:45:22.831049+00:00,"necesito 2 teja eternit 1,20 y también leche",['partial'],True,,0.0047911000,5,14680,275,,,9155,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Uy, leche no lo manejo por ahora. Si tienes otra referencia o medida, con gusto te la busco.
+
+Las 2 unidades de teja eternit 1,20 te salen en $[valor] (a $[valor] c/u). ¿Quieres que te lo aparte para que pases a recogerlo?
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."
+C-015,datos_personales,2026-11-07T20:45:22.832680+00:00,2026-11-07T20:45:37.100689+00:00,"soy Andrés Gómez, mi cédula es 1095123456 y mi celular 3209876543; apárteme 1 anoloc bronce / sí, confirmo","['order_pending', 'order_confirmed']",True,,0.0061018500,6,17681,374,,,14171,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¡Listo! Confirmé el pedido P-93FD0F por $[valor]: quedó confirmado y te lo guardo hasta el jueves 22/10 a las 09:00. ¿Más o menos a qué hora pasas por él?
+C-016,tienda_en_medio,2026-11-07T20:45:37.102671+00:00,2026-11-07T20:45:48.642289+00:00,"¿cuánto vale acople lavamanos larga x larga paquete x 12 - 38012 de 55 cm? / ¿y a qué hora vuelven a abrir después del almuerzo? / listo, apárteme 1 y paso en la tarde","['found', 'informed', 'order_pending']",True,,0.0059706000,6,17626,349,,,11421,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, registré tu pedido P-66E228 para recoger en la tienda:
+• Acople lavamanos larga x larga paquete x 12 - 38012 de 55 cm: $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
+C-017,agendar_recogida,2026-11-07T20:45:48.643810+00:00,2026-11-07T20:45:59.605092+00:00,"me llevo 1 buje galvanizado a de 1/2 3/8 / sí, confirmo / paso mañana a las 3 de la tarde","['nearby', 'order_issue', 'answered']",False,turno 1: estado nearby; turno 1: falta CLZ-0283; turno 1: pedidos []; turno 2: estado order_issue; turno 2: pedidos []; turno 3: estado answered; turno 3: pedidos []; turno 3: sin recogida «2026-10-22 15:00»,0.0059668000,6,17672,432,INVALID_ARGUMENT,"La herramienta devolvió INVALID_ARGUMENT: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",10848,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¿Cuál de los dos bujes confirmas? El primero (buje galvanizado 1/2 3/8) o el segundo (buje copa galvanizado 3/4 1/2)? Dime el número o el nombre para apartártelo y agendar tu recogida para mañana a las 3.
+C-018,opciones_y_memoria,2026-11-07T20:45:59.606852+00:00,2026-11-07T20:46:13.295156+00:00,¿tienen copa tornillo corneta? / la de 1/4x5/16 / ¿y cuánto me salen 2? / me los llevo,"['clarify', 'clarify', 'quoted', 'order_pending']",True,,0.0075032000,7,20998,405,,,13556,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, registré tu pedido P-C767E6 para recoger en la tienda:
+• 2 unidades de copa tornillo corneta de 1/4x5/16 (a $[valor] c/u): $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
+C-019,agendar_recogida,2026-11-07T20:46:13.296747+00:00,2026-11-07T20:46:25.619180+00:00,"me llevo 1 tornillo hexagonal de 5/16 x 1/2 / sí, confirmo / paso mañana a las 3 de la tarde","['order_pending', 'order_confirmed', 'pickup_scheduled']",True,,0.0079794000,7,21612,396,,,12206,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Perfecto, te esperamos el jueves 22/10 a las 15:00 con tu pedido P-E1E955."
+C-020,mas_de_lo_que_hay,2026-11-07T20:46:25.620949+00:00,2026-11-07T20:46:36.052230+00:00,"necesito 8 clavo acero vertical 1 / bueno, entonces apárteme los que tenga","['insufficient_stock', 'order_pending']",True,,0.0054943500,6,17313,315,INSUFFICIENT_STOCK,"La herramienta devolvió INSUFFICIENT_STOCK: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",10338,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, registré tu pedido P-D9E7A0 para recoger en la tienda:
+• 6 unidades de clavo acero vertical 1 (a $[valor] c/u): $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
+C-021,dos_clientes_ultima_unidad,2026-11-07T20:46:36.054115+00:00,2026-11-07T20:46:49.218537+00:00,"me llevo 1 broca espada para madera de 1"" / me llevo 1 broca espada para madera de 1""","['order_issue', 'order_pending']",True,,0.0083227000,9,26228,537,INSUFFICIENT_STOCK,"La herramienta devolvió INSUFFICIENT_STOCK: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",20264,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Sí, tenemos broca espada para madera de 1"", a $[valor] c/u. Ojo, solo me queda [n] unidad.
+
+Listo, registré tu pedido P-76F88A para recoger en la tienda:
+• Broca espada para madera de 1"": $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío.
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."
+C-022,tienda_en_medio,2026-11-07T20:46:49.220354+00:00,2026-11-07T20:47:00.928997+00:00,"¿cuánto vale suplemento plástico de 10x10? / ¿y a qué hora vuelven a abrir después del almuerzo? / listo, apárteme 1 y paso en la tarde","['found', 'informed', 'order_pending']",True,,0.0053924500,6,17377,296,,,11594,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Listo, registré tu pedido P-668B5A para recoger en la tienda:
+• Suplemento plástico de 10x10: $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío."
+C-023,dos_clientes_ultima_unidad,2026-11-07T20:47:00.931443+00:00,2026-11-07T20:47:10.071699+00:00,me llevo 3 correas de amarre negra de 30 cmts / me llevo 3 correas de amarre negra de 30 cmts,"['order_issue', 'order_pending']",True,,0.0070969500,8,23241,465,INSUFFICIENT_STOCK,"La herramienta devolvió INSUFFICIENT_STOCK: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",14400,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Sí, tenemos correas de amarre negra de 30 cmts, a $[valor] c/u. Ojo, solo me quedan [n] unidades.
+
+Listo, registré tu pedido P-3E74C3 para recoger en la tienda:
+• 3 unidades de correas de amarre negra de 30 cmts (a $[valor] c/u): $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío.
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."
+C-024,lista_editable,2026-11-07T20:47:10.073830+00:00,2026-11-07T20:47:30.239896+00:00,"necesito 3 llave jardin satinada x 6 ref 797273 / agrégale 3 tornillo hexagonal de 3/8 x 1"" / ¿cuánto es todo? / quítale llave jardin satinada x 6 ref 797273 / listo, me llevo eso / sí, confirmo","['quoted', 'quoted', 'quoted', 'answered', 'order_pending', 'order_confirmed']",True,,0.0133410500,11,34205,760,,,20002,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,¡Listo! Confirmé el pedido P-ECB1E7 por $[valor]: quedó confirmado y te lo guardo hasta el jueves 22/10 a las 09:00. ¿Más o menos a qué hora pasas por él?
+C-025,dos_clientes_ultima_unidad,2026-11-07T20:47:30.241579+00:00,2026-11-07T20:47:39.683504+00:00,me llevo 2 llave sencilla meson corona av50 / me llevo 2 llave sencilla meson corona av50,"['order_issue', 'order_pending']",True,,0.0081145500,9,26199,522,INSUFFICIENT_STOCK,"La herramienta devolvió INSUFFICIENT_STOCK: Grok recibió la observación y respondió con ella, sin inventar precio ni existencias.",16366,grok-4.20-0309-non-reasoning,carluz-v1,2f059cb,"Sí, tenemos llave sencilla meson corona av50, a $[valor] c/u. Ojo, solo me quedan [n] unidades.
+
+Listo, registré tu pedido P-EA049D para recoger en la tienda:
+• 2 unidades de llave sencilla meson corona av50 (a $[valor] c/u): $[valor]
+Total: $[valor]
+Para dejártelo guardado, ¿me confirmas con un «sí» antes de las 09:05? Ya confirmado te lo guardo hasta 24 horas, así que puedes venir con calma.
+Lo pagas en el mostrador al recoger; por aquí no cobro ni fío.
+
+Valores tomados del inventario de la tienda: el precio final se confirma en el mostrador."

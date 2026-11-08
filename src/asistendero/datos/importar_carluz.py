@@ -34,7 +34,8 @@ STORE_INFO = {
     "nombre": {"texto": "Ferretería Carluz"},
     "ubicacion": {"texto": "Carrera 10E # 30-06, Floridablanca, Santander (código postal 681002)."},
     "horario": {"texto": "Al mediodía la tienda cierra a las 11:55 a. m. y vuelve a abrir a las 2:00 p. m. La hora "
-                         "de apertura en la mañana y la de cierre en la tarde se confirman con la tienda."},
+                         "de apertura en la mañana y la de cierre en la tarde se confirman con la tienda.",
+                "pausa": ["11:55", "14:00"]},
     "medios_pago": {"texto": "En el mostrador se recibe efectivo y transferencia. Este asistente no cobra ni recibe "
                              "pagos."},
 }

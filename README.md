@@ -163,6 +163,32 @@ La semana de carga (S4) corre sola sobre esa base durante 12 horas, con Grok rea
 
 Detalle, reanudación y recuperación de errores en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
+La carga mide volumen y no prueba todo lo que hace el agente. Para eso hay dos colas más, cada una en su carpeta y sobre su
+propia copia de la base:
+
+- **Conversaciones completas** (`--cola cobertura`): 182 conversaciones de 2 a 6 turnos. Cubren:
+  - lista que se edita y opciones que se recuerdan;
+  - pedido que se cambia, se cancela o vence;
+  - dos clientes por la última unidad;
+  - inyección y baneo;
+  - pedir una persona;
+  - regateo;
+  - datos personales;
+  - preguntas de la tienda en medio de la conversación;
+  - agendar la recogida.
+- **Asistente de bodega** (`--cola bodega`): 101 mensajes del tendero, entre llegadas, pedidos al proveedor, cambios de
+  precio, conteos, consultas, mensajes ambiguos e inyecciones. Cada mensaje se comprueba en la base: nada cambia antes
+  de confirmar y confirmar dos veces no repite nada.
+
+```powershell
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_1 preparar --cola cobertura
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura/corrida_1 correr --horas 0.01 --budget-usd 4 --base .local/carluz/cobertura1/tienda.sqlite3
+.\.venv\Scripts\python.exe -m asistendero.evaluacion.cobertura_reporte evaluation/s4_cobertura/corrida_1 evaluation/s4_cobertura/corrida_2
+```
+
+El último comando arma la matriz de capacidades, antes y después de los arreglos, desde las bitácoras y sin leer las
+respuestas. El resultado está en [evaluation/COBERTURA.md](evaluation/COBERTURA.md).
+
 ### Terminal
 
 ```powershell

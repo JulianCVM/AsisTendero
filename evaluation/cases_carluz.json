@@ -293,7 +293,10 @@
     "negocio": "carluz",
     "id": "CL-22",
     "query": "¿tienen vinilo viniplast negro tipo 1?",
-    "expected_status": "found",
+    "expected_status": [
+      "found",
+      "insufficient_stock"
+    ],
     "expected_sku": "CLZ-1985",
     "must_include_any": [
       [

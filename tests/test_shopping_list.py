@@ -765,4 +765,42 @@ def test_shopping_list_quoted_on_final_summary_and_decoupled_from_new_items(chat
     assert "LIST_QUOTE_REQUIRED" in t3["avisos_enviados"]
 
 
+REMOVED_BRUSH = "Listo, quité la brocha. Ahora solo llevas los 2 rodillos de 9 pulgadas."
 
+
+def test_me_llevo_eso_after_removing_a_line_registers_the_list_as_it_stands(chat):
+    # Cobertura C-024 (Carluz, Grok real): tras «quítale los bujes», «listo, me llevo eso» se rechazaba como
+    # referencia ambigua porque la respuesta anterior aún nombraba los bujes quitados.
+    turn, sessions, book = chat
+    session = sessions.create()
+    turn(session, "necesito 3 brochas de 2 pulgadas y 2 rodillos de 9 pulgadas",
+         tool("buscar_productos", items=[BRUSH_2, ROLLER]), quote(("BRO-2", 3), ("ROD-9", 2)), say())
+    # Grok contesta sin herramientas, como en la corrida real; el aviso SEARCH_REQUIRED le da un segundo paso.
+    turn(session, "quítale la brocha", say(REMOVED_BRUSH), say(REMOVED_BRUSH))
+    assert _listed(sessions, session) == [("ROD-9", 2)]
+    result = turn(session, "listo, me llevo eso", tool("registrar_pedido", lines=[{"sku": "ROD-9", "quantity": 2}]), say())
+    assert result["tool_calls"][0]["executed"] and result["estado"] == "order_pending"
+    assert [(line["sku"], line["cantidad"]) for line in book.session_orders(session)[0]["lineas"]] == [("ROD-9", 2)]
+
+
+def test_me_llevo_eso_never_registers_the_removed_product(chat):
+    turn, sessions, book = chat
+    session = sessions.create()
+    turn(session, "necesito 3 brochas de 2 pulgadas y 2 rodillos de 9 pulgadas",
+         tool("buscar_productos", items=[BRUSH_2, ROLLER]), quote(("BRO-2", 3), ("ROD-9", 2)), say())
+    # Grok contesta sin herramientas, como en la corrida real; el aviso SEARCH_REQUIRED le da un segundo paso.
+    turn(session, "quítale la brocha", say(REMOVED_BRUSH), say(REMOVED_BRUSH))
+    result = turn(session, "listo, me llevo eso", tool("registrar_pedido", lines=[{"sku": "BRO-2", "quantity": 3}]), say())
+    assert not result["tool_calls"][0]["executed"] and book.session_orders(session) == []
+
+
+def test_options_that_differ_only_by_unit_are_told_apart_by_the_unit():
+    # Carluz vende «Regla metálica» por metro y por tramo, sin variante: las opciones salían como «•  •» (C-076).
+    from asistendero.agente.respuesta.reply_text import option_lines
+    from asistendero.tienda.catalogo.catalog import Product
+
+    by_meter = Product("CLZ-1", "Regla metálica", "", "metro", 1000, 3, "2026-11-07")
+    by_piece = Product("CLZ-2", "Regla metálica", "", "tramo", 5000, 2, "2026-11-07")
+    assert option_lines([by_meter, by_piece]) == ["• Regla metálica (por metro)", "• Regla metálica (por tramo)"]
+    sized = [Product("CLZ-3", "Tubo", "1/2", "metro", 1, 1, ""), Product("CLZ-4", "Tubo", "3/4", "metro", 1, 1, "")]
+    assert option_lines(sized) == ["• 1/2", "• 3/4"]

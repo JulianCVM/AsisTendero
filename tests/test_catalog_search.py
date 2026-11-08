@@ -195,3 +195,121 @@ def test_a_tube_searched_with_its_quantity_is_not_the_three_inch_one(catalog):
     said = catalog.search(ProductQuery("tubo PVC 3 metros", product="tubo", material="PVC"), limit=10)
     sized = catalog.search(ProductQuery("tubo PVC 3 pulgadas", product="tubo", material="PVC"), limit=10)
     assert said.matches[0].sku != "SAN-3" and sized.matches[0].sku == "SAN-3"
+
+
+def test_measures_understand_the_abbreviations_of_the_real_inventory():
+    # El inventario de Carluz escribe «55 cmts»: el cliente que decía «55 cm» recibía «no lo manejo así» (C-009).
+    from asistendero.tienda.catalogo.measures import measures
+    assert measures("correa de amarre negra 55 cmts") == measures("correa de amarre negra de 55 cm")
+    assert measures("manguera 3 mtrs") == measures("manguera 3 metros") == {"3m"}
+    assert measures("thinner 1 lt") == measures("thinner 1 litro")
+    assert measures("lija 80 cms") != measures("lija 80 mm")
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("necesito 3 aerosol pintuco negro mate", "CLZ-A"),
+    ("necesito 3 aerosol pintuco negro mate alta temperatura", "CLZ-B"),
+    ("necesito 3 aerosol negro", None),
+])
+def test_naming_a_product_whole_chooses_it_over_a_longer_name(message, expected):
+    # Cobertura C-005 (Carluz): el cliente escribió el nombre exacto y recibió opciones porque el otro aerosol
+    # lleva las mismas palabras más «alta temperatura». Decir el nombre entero elige; decir menos, pregunta.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product
+
+    matte = Product("CLZ-A", "Aerosol pintuco negro mate", "", "unidad", 1, 5, "")
+    hot = Product("CLZ-B", "Aerosol pintuco negro mate alta temperatura", "", "unidad", 1, 5, "")
+    query = message.removeprefix("necesito 3 ")
+    finding = {"query": query, "request": {"text": query, "product": "aerosol"}, "matches": [matte, hot], "nearby": []}
+    chosen = grounded_selection(message, finding)
+    assert (chosen.sku if chosen else None) == expected
+
+
+def _carluz_like(*names):
+    from asistendero.tienda.catalogo.catalog import Product
+
+    return [Product(f"CLZ-{index}", name, "", "metro", 1, 5, "") for index, name in enumerate(names)]
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("necesito 10 manguera para gas economica x 1", "CLZ-0"),
+    ("necesito 10 manguera para gas economica x 1,5", "CLZ-1"),
+    ("necesito 10 manguera para gas economica x 2", "CLZ-2"),
+])
+def test_a_decimal_measure_in_the_name_is_one_number(message, expected):
+    # Cobertura C-020 (Carluz): «x 1» se leía también en «x 1,5» porque la coma partía el decimal en 1 y 5.
+    from asistendero.agente.reglas.validation import grounded_selection
+
+    hoses = _carluz_like("Manguera para gas economica x 1", "Manguera para gas economica x 1,5",
+                         "Manguera para gas economica x 2")
+    query = message.removeprefix("necesito 10 ")
+    finding = {"query": query, "request": {"text": query, "product": "manguera"}, "matches": hoses, "nearby": []}
+    assert grounded_selection(message, finding).sku == expected
+
+
+def test_a_comma_inside_a_product_name_does_not_cut_what_the_customer_said():
+    # Cobertura C-028 (Carluz): «toma … codelca, grande industrial» se cortaba en la coma y quedaban tres opciones.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.product_fit import said_about
+
+    sockets = _carluz_like("Toma aerea eléctrica hembra codelca con polo a tierra, grande",
+                           "Toma aerea eléctrica hembra codelca, grande industrial",
+                           "Toma aerea eléctrica hembra codelca, pequeña")
+    message = "¿cuánto vale toma aerea eléctrica hembra codelca, grande industrial?"
+    query = "toma aerea eléctrica hembra codelca grande industrial"
+    finding = {"query": query, "request": {"text": query, "product": "toma"}, "matches": sockets, "nearby": []}
+    assert grounded_selection(message, finding).sku == "CLZ-1"
+    # Dos artículos separados por coma siguen siendo dos partes: cada uno se lee solo con lo suyo.
+    assert said_about("brocha de 2 pulgadas, y un rodillo de 9 pulgadas", "rodillo de 9 pulgadas").strip().startswith("un rodillo")
+
+
+@pytest.mark.parametrize("said", ["candado dorado número 40", "candado dorado nro 40", "candado dorado No. 40",
+                                  "candado dorado n° 40", "candado dorado #40"])
+def test_a_spoken_number_sign_is_the_inventory_hash(said):
+    # CL-18 y CL-31 (humo de Carluz): el inventario escribe «#40» y «número 40» quedaba como opción cercana porque
+    # «numero» no estaba en ningún nombre.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product, tokens
+
+    padlocks = [Product("CLZ-40", "Candado dorado", "#40", "unidad", 1, 5, ""),
+                Product("CLZ-20", "Candado dorado", "#20", "unidad", 1, 5, "")]
+    assert tokens(said) == tokens("Candado dorado #40")
+    finding = {"query": said, "request": {"text": said, "product": "candado"}, "matches": padlocks, "nearby": []}
+    assert grounded_selection(f"necesito 1 {said}", finding).sku == "CLZ-40"
+
+
+def test_no_followed_by_a_number_is_still_a_negation():
+    # Lo que no debe pasar: «no 40, el de 20» pierde el «no» y queda como si pidiera el 40.
+    from asistendero.tienda.catalogo.measures import canonical_text
+
+    assert "no 40" in canonical_text("no 40, el de 20")
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("3 kilos de yeso faraón", "CLZ-KILO"),
+    ("un kilo de yeso faraón", "CLZ-KILO"),
+    # Grok buscó sin «bulto»: se pregunta, pero nunca se elige el yeso por kilo.
+    ("1 bulto de yeso faraón", None),
+    ("2 bultos de yeso faraón", None),
+])
+def test_kilos_said_choose_the_product_sold_by_kilo(message, expected):
+    # CL-14 (humo de Carluz): «3 kilos de yeso faraón» mostraba el bulto de 25 kg y el yeso por kilo como opciones,
+    # aunque el cliente dijo la unidad.
+    from asistendero.agente.reglas.validation import grounded_selection
+    from asistendero.tienda.catalogo.catalog import Product
+
+    plaster = [Product("CLZ-BULTO", "Yeso faraon bulto", "25kg", "bulto", 1, 5, ""),
+               Product("CLZ-KILO", "Yeso faraon", "", "kilo", 1, 5, "")]
+    finding = {"query": "yeso faraón", "request": {"text": "yeso faraón", "product": "yeso"}, "matches": plaster,
+               "nearby": []}
+    chosen = grounded_selection(message, finding)
+    assert (chosen.sku if chosen else None) == expected
+
+
+def test_kilos_of_the_measure_are_not_a_quantity():
+    # Lo que no debe pasar: «cemento de 50 kilos» o «2 bultos de cemento de 50 kilos» no piden 50 de nada.
+    from asistendero.agente.reglas.validation import foreign_unit, sale_units
+
+    assert sale_units("cemento de 50 kilos") <= {"kilo"}
+    assert foreign_unit("2 bultos de cemento de 50 kilos", 2, "bulto 50kg") is None
+    assert foreign_unit("3 kilos de clavos", 3, "libra 2 pulgada") == "kilo"

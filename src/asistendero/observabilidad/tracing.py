@@ -145,7 +145,7 @@ def run_traced(
         return decision
 
     # Los datos personales no quedan en la traza ni en los reportes del evaluador.
-    push("input", details={"run_id": run_id, "consulta": redact_personal_data(query)[0],
+    push("input", details={"run_id": run_id, "consulta": redact_personal_data(query, customer=True)[0],
                            "prompt_version": active_prompt()[0], "sesion": bool(context), "foto": bool(vision)})
     vision_call = _push_vision(push, run_id, vision, call_costs)
     # El planificador del servidor (turno con foto) no es Grok: sin model_request ni costo.

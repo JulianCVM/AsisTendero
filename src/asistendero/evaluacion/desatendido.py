@@ -3,6 +3,7 @@
     python -m asistendero.evaluacion.desatendido preparar --tareas 1300
     python -m asistendero.evaluacion.desatendido correr --horas 12.25 --budget-usd 25 --supervisar
     python -m asistendero.evaluacion.desatendido resumen
+    python -m asistendero.evaluacion.desatendido --carpeta evaluation/s4_cobertura preparar --cola cobertura
 
 - **Ritmo fijo:** la tarea i arranca a ``inicio + i × intervalo``, con el intervalo que reparte la cola en las horas
   pedidas. Así la llave consume de forma pareja durante toda la ventana, sin ráfagas ni relleno.
@@ -12,7 +13,11 @@
   seguidos, el proceso espera (sin llamar a nadie) antes de seguir. Una excepción no detiene la cola.
 - **Tope de gasto:** al llegar a ``--budget-usd`` no empieza más tareas.
 - **Bitácora:** ``evaluation/s4_carga/bitacora.jsonl`` (una línea por tarea y por evento), ``bitacora.csv`` y
-  ``RESUMEN.md``. Nunca lleva la llave.
+  ``RESUMEN.md``. Nunca lleva la llave. Una conversación guarda además cada turno (``turnos``): mensaje, respuesta,
+  herramientas, errores, pedidos y avisos, para ver la memoria y el pedido, no solo el final.
+- **Cobertura:** ``--cola cobertura`` arma las conversaciones completas de ``cobertura_carluz.py`` y ``--cola bodega``
+  los mensajes del tendero al asistente de bodega (``bodega_carluz.py``); cada carpeta trabaja sobre su propia copia
+  de la base (``--base``).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -34,13 +40,17 @@ from asistendero.agente.reglas.context_resolution import load_catalog_words
 from asistendero.datos.carluz import CARLUZ_BUSINESS_ID
 from asistendero.datos.importar_carluz import CARLUZ_DB_PATH, CARLUZ_DIR
 from asistendero.datos.seed import upgrade_db
+from asistendero.evaluacion.bodega_carluz import build_bodega_cases, run_bodega_case
 from asistendero.evaluacion.bitacora_carga import (
     BITACORA, COLA, DONE, ESTADO, append, done_ids, events_of, write_summary,
 )
 from asistendero.evaluacion.carga_carluz import build_queue
+from asistendero.evaluacion.cobertura_carluz import build_coverage
 from asistendero.evaluacion.eval_report import record_cost
+from asistendero.evaluacion.eval_sessions import SIM_START, StoreClock
 from asistendero.evaluacion.evaluate import evaluate_cases, git_state
 from asistendero.tienda import reloj
+from asistendero.tienda.bodega.stock_assistant import interpret_text
 from asistendero.tienda.catalogo.catalog import MockCatalog
 
 RUN_DB = CARLUZ_DIR / "carga" / "tienda.sqlite3"
@@ -51,6 +61,9 @@ MAX_RESTARTS = 50
 RESTART_WAIT_S = 30
 SUMMARY_EVERY = 25
 MAX_RESPONSE_CHARS = 1500
+MAX_TURN_RESPONSE_CHARS = 600
+# Quién interpreta los mensajes del tendero; las pruebas lo cambian por uno falso.
+BODEGA_INTERPRET = interpret_text
 
 
 def _now() -> datetime:
@@ -93,9 +106,31 @@ def _product_reason(task: dict, record: dict) -> list[str]:
     return [] if set(wanted) & set(record.get("selected_skus") or []) else ["eligió otro producto"]
 
 
+def _turn_line(turn: dict, client: int | None = None) -> dict:
+    codes = [code for call in turn.get("tool_calls", []) if (code := (call.get("error") or {}).get("code"))]
+    return {
+        **({"cliente": client} if client else {}),
+        "mensaje": turn["query"] or f"(pasan {turn.get('wait_minutes')} min)",
+        "esperado": turn.get("expected_status"), "resultado": turn["actual_status"], "exito": turn["passed"],
+        "motivos": turn["fail_reasons"], "respuesta": (turn.get("response") or "")[:MAX_TURN_RESPONSE_CHARS],
+        "herramientas": turn.get("tools_executed", []), "errores": codes,
+        "pedidos": [order["estado"] for order in turn.get("orders", [])], "avisos": turn.get("notices", []),
+        "llamadas_grok": turn.get("model_calls"),
+        "costo_usd": str(cost) if (cost := record_cost(turn)) is not None else None,
+    }
+
+
+def turn_lines(record: dict) -> list[dict]:
+    """Cada turno de una conversación (o de cada cliente), en orden."""
+    if record.get("clients"):
+        return [_turn_line(turn, item["client"]) for item in record["clients"] for turn in item["turns"]]
+    return [_turn_line(turn) for turn in record.get("turns", [])]
+
+
 def entry(task: dict, record: dict, started: datetime, state: dict) -> dict:
     reasons = list(record.get("fail_reasons", [])) + _product_reason(task, record)
     codes = _codes(record)
+    turns = turn_lines(record)
     return {
         "tipo": "tarea", "id": task["id"], "clase": task["tipo"],
         "inicio": started.isoformat(), "fin": _now().isoformat(),
@@ -110,6 +145,7 @@ def entry(task: dict, record: dict, started: datetime, state: dict) -> dict:
         "errores": codes, "recuperacion": recovery(codes),
         "duracion_ms": record.get("elapsed_ms"), "modelo": record.get("model") or current_model(),
         "prompt_version": record.get("prompt_version"), "commit": state["commit"],
+        **({"turnos": turns} if turns else {}),
     }
 
 
@@ -117,7 +153,7 @@ def failed_entry(task: dict, error: BaseException, started: datetime, state: dic
     # Un error de programa no puede tumbar una corrida de doce horas: se registra como tarea fallida y se sigue.
     return {
         "tipo": "tarea", "id": task["id"], "clase": task["tipo"], "inicio": started.isoformat(),
-        "fin": _now().isoformat(), "entrada": task.get("query") or task["turns"][0]["query"],
+        "fin": _now().isoformat(), "entrada": task.get("query") or _first_query(task),
         "resultado": "excepcion", "esperado": task.get("expected_status") or "conversación", "exito": False,
         "motivos": [type(error).__name__], "respuesta": "", "llamadas_grok": None, "tokens_entrada": None,
         "tokens_salida": None, "costo_usd": None, "errores": ["RUNNER_EXCEPTION"],
@@ -126,8 +162,22 @@ def failed_entry(task: dict, error: BaseException, started: datetime, state: dic
     }
 
 
+def _first_query(task: dict) -> str:
+    if task.get("mensaje"):
+        return task["mensaje"]
+    turns = task.get("turns") or task["clients"][0]["turns"]
+    return next(turn["query"] for turn in turns if turn.get("query"))
+
+
 def run_task(task: dict, catalog: MockCatalog, planner) -> dict:
-    report = evaluate_cases([task], catalog=catalog, planner=planner)
+    if task.get("suite") == "bodega":
+        with tempfile.TemporaryDirectory() as folder:
+            return run_bodega_case(task, catalog.path, Path(folder), interpret=BODEGA_INTERPRET)
+    # Las conversaciones de cobertura fijan la hora de la tienda como ``evaluate --live`` (miércoles 21-10, 9:00):
+    # sus casos esperan «paso mañana a las 3» el 22-10 a las 15:00. Con el reloj real, la corrida 2 agendó bien el
+    # domingo 08/11 y el caso fallaba por la fecha, no por el agente.
+    clock = StoreClock(SIM_START) if task.get("suite") == "cobertura" else None
+    report = evaluate_cases([task], catalog=catalog, planner=planner, clock=clock)
     return report["cases"][0]
 
 
@@ -203,10 +253,12 @@ def main() -> int:
     prepare = sub.add_parser("preparar", help="Arma la cola de tareas distintas (no llama a Grok)")
     prepare.add_argument("--tareas", type=int, default=1300)
     prepare.add_argument("--semilla", type=int, default=7)
+    prepare.add_argument("--cola", choices=("carga", "cobertura", "bodega"), default="carga")
     run = sub.add_parser("correr", help="Procesa la cola con Grok real (consume créditos del reto)")
     run.add_argument("--horas", type=float, default=12.25)
     run.add_argument("--budget-usd", type=Decimal, required=True)
     run.add_argument("--supervisar", action="store_true", help="Relanza el proceso si se cae")
+    run.add_argument("--base", type=Path, default=RUN_DB, help="Copia de la base sobre la que trabaja esta carpeta")
     sub.add_parser("resumen", help="Rehace bitacora.csv y RESUMEN.md desde la bitácora")
     parser.add_argument("--carpeta", type=Path, default=Path("evaluation/s4_carga"))
     args = parser.parse_args()
@@ -217,7 +269,9 @@ def main() -> int:
             parser.error(f"Ya hay una bitácora en {folder}: la cola no se cambia a mitad de una corrida.")
         if not CARLUZ_DB_PATH.is_file():
             parser.error(f"No existe {CARLUZ_DB_PATH}: impórtala con python -m asistendero.datos.importar_carluz")
-        queue = build_queue(CARLUZ_DB_PATH, args.tareas, args.semilla)
+        builders = {"cobertura": build_coverage, "bodega": build_bodega_cases,
+                    "carga": lambda database: build_queue(database, args.tareas, args.semilla)}
+        queue = builders[args.cola](CARLUZ_DB_PATH)
         (folder / COLA).write_text(json.dumps(queue, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"{len(queue)} tareas distintas en {folder / COLA}")
         return 0
@@ -229,14 +283,15 @@ def main() -> int:
         parser.error("--budget-usd debe ser mayor que cero y --horas ir de 0 a 48")
     keep_awake()
     if args.supervisar:
-        rest = ["--carpeta", str(folder), "correr", "--horas", str(args.horas), "--budget-usd", str(args.budget_usd)]
+        rest = ["--carpeta", str(folder), "correr", "--horas", str(args.horas), "--budget-usd", str(args.budget_usd),
+                "--base", str(args.base)]
         return supervise(rest, folder)
     load_dotenv()
-    if not RUN_DB.is_file():
+    if not args.base.is_file():
         # La corrida aparta pedidos de prueba: trabaja sobre una copia para no tocar la base de la tienda.
-        RUN_DB.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(CARLUZ_DB_PATH, RUN_DB)
-    return work(folder, args.horas, args.budget_usd)
+        args.base.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(CARLUZ_DB_PATH, args.base)
+    return work(folder, args.horas, args.budget_usd, database=args.base)
 
 
 if __name__ == "__main__":

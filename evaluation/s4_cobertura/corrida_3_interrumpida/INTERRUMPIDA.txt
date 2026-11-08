@@ -1,0 +1,1 @@
+Detenida a mano en 47 de 182 conversaciones para cambiar el código (verificación de medios de pago, CL-32); se repitió completa sobre el commit final.

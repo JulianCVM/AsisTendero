@@ -29,6 +29,9 @@ RUSHES = re.compile(r"\bapur|\bapresur|date prisa|se (?:te |le )?vence pronto|ti
 CONFIRMED_HOURS = int(CONFIRMED_HOLD.total_seconds() // 3600)
 # Un rechazo de la validación también tiene una salida fija: se le pide al cliente lo que falta.
 REJECTION_TEXT = {
+    # El mensaje de TOOL_FAILURE es para la traza (trae el tipo de excepción): el cliente recibe uno propio.
+    "TOOL_FAILURE": "No pude completar ese paso del pedido en este momento; tu pedido sigue como estaba. "
+                    "Inténtalo de nuevo en un momento o confírmalo en el mostrador.",
     "PURCHASE_NOT_STATED": "¿Quieres que registre el pedido? Dime qué te llevas y cuántas unidades, y te muestro el resumen.",
     "CONFIRMATION_NOT_STATED": "Revisa el resumen del pedido y respóndeme «sí, confirmo» para confirmarlo.",
     "TIME_NOT_GROUNDED": "¿Qué día y a qué hora pasas a recoger? Por ejemplo: «hoy a las 4».",

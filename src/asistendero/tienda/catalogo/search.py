@@ -7,7 +7,7 @@ from asistendero.tienda.vocabulario import normalize_text
 
 # Las seis últimas son de la tienda de mercado: «2 paquetes de pan» o «una cubeta de huevos».
 SALE_UNIT_NAME = (r"(metros?|bultos?|galon(?:es)?|unidad(?:es)?|libras?|rollos?|pares|par|pliegos?|bolsas?|cajas?|"
-                  r"paquetes?|botellas?|latas?|cubetas?|atados?|barras?)")
+                  r"paquetes?|botellas?|latas?|cubetas?|atados?|barras?|kilos?)")
 # «3 metros de tubo» es cuánto lleva, no una medida. En la conversación del visor del 23-10, «dame del primero 3
 # metros» llevó a Grok a buscar «tubo PVC 3 metros» y se eligió el tubo sanitario de 3 pulgadas. «de 3 metros» o
 # «x 15 m» sí describen el producto (un flexómetro, una manguera) y se dejan.

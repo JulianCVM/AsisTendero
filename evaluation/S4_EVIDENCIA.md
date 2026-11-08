@@ -52,11 +52,11 @@ Sin Grok, `tests/test_eval_sessions.py` recorre los 214 casos con un Grok guioni
 conversaciones con decisiones aleatorias (500 sin fallos antes de `46f01f2`; 200 sin fallos sobre `e813368`; entre
 200 y 400 sin fallos después de cada arreglo de las corridas 11 a 19).
 
-## Inventario real de Ferretería Carluz: importado, todavía sin corrida con Grok (07-11-2026)
+## Inventario real de Ferretería Carluz: carga, cobertura y ciclo de mejora (07-11-2026)
 
-**Esta sección no afirma un resultado con Grok real, porque aún no se ha hecho esa corrida.** Lo que sigue se midió sin
-llamar al modelo. Las secciones de abajo siguen siendo sobre datos ficticios. Aquí solo van conteos: los precios, las
-existencias y el Excel se quedan en `.local/carluz/`, que no se sube.
+La tienda dio permiso para usar su inventario; Julian lo confirmó el 07-11-2026. Aquí solo van conteos y resultados.
+Los precios, las existencias y el Excel se quedan en `.local/carluz/`, que no se sube, y las bitácoras publicadas
+enmascaran cada precio y existencia de la tienda (`publicar_bitacora.py`).
 
 | Medida de la importación | Valor |
 |---|---|
@@ -70,20 +70,42 @@ existencias y el Excel se quedan en `.local/carluz/`, que no se sube.
 | Sin categoría reconocida (`Otros artículos`) | 92 (4,5 %) |
 | Con imagen | 0: el Excel no trae |
 
-**Lo que falta para cumplir lo que pidió el jurado:**
+Sobre esa base se midieron tres cosas, todas con Grok real (`grok-4.20-0309-non-reasoning`, prompt `carluz-v1`):
 
-- Permiso del tendero por escrito. Sin él, el nombre de la tienda y los casos no deberían publicarse.
-- La corrida real de `evaluation/cases_carluz.json` (31 casos), registrada aquí con commit, fecha, `PROMPT_VERSION` y costo.
-- El precio de venta: la columna de valor del Excel parece costo con IVA (126 de 134 pares cruzados dan exactamente
-  costo × 1,19). El agente la presenta como valor del inventario, a confirmar en el mostrador.
+1. **Carga de 12 horas desatendida** (`evaluation/s4_carga/`, commit `970dbd5`). Más de mil consultas distintas, a
+   ritmo fijo y sin intervención. El resultado se anota al cerrar la corrida.
+2. **Cobertura** ([`COBERTURA.md`](COBERTURA.md)). 182 conversaciones completas en 13 capacidades y 101 mensajes del
+   tendero al asistente de bodega. Con el código final (`423c993`):
+   - conversaciones: **169/182 (93 %)** y 517 de 546 turnos, por 1.2081 USD;
+   - bodega: **100/101**, por 0.0762 USD.
+3. **Ciclo de mejora.** La corrida 1 (`8ee733c`) dio 107/182 (59 %). Sus fallas dieron ocho arreglos del agente, cada
+   uno con su prueba. La corrida 2, con la misma cola, dio 134/182 (74 %). Su revisión a mano separó tres fallas del
+   evaluador de dos más del agente. La corrida de humo destapó una afirmación falsa sobre medios de pago (`658a0a8`).
+   La corrida 3 dio 169/182 (93 %).
+4. **Ronda de pulido** (corridas 4 a 6, misma cola que la 3). Seis arreglos más, cada uno con su prueba. Dos los
+   destaparon las propias corridas:
+   - una frase de rebaja que pasaba la verificación porque la cifra era la del catálogo;
+   - el nombre del cliente, que Grok repetía aunque la respuesta dijera que no guarda datos personales.
 
-**Límite conocido, visto con un guion sin Grok:** a «¿venden neveras?» el agente ofrece «Bombillo para nevera» como
-opción, porque la palabra está en el nombre. La respuesta no inventa nada y el nombre deja claro qué es, pero no es lo
-que el cliente pidió. El caso CL-19 lo cubre.
+   Con el código final:
+   - los 345 casos curados de la tienda ficticia pasan **344/345** con los 3 fallos controlados (1.208592 USD). En
+     `658a3ab` y en `484b002` dieron 345/345; el fallo de la final es una pregunta de Grok sin buscar (Z-12), que no
+     inventa nada;
+   - los 32 casos de humo de Carluz pasan **30/32** (0.056519 USD), frente a 27/32 en `658a0a8`.
 
-**Vencimiento del surtido de M-27:** `MLPO-400` tiene fecha fija 2026-11-04. Desde `surtido.py` con `reloj.local_now`, la
-prueba con guion fija el día y vuelve a pasar; pero una corrida `--live` usa el reloj real, y M-27 ya no encontrará una
-fecha futura. Hay que resolverlo antes de la próxima corrida completa.
+Costo total de la cobertura y sus dos rondas de mejora: 14.7302 USD, del presupuesto de 60 USD que Julian aprobó para
+S4 el 07-11-2026, y dentro del tope de 20 USD que se fijó para la cobertura. El desglose está en `COBERTURA.md`.
+
+**Límite conocido:** a «¿venden neveras?» el agente ofrece «Bombillo para nevera», porque la palabra está en el nombre.
+No inventa nada, pero no es lo que el cliente pidió. Lo cubre el caso CL-19.
+
+**Precio de venta:** la columna de valor del Excel parece costo con IVA: en 126 de 134 pares cruzados da exactamente
+costo × 1,19. Julian decidió usarla como precio mientras la tienda no dé su lista de venta. El agente la presenta como
+valor del inventario, a confirmar en el mostrador.
+
+**Surtido con fecha (M-27):** `MLPO-400` tiene fecha fija 2026-11-04. Las corridas `--live` fijan la hora de la tienda
+en el día simulado (`StoreClock(SIM_START)`, 21-10-2026), así que la fecha sigue siendo futura dentro de la corrida. La
+regresión final lo confirma: M-27 pasa.
 
 ## Corridas 45 a 48: los 345 casos con Grok real hasta el commit de la entrega (01-11-2026)
 

@@ -958,3 +958,145 @@ def test_a_registered_order_reply_that_does_not_ask_to_confirm_is_replaced(chat)
                  lambda seen: say(f"Listo, registré el pedido {seen[-1]['datos']['pedido']}. ¿Me lo confirmas con un "
                                   "«sí»? El pago es en el mostrador."))
     assert asked["respuesta"].startswith("Listo, registré el pedido")
+
+
+def _horario(book, content: dict) -> None:
+    import json
+    import sqlite3
+    with sqlite3.connect(book.path) as connection:
+        connection.execute("UPDATE store_info SET content = ? WHERE topic = 'horario'", (json.dumps(content),))
+
+
+def test_pickup_in_a_store_with_hours_only_in_text_respects_the_known_pause(store):
+    # Carluz dio su horario en texto y la pausa del mediodía; agendar fallaba con KeyError (cobertura, corrida 1).
+    book, _, _ = store
+    _horario(book, {"texto": "Cierra a las 11:55 a. m. y vuelve a abrir a las 2 p. m.", "pausa": ["11:55", "14:00"]})
+    order = book.create("sesion-a", [("PVC-050", 1)])
+    with pytest.raises(OrderError) as error:
+        book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 12, 30, tzinfo=BOGOTA), None)
+    assert error.value.code == "PICKUP_OUTSIDE_HOURS" and "pausa" in str(error.value)
+    scheduled = book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 15, 0, tzinfo=BOGOTA), None)
+    assert scheduled["recogida"] == "2026-10-22 15:00"
+
+
+def test_pickup_in_a_store_with_hours_only_in_text_and_no_pause_does_not_crash(store):
+    book, _, _ = store
+    _horario(book, {"texto": "El horario se confirma con la tienda."})
+    order = book.create("sesion-a", [("PVC-050", 1)])
+    assert book.schedule("sesion-a", order["pedido"], datetime(2026, 10, 22, 9, 0, tzinfo=BOGOTA), None)["recogida"]
+
+
+def test_a_failing_order_tool_never_shows_the_exception_to_the_customer():
+    # Cobertura C-004: el cliente leía «La herramienta falló (KeyError)».
+    from asistendero.agente.herramientas.observations import execute_safely
+    from asistendero.agente.respuesta.order_replies import order_reply
+
+    def broken(name, arguments):
+        raise KeyError("dias")
+
+    response = execute_safely(broken, "agendar_recogida", {"pedido": "P-0001"})
+    call = {"step": 1, "requested_tool": "agendar_recogida", "arguments": {"pedido": "P-0001"}, "executed": True,
+            "response": response, "duration_ms": 1}
+    status, text = order_reply([call])
+    assert "KeyError" not in text and "falló (" not in text
+    assert "sigue como estaba" in text and status == "order_issue"
+
+
+def test_apartame_los_que_tenga_after_short_stock_registers_what_is_left(chat):
+    # Cobertura C-027 (Carluz, Grok real): tras «solo me quedan 2», «bueno, entonces apárteme los que tenga» se
+    # rechazaba por cantidad no dicha y el agente preguntaba «¿cuántos?».
+    turn, sessions, book, _, _ = chat
+
+    def short_stock():
+        session = sessions.create()
+        short = turn(session, "Necesito 20 metros de tubo PVC de 1/2 para agua", tool("buscar_productos", items=[PVC_HALF]),
+                     tool("calcular_cotizacion_informativa", lines=[{"sku": "PVC-050", "quantity": 20}]), say())
+        assert "quedan 12" in short["respuesta"]
+        return session
+
+    other = short_stock()
+    too_many = turn(other, "bueno, entonces apárteme los que tenga",
+                    tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 15}]), say())
+    assert too_many["tool_calls"][0]["response"]["error"]["code"] == "QUANTITY_NOT_GROUNDED"
+    session = short_stock()
+    result = turn(session, "bueno, entonces apárteme los que tenga",
+                  tool("registrar_pedido", lines=[{"sku": "PVC-050", "quantity": 12}]), say())
+    assert result["tool_calls"][0]["executed"] and result["estado"] == "order_pending"
+    assert book.session_orders(session)[0]["lineas"][0]["cantidad"] == 12
+
+
+def test_a_category_that_does_not_exist_is_not_a_catalog_failure():
+    # Cobertura C-059: «¿tienen tabla?» → explorar_categoria NOT_FOUND contestaba «No pude consultar el catálogo».
+    from asistendero.agente.herramientas.observations import error_envelope
+    from asistendero.agente.respuesta.answers import render_answer
+
+    def call(response):
+        return {"step": 1, "requested_tool": "explorar_categoria", "requested_arguments": {"categoria": "tabla"},
+                "executed": True, "arguments": {"categoria": "tabla"}, "response": response, "duration_ms": 1}
+
+    missing = error_envelope("error", "NOT_FOUND", "No hay esa categoría.", "catalog")
+    status, text = render_answer("¿tienen tabla?", [call(missing)], context={"turnos": []})
+    assert status == "clarify" and "No pude consultar" not in text and "$" not in text
+    broken = error_envelope("error", "TOOL_FAILURE", "La herramienta falló.", "agent_validation")
+    assert render_answer("¿tienen tabla?", [call(broken)], context={"turnos": []})[0] == "tool_error"
+
+
+def test_a_store_topic_the_store_never_gave_is_not_a_catalog_search():
+    # Humo de Carluz (07-11, CL-25): «¿hacen domicilios?» → consultar_info_tienda NOT_FOUND pedía «qué producto buscas».
+    from asistendero.agente.herramientas.observations import error_envelope
+    from asistendero.agente.respuesta.answers import render_answer
+
+    call = {"step": 1, "requested_tool": "consultar_info_tienda", "requested_arguments": {"tema": "domicilios"},
+            "executed": True, "arguments": {"tema": "domicilios"}, "duration_ms": 1,
+            "response": error_envelope("error", "NOT_FOUND", "La tienda no tiene ese dato.", "catalog")}
+    status, text = render_answer("¿hacen domicilios?", [call], context={"turnos": []})
+    assert status == "answered" and "no lo tengo" in text
+    assert "catálogo" not in text and "producto" not in text and "$" not in text
+
+
+def test_a_product_named_like_a_sale_unit_takes_the_quantity_said(tmp_path):
+    # C-009 y C-072 (cobertura sobre Carluz, corrida 3): «apárteme 2 caja octagonal» o «me llevo 1 rollo zuncho»
+    # nombran el producto, no una unidad de venta; el servidor rechazaba la cantidad y Grok la volvía a preguntar.
+    from asistendero.agente.reglas.order_rules import validate_order_request
+    from asistendero.agente.reglas.validation import Rejected, foreign_unit, sold_as
+
+    box = {"sku": "CLZ-0001", "nombre": "Caja octagonal", "unidad": "unidad", "variante": ""}
+    context = {"productos": [box], "pedidos": [], "turnos": []}
+    clean = validate_order_request("registrar_pedido", {"lines": [{"sku": "CLZ-0001", "quantity": 2}]},
+                                   current="apárteme 2 caja octagonal", reference="apárteme 2 caja octagonal",
+                                   calls=[], context=context)
+    assert clean["lines"] == [{"sku": "CLZ-0001", "quantity": 2}]
+    assert foreign_unit("me llevo 1 rollo zuncho", 1, sold_as("unidad", "", "Rollo zuncho")) is None
+    # Lo que no debe pasar: «un rollo de cable» sigue sin ser 1 metro, ni «2 cajas de tornillos» 2 tornillos.
+    assert foreign_unit("un rollo de cable", 1, sold_as("metro", "12 AWG", "Cable eléctrico")) == "rollo"
+    assert foreign_unit("2 cajas de tornillos", 2, sold_as("unidad", "1/4", "Tornillo drywall")) == "caja"
+    cable = {"sku": "CLZ-0002", "nombre": "Cable de prueba", "unidad": "metro", "variante": "2x12"}
+    try:
+        validate_order_request("registrar_pedido", {"lines": [{"sku": "CLZ-0002", "quantity": 1}]},
+                               current="apárteme un rollo de cable", reference="apárteme un rollo de cable",
+                               calls=[], context={"productos": [cable], "pedidos": [], "turnos": []})
+    except Rejected as rejected:
+        assert rejected.code == "QUANTITY_NOT_GROUNDED"
+    else:
+        raise AssertionError("un rollo de cable no son 1 metro")
+
+
+def test_a_session_reply_never_offers_a_bargain_even_with_the_real_price(chat):
+    # C-115 y C-117 (cobertura sobre Carluz, corrida 4): tras cotizar, «¿en cuánto me lo deja de contado?» recibió
+    # «De contado te lo dejo en $2.800 la unidad». La cifra era la del catálogo y pasaba la verificación, pero la
+    # frase ofrece una rebaja que la tienda no da.
+    import re
+
+    from asistendero.tienda.vocabulario import format_cop, normalize_text
+
+    turn, sessions, _, catalog, _ = chat
+    session = sessions.create()
+    price = format_cop(catalog.get("PVC-050").price_cop)
+    turn(session, "¿cuánto vale el tubo PVC de 1/2 para agua?", tool("buscar_productos", items=[PVC_HALF]),
+         say(f"Sí, tenemos tubo PVC de 1/2 para agua a {price} el metro. ¿Cuántos metros necesitas?", "productos"))
+    asked = turn(session, "¿en cuánto me lo deja de contado?", tool("buscar_productos", items=[PVC_HALF]),
+                 say(f"De contado te lo dejo en {price} el metro. ¿Cuántos metros te llevo?", "productos"))
+    reply = normalize_text(asked["respuesta"])
+    assert "dejo en" not in reply and "de contado" not in reply and "rebaj" not in reply
+    # Lo que no debe pasar tampoco: una cifra distinta a la del catálogo.
+    assert set(re.findall(r"\$[\d.]+", asked["respuesta"])) <= {price}

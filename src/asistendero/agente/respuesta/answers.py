@@ -15,7 +15,7 @@ from asistendero.agente.reglas.context_resolution import (
     affirms_active_item, filter_matches_by_spec, pending_quantity_target, remembered_spec_for_item,
 )
 from asistendero.agente.reglas.validation import (
-    foreign_unit, fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message,
+    foreign_unit, sold_as, fractional_amount, grounded_products, grounded_selection, naming_numbers, quantities_in_message,
     without_negated,
 )
 from asistendero.agente.respuesta.order_replies import order_allowances, order_reply, rushes_the_customer
@@ -39,7 +39,9 @@ FORBIDDEN_CLAIMS = re.compile(
     r"\b(reservad|apartad|separad|registrad|confirmad|agendad|programad|pagad|despachad|entregad|facturad|descuent"
     r"|compatib|equivalen|abiert|cerrad)\w*"
     r"|\b(?:apart|reserv)ar\w*"
-    r"|\bpedido\s+(?:creado|registrado|confirmado|listo)",
+    r"|\bpedido\s+(?:creado|registrado|confirmado|listo)"
+    # «De contado te lo dejo en $2.800» ofrece una rebaja aunque la cifra sea la del catálogo (C-115, corrida 4).
+    r"|\b(?:te|se)\s+lo\s+(?:dejo|rebajo|pongo)\s+en\b|\bde\s+contado\b|\brebaj\w*",
     re.I,
 )
 
@@ -206,7 +208,18 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             return "clarify", _join([f"¿{many} {units(unit, 2)} {of_the(item_name)} necesitas?", *demo])
         if ordinal_note := unresolved_ordinal(asked_raw, context):
             return "clarify", _join([ordinal_note, *demo])
-        if any(call["response"]["status"] == "error" for call in calls):
+        codes = [(call["response"].get("error") or {}).get("code") for call in calls if call["response"]["status"] == "error"]
+        # «¿tienen tabla?» con explorar_categoria → NOT_FOUND contestaba «No pude consultar el catálogo» (cobertura,
+        # C-059): el catálogo sí respondió, solo que no hay esa categoría.
+        if codes and all(code == "NOT_FOUND" for code in codes):
+            missing = {call["requested_tool"] for call in calls if call["response"]["status"] == "error"}
+            if missing == {"consultar_info_tienda"}:
+                # Un tema que la tienda no ha dado («¿hacen domicilios?» en Carluz): no es un producto que buscar.
+                return "answered", _join(["Ese dato de la tienda no lo tengo; confírmalo directamente en el mostrador.",
+                                          *demo])
+            return "clarify", _join(["No lo encontré con ese nombre en el catálogo. ¿Me dices qué producto buscas y, "
+                                     "si la sabes, la medida o referencia?", *demo])
+        if codes:
             return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
                                   "existencias verificados. Intenta de nuevo en unos minutos.")
         return "not_verified", ("No pude verificar ese producto en el catálogo. ¿Me dices qué producto y qué "
@@ -460,7 +473,7 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     # X-06 (corrida 39): el cable se vende por metro y Grok escribió «un rollo … te sale a $2.700 el metro», como si
     # el rollo costara eso. Con la cantidad en otra unidad de venta, la respuesta determinista pregunta.
     asked_now = message if current is None else current
-    if not quote and any(foreign_unit(asked_now, quantity, f"{product.unit} {product.variant}")
+    if not quote and any(foreign_unit(asked_now, quantity, sold_as(product.unit, product.variant, product.name))
                          for product in selected.values() for quantity in quantities_in_message(asked_now)):
         return False
     if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:
