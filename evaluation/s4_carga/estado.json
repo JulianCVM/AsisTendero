@@ -1,0 +1,9 @@
+{
+  "inicio": "2026-11-07T15:35:09.884909+00:00",
+  "horas": 12.25,
+  "tareas": 1300,
+  "intervalo_s": 33.92307692307692,
+  "commit": "970dbd5",
+  "src_dirty": false,
+  "modelo": "grok-4.20-0309-non-reasoning"
+}
