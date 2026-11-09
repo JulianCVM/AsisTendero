@@ -365,6 +365,25 @@ El reporte guarda en `.local/` los eventos completos, `run_id`, versión del pro
 
 Las mediciones de `evaluation/historico/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
 
+## Punto de entrada del harness del reto
+
+El reto evalúa la autonomía con un harness propio que corre sus casos contra el agente. `entregas/harness.py` (`asistendero-harness`) es ese punto de entrada. No es un camino aparte: cada turno pasa por `run_turn`, igual que un cliente del visor, con barreras, Grok, herramientas validadas, respuesta verificada, pedidos y baneo. Comandos y formatos, en el README («Harness del reto»).
+
+- **Entrada** (`harness_casos.read_cases`):
+  - JSONL, un arreglo JSON o un `.txt`;
+  - casos de un mensaje o de varios turnos, con foto opcional;
+  - nombres en español o en inglés, y turnos al estilo Chat Completions. Los turnos que no son del cliente (`role` distinto de `user`) se ignoran: el agente da sus propias respuestas.
+
+  Como el reto no publicó el formato de su harness, la entrada es flexible. Los límites están en constantes (`MAX_CASES`, `MAX_INPUT_BYTES`, `MAX_ID_CHARS`; turnos con `MAX_TURNS_PER_SESSION`; fotos con `MAX_PHOTO_BYTES`). Pasado uno, el caso o el archivo se rechaza con su motivo; nada se recorta. El largo del mensaje lo valida el agente, como con cualquier cliente.
+- **Aislamiento:** cada caso es una sesión nueva sobre una copia de la tienda en una carpeta temporal. Ningún caso hereda pedidos, memoria ni existencias apartadas de otro. La tienda real nunca se crea desde la siembra.
+- **Salida** (`turn_output`):
+  - una línea JSON por caso, escrita apenas termina;
+  - por turno: estado, respuesta, herramientas pedidas (con las rechazadas y su código), barreras, llamadas a Grok, tokens, costo, latencia, `run_id` y `prompt_version`.
+
+  Una sesión baneada responde `SESSION_BANNED` sin Grok. Un fallo inesperado termina el caso con `HARNESS_FAILURE` y solo el tipo de excepción: el mensaje del SDK puede traer datos de la solicitud.
+- **Consumo:** cada turno con costo deja una línea en `.local/harness/bitacora.jsonl` (`ConsumptionLog`), sin el texto del cliente, para que el gasto quede ligado a una tarea. `--budget-usd` deja de empezar casos al llegar al tope, y el modelo se valida contra las familias del reglamento antes de llamar a la pasarela.
+- **Contenedor:** el `Dockerfile` usa este punto de entrada, corre como un usuario sin privilegios y guarda bases y bitácora en el volumen `/app/.local` (`docs/DESPLIEGUE.md`).
+
 ## Límite siguiente
 
 Para un producto real hay que reemplazar `MockCatalog` por herramientas autorizadas de negocio, con identidad, sede y permisos verificados. Después de cerrar los contratos correspondientes, se agregarían carrito y acciones idempotentes sobre la memoria de sesión que ya existe. El bucle de decisiones con un plan JSON estructurado es una elección de este prototipo; los `tool_calls` nativos son una alternativa opcional, y ninguno de los dos es un requisito oficial del reto.

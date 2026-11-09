@@ -237,16 +237,45 @@ Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Secciones: **Hoy** (cuatr
 
 `--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. Con `python -m asistendero --demo`, el chat del visor también usa esa tienda. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio): explica el producto y trae una demo en un celular que se reproduce sola con casos fijos (no llama a Grok), junto a lo que pasa por dentro y lo que ve el tendero. **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
 
+### Harness del reto: casos propios contra el agente
+
+`asistendero-harness` (o `python -m asistendero.entregas.harness`) corre casos ajenos contra el mismo agente que atiende el chat y devuelve **una línea JSON por caso**. Cada turno llama a Grok con la llave del `.env` y **consume créditos**.
+
+```powershell
+.\.venv\Scripts\asistendero-harness.exe casos.jsonl --salida resultados.jsonl
+.\.venv\Scripts\asistendero-harness.exe casos.jsonl --tienda carluz --budget-usd 2 --concurrencia 3
+.\.venv\Scripts\asistendero-harness.exe --mensaje "Busco tubo PVC de 1/2 para agua"
+Get-Content casos.jsonl | .\.venv\Scripts\asistendero-harness.exe -
+```
+
+- **Entrada:** JSONL (un caso por línea), un arreglo JSON o un `.txt` con un mensaje por línea.
+  - Un caso de un turno: `{"id": "c1", "mensaje": "Busco tubo PVC de 1/2"}`.
+  - Una conversación: `{"id": "c2", "turnos": ["Busco tubo PVC de 1/2", "dame 3 metros de ese"]}`.
+  - Un turno con foto: `{"mensaje": "¿tienen esta?", "foto": "ruta.jpg"}`; la ruta es relativa al archivo de casos.
+  - También se aceptan `message`, `input`, `messages` y turnos al estilo Chat Completions (`{"role": "user", "content": "..."}`).
+- **Salida:** cada caso trae `id`, `tienda`, `modelo`, `error`, `llamadas_grok`, `costo_usd`, `latencia_ms` y sus `turnos`. Cada turno trae:
+  - `respuesta` y `estado`;
+  - las `herramientas` pedidas, con las ejecutadas y las rechazadas con su código;
+  - las `barreras` que actuaron;
+  - tokens, costo, latencia, `run_id` y `prompt_version`.
+
+  El resumen de la corrida va a la salida de errores.
+- **Aislamiento:** cada caso es una conversación nueva sobre una copia de la tienda en una carpeta temporal. Lo que un caso aparta no cambia otro, y la base original no se toca.
+- **Tiendas:** `--tienda ferreteria` (predeterminada) y `mercado` son ficticias. `carluz` usa el inventario real, que primero hay que importar.
+- **Límites:** hasta 2.000 casos por corrida, 40 turnos por conversación y fotos de 1,5 MB. Un caso que no se entiende queda con `error: CASE_INVALID` y no se ejecuta; un fallo inesperado termina el caso con `HARNESS_FAILURE`, sin mostrar la excepción.
+- **Bitácora de consumo:** cada turno deja una línea en `.local/harness/bitacora.jsonl` (`--bitacora` la cambia), con caso, modelo, prompt, llamadas, tokens y costo, sin el texto del cliente.
+
 ### Docker
 
-El repositorio incluye un Dockerfile que instala el paquete y crea el catálogo de prueba durante la construcción:
+La imagen corre el harness como un usuario sin privilegios. No guarda datos ni la llave: las bases, las sesiones y la bitácora van en el volumen `/app/.local`, y el catálogo ficticio se crea ahí en el primer uso.
 
 ```powershell
 docker build -t asistendero .
-docker run --rm --env-file .env asistendero "Busco tubo PVC de 1/2 para agua"
+docker run --rm --env-file .env -v asistendero-datos:/app/.local asistendero --mensaje "Busco tubo PVC de 1/2 para agua"
+docker run --rm -i --env-file .env -v asistendero-datos:/app/.local asistendero - < casos.jsonl
 ```
 
-Esta ruta de ejecución está disponible en el proyecto; las verificaciones documentadas de este corte se realizaron con Python local.
+Para el inventario real se monta la carpeta `.local` que tiene `carluz/tienda.sqlite3` y se agrega `--tienda carluz`. El contenedor no publica el visor ni el panel, porque no tienen usuarios ([docs/DESPLIEGUE.md](docs/DESPLIEGUE.md)).
 
 ## Pruebas y evidencia
 
@@ -330,7 +359,7 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. `hoja_xlsx.py`, `carluz.py`, `carluz_vocabulario.py` e `importar_carluz.py`: importación del inventario real. `fotos/` guarda una foto libre de Wikimedia Commons por familia (208 de 246, revisadas a ojo), con `fotos.json` y `CREDITOS.md`. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py`, `harness_flow.py` (mapa del harness atado al grafo real) y `photo_flow.py` (recorrido de una foto atado a sus funciones). |
 | `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_costs.py` (costo por tarea, por mensaje, por llamada a Grok y por herramienta), `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
-| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
+| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`), `estaticos.py` y `harness.py` con `harness_casos.py` (casos ajenos para el harness del reto). |
 | `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
 | `tools/mostrador/` | Generador de la tienda isométrica de «Cómo funciona» en `/inicio` (`node tools/mostrador/build.mjs`); usa el mismo kit de anatomy. |
