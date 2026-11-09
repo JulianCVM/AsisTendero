@@ -363,7 +363,7 @@ Desde S4 hubo 257 casos en diecisiete suites. La última es `fallas` (38: casos 
 
 El reporte guarda en `.local/` los eventos completos, `run_id`, versión del prompt, modelo, **commit evaluado y si `src/` tenía cambios sin commit** (`commit`, `src_dirty`), herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia. Un caso pasa si el estado coincide y cada SKU esperado aparece en lo que el servidor consultó, cotizó **o respaldó en la búsqueda** (`grounded_products`): un caso `found` no necesita llamar a `consultar_disponibilidad`, porque el SKU ya lo respalda el servidor. Además de ese reporte final, cada caso agrega un renglón a `.local/eval-*.partial.jsonl` apenas termina (modelo, prompt, commit, llamadas, tokens y costo): en S3 cinco corridas se cortaron por falta de memoria del equipo sin dejar reporte. Los resultados reales verificados están en `evaluation/S2_EVIDENCIA.md` y `evaluation/S3_EVIDENCIA.md`.
 
-Las mediciones de `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
+Las mediciones de `evaluation/historico/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
 
 ## Límite siguiente
 
