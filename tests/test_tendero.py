@@ -944,13 +944,17 @@ def test_extra_keys_never_slip_through_a_panel_action(server):
     assert "Iluminación" in [item["nombre"] for item in _get(server, "/api/categorias")["categorias"]]
 
 
-def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path):
+def test_the_demo_store_is_coherent_and_lives_apart_from_the_real_one(tmp_path, monkeypatch):
     from asistendero.datos.seed import DEFAULT_DB_PATH
     from asistendero.entregas.demo import build_demo
+    from asistendero.tienda import reloj
 
-    database, sessions_path = build_demo(tmp_path / "demo")
+    # La historia «de hoy» de la demo cubre las últimas horas: con el reloj real, la prueba fallaba de madrugada.
+    now = datetime(2026, 10, 22, 15, 30, tzinfo=BOGOTA)
+    monkeypatch.setattr(reloj, "local_now", lambda: now)
+    database, sessions_path = build_demo(tmp_path / "demo", now=now)
     assert database.parent == tmp_path / "demo" and database.resolve() != DEFAULT_DB_PATH.resolve()
-    instance = tendero.make_server(0, Inventory(database), sessions=SessionStore(sessions_path))
+    instance = tendero.make_server(0, Inventory(database), sessions=SessionStore(sessions_path, lambda: now))
     try:
         views = instance.views
         summary = views.summary()
