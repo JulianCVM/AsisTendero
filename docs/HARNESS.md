@@ -383,6 +383,7 @@ El reto evalúa la autonomía con un harness propio que corre sus casos contra e
   Una sesión baneada responde `SESSION_BANNED` sin Grok. Un fallo inesperado termina el caso con `HARNESS_FAILURE` y solo el tipo de excepción: el mensaje del SDK puede traer datos de la solicitud.
 - **Consumo:** cada turno con costo deja una línea en `.local/harness/bitacora.jsonl` (`ConsumptionLog`), sin el texto del cliente, para que el gasto quede ligado a una tarea. `--budget-usd` deja de empezar casos al llegar al tope, y el modelo se valida contra las familias del reglamento antes de llamar a la pasarela.
 - **Contenedor:** el `Dockerfile` usa este punto de entrada, corre como un usuario sin privilegios y guarda bases y bitácora en el volumen `/app/.local` (`docs/DESPLIEGUE.md`).
+- **Probado con Grok real** el 10-11-2026, en local y en el contenedor (evidencia S4, «Prueba de humo del harness del reto»). Esa prueba destapó que la búsqueda tomaba como opciones de lo pedido productos que solo sirven *para* eso («Bombillo para nevera» ante «¿venden neveras?»). Desde `6558d8a`, `destination_only` (`catalog.py`) los deja como lo más parecido, salvo que el cliente nombre el producto o Grok pida por uso.
 
 ## Límite siguiente
 

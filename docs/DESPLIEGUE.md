@@ -1,6 +1,6 @@
 # Despliegue: contenedor y modo desatendido
 
-**Estado (09-11-2026):** el **contenedor ya existe**. El `Dockerfile` corre el harness del reto (`asistendero-harness`) con un usuario sin privilegios y sin datos en la imagen; ver «Qué cambia respecto al `Dockerfile` anterior». Se construyó y se probó sin Grok: la siembra crea el catálogo ficticio en el volumen y, sin llave, el proceso termina con código 2 antes de llamar a la pasarela. Falta una corrida con Grok dentro del contenedor. El **modo desatendido ya existe** (07-11-2026): `evaluacion/desatendido.py`, con la cola de `carga_carluz.py` y la bitácora de `bitacora_carga.py`; ver «Modo desatendido» abajo. Lo pidió Julian el 07-11-2026
+**Estado (09-11-2026):** el **contenedor ya existe**. El `Dockerfile` corre el harness del reto (`asistendero-harness`) con un usuario sin privilegios y sin datos en la imagen; ver «Qué cambia respecto al `Dockerfile` anterior». Se construyó y se probó sin Grok: la siembra crea el catálogo ficticio en el volumen y, sin llave, el proceso termina con código 2 antes de llamar a la pasarela. El 10-11-2026 corrió con Grok real dentro del contenedor, sobre la ferretería y con la base de Carluz montada (evidencia S4, «Prueba de humo del harness del reto»). El **modo desatendido ya existe** (07-11-2026): `evaluacion/desatendido.py`, con la cola de `carga_carluz.py` y la bitácora de `bitacora_carga.py`; ver «Modo desatendido» abajo. Lo pidió Julian el 07-11-2026
 para ir diseñando el despliegue con el inventario real de Ferretería Carluz y para el hito S4 (mil unidades de trabajo,
 doce horas desatendido y bitácora completa).
 
@@ -103,5 +103,5 @@ si el costo real sobre el catálogo de Carluz resulta mayor que el medido.
 1. [Hecho] Permiso del tendero (confirmado por Julian el 07-11-2026) y datos de la tienda.
 2. [Hecho] Cola, bitácora, ritmo, reanudación y tope del modo desatendido, con pruebas y sin Grok.
 3. Corrida real corta de `cases_carluz.json` y luego la de doce horas, desde el commit de esta rama.
-4. [Hecho] Imagen sin datos, con volumen y usuario sin privilegios, probada sin Grok (09-11-2026). Falta una corrida
-   corta con Grok dentro del contenedor.
+4. [Hecho] Imagen sin datos, con volumen y usuario sin privilegios, probada sin Grok (09-11-2026) y con Grok real
+   (10-11-2026).

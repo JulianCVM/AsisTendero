@@ -80,7 +80,7 @@ propio.
    El alcance del corte vigente está en el plan del corte del vault PulsoTienda, fuera del repositorio (S3: nota
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
-   - `tokens`, `category_stems` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
+   - `tokens`, `category_stems`, `destination_only` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
    - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
      (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
    - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
