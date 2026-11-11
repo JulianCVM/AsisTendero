@@ -313,3 +313,21 @@ def test_kilos_of_the_measure_are_not_a_quantity():
     assert sale_units("cemento de 50 kilos") <= {"kilo"}
     assert foreign_unit("2 bultos de cemento de 50 kilos", 2, "bulto 50kg") is None
     assert foreign_unit("3 kilos de clavos", 3, "libra 2 pulgada") == "kilo"
+
+
+def test_a_product_that_only_serves_what_was_asked_is_not_one_of_its_options(catalog):
+    # Humo del harness sobre Carluz (10-11-2026): «¿venden neveras?» respondía «De nevera tengo estas opciones» con
+    # bombillos para nevera. Lo pedido que solo aparece tras «para» es el destino del producto, no lo que es.
+    sink = catalog.search(ProductQuery("lavaplatos", product="lavaplatos"), limit=10)
+    assert not sink.matches
+    assert sink.nearby and all(" para lavaplatos" in item.name for item in sink.nearby)
+    tube = catalog.search(ProductQuery("tubo", product="tubo"), limit=10)
+    assert tube.matches and all(item.name.startswith("Tubo") for item in tube.matches)
+    # Si el cliente nombra el producto, el destino no le quita nada: la llave para tubo sigue siendo una llave.
+    wrench = catalog.search(ProductQuery("llave para tubo", product="llave"), limit=10)
+    assert "Llave para tubo" in {item.name for item in wrench.matches}
+    whole = catalog.search(ProductQuery("grifo para lavaplatos", product="grifo para lavaplatos"), limit=10)
+    assert not catalog.search(ProductQuery("lavaplatos"), limit=10).matches
+    by_use = catalog.search(ProductQuery("algo para agua", use="agua"), limit=10)
+    assert any(item.name == "Tubo PVC presión para agua" for item in by_use.matches)
+    assert [item.name for item in whole.matches][:1] == ["Grifo para lavaplatos"]
