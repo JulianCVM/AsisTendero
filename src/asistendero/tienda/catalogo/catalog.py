@@ -114,6 +114,20 @@ def tokens(value: str, synonyms: bool = True) -> set[str]:
     return set(_cached_tokens(value, synonyms))
 
 
+def destination_only(name: str, type_words: set[str]) -> bool:
+    """Lo pedido solo aparece tras «para» en el nombre: el producto sirve para eso, no lo es («Bombillo para nevera»)."""
+    words = normalize_text(name).split()
+    if not type_words or "para" not in words:
+        return False
+    cut = words.index("para")
+    return not tokens(" ".join(words[:cut])) & type_words and bool(tokens(" ".join(words[cut + 1:])) & type_words)
+
+
+def category_stems(text: str) -> set[str]:
+    """Primeras seis letras de cada palabra: «tornillos» encuentra «Tornillería y fijación»."""
+    return {word[:6] for word in tokens(text) if len(word) >= 4}
+
+
 def covers(value: str, words: set[str]) -> bool:
     """Cada palabra de ``value`` está en ``words`` en alguna de sus formas: «galones» cubre «galón»."""
     return all(_forms(word) & words for word in _raw_words(value))
@@ -208,11 +222,15 @@ class MockCatalog:
             score += 5 * len(query_measures & _cached_measures(f"{row['name']} {row['variant']}"))
             product = Product(**{key: row[key] for key in Product.__dataclass_fields__})
             entry = (score, product)
-            if missing:
+            # «¿Venden neveras?» no tiene como opciones los bombillos para nevera: a lo sumo son lo más parecido
+            # (humo del harness sobre Carluz, 10-11-2026).
+            # Sin tipo, ancla el texto; con un uso («algo para agua»), el destino es justo lo que se pide.
+            serves = destination_only(row["name"], type_words or (set() if request.use else query_words))
+            if missing or serves:
                 # Mostrar otras presentaciones de la misma categoría solo si no hubo exactos. Una cercana que
                 # cambia el uso o el material (conduit eléctrico frente a tubo para agua) va detrás de una que
                 # solo cambia la medida, aunque coincida en la medida.
-                nearby.append((score - 20 * len({"use", "material"} & set(missing)), product))
+                nearby.append((score - 20 * (len({"use", "material"} & set(missing)) + serves), product))
             else:
                 exact.append(entry)
 

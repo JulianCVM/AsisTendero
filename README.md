@@ -2,7 +2,7 @@
 
 **AsisTendero** es un agente conversacional basado en Grok que busca ayudar a ferreterías y tiendas de barrio colombianas a atender consultas y operar con información confiable. Forma parte de **PulsoTienda**, la plataforma que conecta conversaciones, catálogo, inventario y decisiones del comercio: PulsoTienda es el producto (panel del tendero y página pública) y AsisTendero, el agente que atiende el chat.
 
-Este repositorio contiene la **versión ejecutable del corte S3**: recibe mensajes escritos, sueltos o dentro de una conversación con memoria, y deja que Grok decida cuál de **cinco herramientas del servidor** necesita (buscar productos, consultar disponibilidad, calcular una cotización informativa, consultar la información de la tienda y explorar categorías). El servidor filtra las preguntas trampa antes de Grok, valida cada solicitud antes de ejecutarla sobre un catálogo ficticio de ferretería y responde solo con datos comprobados. También incluye una interfaz local para explorar cada ejecución, un mapa del harness y un evaluador de 43 casos con comparación de modelos y costo por tarea. El piloto con un comercio real y las funciones comerciales más amplias siguen en definición y desarrollo.
+Este repositorio contiene la **versión ejecutable del corte S4**: recibe mensajes escritos o fotos, sueltos o dentro de una conversación con memoria, y deja que Grok decida cuál de **diez herramientas del servidor** necesita: cinco de consulta (buscar productos, consultar disponibilidad, calcular una cotización informativa, consultar la información de la tienda y explorar categorías) y, en una conversación, cinco de pedidos para recoger. El servidor filtra las preguntas trampa y las inyecciones antes de Grok, valida cada solicitud antes de ejecutarla sobre el catálogo y responde solo con datos comprobados. Trabaja sobre un catálogo ficticio de ferretería o sobre el inventario real de Ferretería Carluz, que se importa en local y no se sube. También incluye un visor local para explorar cada ejecución, el panel del tendero, un evaluador de 345 casos con costo por tarea y un modo desatendido que corrió 12 horas sobre el inventario real.
 
 ## El problema
 
@@ -10,7 +10,7 @@ En muchos comercios pequeños, los productos, precios, existencias y conversacio
 
 La visión de PulsoTienda es que el agente pueda acompañar el recorrido comercial y apoyar al dueño en la operación diaria. La primera etapa se concentra en una pregunta básica: **¿puede entender una solicitud de un cliente, buscar únicamente lo pertinente y contestar sin inventar productos, precios ni disponibilidad?**
 
-El primer piloto previsto es una ferretería de una sede. El establecimiento, su catálogo y sus datos aún no están definidos; por eso esta versión trabaja con un catálogo de demostración de 435 variantes en 12 categorías. Para evaluar al agente fuera de la ferretería, la misma base trae una segunda tienda ficticia, una tienda de barrio de mercado diario con 108 productos (granos, lácteos, huevos, frescos, aseo, bebidas y mecato), que solo usa el evaluador.
+El comercio con el que se trabaja es una ferretería de una sede, Ferretería Carluz, que entregó su inventario en Excel (2.032 productos). Ese inventario se importa a una base local que nunca sube al repositorio; quien clone el repositorio usa el catálogo de demostración, de 435 variantes en 12 categorías. Para evaluar al agente fuera de la ferretería, la misma base trae una segunda tienda ficticia, una tienda de barrio de mercado diario con 108 productos (granos, lácteos, huevos, frescos, aseo, bebidas y mecato), que solo usa el evaluador.
 
 ## Qué hace hoy
 
@@ -34,7 +34,7 @@ El primer piloto previsto es una ferretería de una sede. El establecimiento, su
   Si la rechaza, la herramienta no corre y Grok recibe el código.
 - Si falta una variante, pide precisión; si la medida no existe, muestra opciones cercanas sin tratarlas como equivalentes; si no hay existencias suficientes, dice cuánto hay.
 - Responde preguntas generales que no necesitan catálogo. Horario, pagos, domicilios o garantías solo se afirman si se consultaron con `consultar_info_tienda` en esa ejecución.
-- Usa la redacción de Grok solo si cada precio, SKU, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt ni datos internos; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
+- Usa la redacción de Grok solo si cada precio, cantidad, hora y política coincide con lo que devolvieron las herramientas y no trae fragmentos del prompt, datos internos ni el código interno (SKU) de un producto; si no, responde con los datos del catálogo. Un pedido de apartar, reservar o fiar recibe siempre la aclaración de que no es pedido ni reserva.
 - Termina cada fallo (catálogo caído, timeout, cuota, salida inválida, tope de herramientas) en un estado seguro con código, sin inventar precio ni existencias.
 - Muestra en el visor el resultado de cada prueba para evaluarla (estado, quién redactó, herramientas pedidas, ejecutadas y rechazadas, costo y latencia), un castillo animado del harness (cada edificio es un nodo o una barrera del flujo), un mapa interactivo del flujo de decisión y la traza en paneles legibles con el JSON a un clic.
 
@@ -72,7 +72,7 @@ Mensaje del cliente
 
 **Grok decide** qué información necesita y **el servidor ejecuta**: el modelo no tiene acceso SQL libre, no elige negocio ni sede y no puede imponer precio ni existencias. Una pregunta general suele necesitar una llamada a Grok; una cotización de un producto, unas cuatro (buscar, consultar, cotizar y responder). El detalle del contrato, las barreras y los códigos está en [docs/HARNESS.md](docs/HARNESS.md), y el visor lo muestra en su sección **Mapa del harness**.
 
-Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg», el agente busca ambos artículos, consulta `PVC-050` y `CEM-050` y responde «Te quedaría así: • 2 metros de tubo PVC presión para agua de 1/2 pulgada (a $8.500 el metro): $17.000 • 1 bulto de cemento gris de 50 kg: $39.500 · Total: $56.500», con precios de demostración y sin anunciar cuánto queda si el cliente no lo pregunta. En una conversación recuerda lo que el cliente va cotizando: tras «un metro de tubo conduit» y «agrega una manguera de abasto, ¿cuánto sería todo?» cotiza las dos cosas juntas, y tras listar tres tubos entiende «dame del primero 3 metros». Ante «Busco tubo PVC de 1 pulgada», indica que no encontró esa medida exacta y muestra las medidas cercanas sin afirmar que sirven para lo mismo. Ante «20 metros de PVC de 1/2», la cotización detecta que solo hay 12 y lo dice.
+Por ejemplo, ante «Necesito 2 metros de tubo PVC de 1/2 para agua y 1 bulto de cemento gris de 50 kg», el agente busca ambos artículos, consulta `PVC-050` y `CEM-050` y responde «Te quedaría así: • 2 metros de tubo PVC presión para agua de 1/2 pulgada (a $8.500 el metro): $17.000 • 1 bulto de cemento gris de 50 kg: $39.500 · Total: $56.500», con precios de demostración y sin anunciar cuánto queda si el cliente no lo pregunta. En una conversación recuerda lo que el cliente va cotizando: tras «un metro de tubo conduit» y «agrega una manguera de abasto, ¿cuánto sería todo?» cotiza las dos cosas juntas, y tras listar tres tubos entiende «dame del primero 3 metros». Ante «Busco tubo PVC de 1 pulgada», encuentra el tubo conduit de 1 pulgada, dice que está agotado y cuándo vuelve a llegar. Si lo pedido no existe, muestra lo más parecido sin afirmar que sirve para lo mismo: en el inventario real, «¿venden neveras?» responde que no las maneja y que lo más parecido son bombillos para nevera. Ante «20 metros de PVC de 1/2», la cotización detecta que solo hay 12 y lo dice.
 
 ## Tecnologías
 
@@ -237,16 +237,45 @@ Abre [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Secciones: **Hoy** (cuatr
 
 `--demo` rehace `.local/demo/` cada vez y no toca la base del chat ni del evaluador. Con `python -m asistendero --demo`, el chat del visor también usa esa tienda. La página pública de presentación está en [http://127.0.0.1:8766/inicio](http://127.0.0.1:8766/inicio): explica el producto y trae una demo en un celular que se reproduce sola con casos fijos (no llama a Grok), junto a lo que pasa por dentro y lo que ve el tendero. **Interpretar** en el asistente de bodega llama a Grok con la llave del reto (consume créditos); el resto del panel no llama a Grok.
 
+### Harness del reto: casos propios contra el agente
+
+`asistendero-harness` (o `python -m asistendero.entregas.harness`) corre casos ajenos contra el mismo agente que atiende el chat y devuelve **una línea JSON por caso**. Cada turno llama a Grok con la llave del `.env` y **consume créditos**.
+
+```powershell
+.\.venv\Scripts\asistendero-harness.exe casos.jsonl --salida resultados.jsonl
+.\.venv\Scripts\asistendero-harness.exe casos.jsonl --tienda carluz --budget-usd 2 --concurrencia 3
+.\.venv\Scripts\asistendero-harness.exe --mensaje "Busco tubo PVC de 1/2 para agua"
+Get-Content casos.jsonl | .\.venv\Scripts\asistendero-harness.exe -
+```
+
+- **Entrada:** JSONL (un caso por línea), un arreglo JSON o un `.txt` con un mensaje por línea.
+  - Un caso de un turno: `{"id": "c1", "mensaje": "Busco tubo PVC de 1/2"}`.
+  - Una conversación: `{"id": "c2", "turnos": ["Busco tubo PVC de 1/2", "dame 3 metros de ese"]}`.
+  - Un turno con foto: `{"mensaje": "¿tienen esta?", "foto": "ruta.jpg"}`; la ruta es relativa al archivo de casos.
+  - También se aceptan `message`, `input`, `messages` y turnos al estilo Chat Completions (`{"role": "user", "content": "..."}`).
+- **Salida:** cada caso trae `id`, `tienda`, `modelo`, `error`, `llamadas_grok`, `costo_usd`, `latencia_ms` y sus `turnos`. Cada turno trae:
+  - `respuesta` y `estado`;
+  - las `herramientas` pedidas, con las ejecutadas y las rechazadas con su código;
+  - las `barreras` que actuaron;
+  - tokens, costo, latencia, `run_id` y `prompt_version`.
+
+  El resumen de la corrida va a la salida de errores.
+- **Aislamiento:** cada caso es una conversación nueva sobre una copia de la tienda en una carpeta temporal. Lo que un caso aparta no cambia otro, y la base original no se toca.
+- **Tiendas:** `--tienda ferreteria` (predeterminada) y `mercado` son ficticias. `carluz` usa el inventario real, que primero hay que importar.
+- **Límites:** hasta 2.000 casos por corrida, 40 turnos por conversación y fotos de 1,5 MB. Un caso que no se entiende queda con `error: CASE_INVALID` y no se ejecuta; un fallo inesperado termina el caso con `HARNESS_FAILURE`, sin mostrar la excepción.
+- **Bitácora de consumo:** cada turno deja una línea en `.local/harness/bitacora.jsonl` (`--bitacora` la cambia), con caso, modelo, prompt, llamadas, tokens y costo, sin el texto del cliente.
+
 ### Docker
 
-El repositorio incluye un Dockerfile que instala el paquete y crea el catálogo de prueba durante la construcción:
+La imagen corre el harness como un usuario sin privilegios. No guarda datos ni la llave: las bases, las sesiones y la bitácora van en el volumen `/app/.local`, y el catálogo ficticio se crea ahí en el primer uso.
 
 ```powershell
 docker build -t asistendero .
-docker run --rm --env-file .env asistendero "Busco tubo PVC de 1/2 para agua"
+docker run --rm --env-file .env -v asistendero-datos:/app/.local asistendero --mensaje "Busco tubo PVC de 1/2 para agua"
+docker run --rm -i --env-file .env -v asistendero-datos:/app/.local asistendero - < casos.jsonl
 ```
 
-Esta ruta de ejecución está disponible en el proyecto; las verificaciones documentadas de este corte se realizaron con Python local.
+Para el inventario real se monta la carpeta `.local` que tiene `carluz/tienda.sqlite3` y se agrega `--tienda carluz`. El contenedor no publica el visor ni el panel, porque no tienen usuarios ([docs/DESPLIEGUE.md](docs/DESPLIEGUE.md)).
 
 ## Pruebas y evidencia
 
@@ -262,7 +291,7 @@ La página `/inicio` habla en lenguaje de negocio y no reproduce detalles técni
 
 | Garantía de la página | Dónde se cumple |
 |---|---|
-| Una cifra que no coincide con el catálogo no se envía | `reply_is_grounded` (`answers.py`): la redacción de Grok se usa solo si cada `$`, SKU y cantidad sale de las observaciones de esa ejecución; si no, responde la salida determinista del servidor. |
+| Una cifra que no coincide con el catálogo no se envía | `reply_is_grounded` (`answers.py`): la redacción de Grok se usa solo si cada `$` y cantidad sale de las observaciones de esa ejecución y no muestra ningún SKU; si no, responde la salida determinista del servidor. |
 | Con una medida ambigua se pregunta y no se elige por el cliente | `validate_request` (`validation.py`) y las opciones mostradas de `choices.py`; una opción cercana no es equivalente. |
 | Un intento de manipulación se bloquea antes de llegar al modelo | `detect_injection` y `blocked_reply` (`injection.py`): no llama a Grok y la conversación queda bloqueada hasta que el tendero la desbloquee. |
 | El pedido se confirma con el «sí» del cliente y lo apartado se libera a los 5 minutos | `validate_order_request` (`order_rules.py`) y `HOLD_MINUTES` (`orders.py`). |
@@ -271,7 +300,7 @@ La página `/inicio` habla en lenguaje de negocio y no reproduce detalles técni
 
 Cifras del repositorio: **345 casos de evaluación en 21 suites** ([cases.json](evaluation/cases.json)); **45 de ellos en la suite `inyeccion`**, con **34 ataques** que deben bloquearse antes de Grok y frases legítimas parecidas que deben atenderse; **10 herramientas** que Grok puede pedir (`TOOL_NAMES` de `grok.py`), y **más de 850 pruebas automáticas** que nunca llaman a Grok (`pytest -q`). Topes que el código hace cumplir: un mensaje de hasta **2.000 caracteres**, hasta **6 herramientas** por mensaje, lo apartado espera el «sí» **5 minutos**, hasta **3 pedidos activos** por conversación y la recogida se agenda con **hasta 7 días** de anticipación. `tests/test_tendero.py` compara estas cifras con su fuente.
 
-La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con Grok de los diez casos `S2-01` a `S2-10` y de dos fallos controlados (catálogo inaccesible y modelo inaccesible), con `run_id`, tokens, latencia y costo informado por la API. Con `s2-tools-v1` pasaron 7 de 10 casos y los dos fallos. Los tres que fallaron se corrigieron en `s2-tools-v2`. Con esa versión, los diez casos y los dos fallos pasaron en una sola corrida sobre el commit `ffcdde4`. Desde el 21-10-2026 el evaluador agrega un tercer fallo controlado (salida inválida del modelo, sin red) y guarda en cada reporte el commit evaluado; la corrida vigente da 10/10 casos y 3/3 fallos sobre `a6a190e`. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. Las verificaciones de [búsqueda estructurada](evaluation/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) y de [Semana 1](EVIDENCIA_SEMANA1.md) corresponden a versiones anteriores del agente.
+La [evidencia S2](evaluation/S2_EVIDENCIA.md) registra las corridas reales con Grok de los diez casos `S2-01` a `S2-10` y de dos fallos controlados (catálogo inaccesible y modelo inaccesible), con `run_id`, tokens, latencia y costo informado por la API. Con `s2-tools-v1` pasaron 7 de 10 casos y los dos fallos. Los tres que fallaron se corrigieron en `s2-tools-v2`. Con esa versión, los diez casos y los dos fallos pasaron en una sola corrida sobre el commit `ffcdde4`. Desde el 21-10-2026 el evaluador agrega un tercer fallo controlado (salida inválida del modelo, sin red) y guarda en cada reporte el commit evaluado; la corrida vigente da 10/10 casos y 3/3 fallos sobre `a6a190e`. Los casos son evidencia del flujo funcional; no constituyen una medida general de precisión. Las verificaciones de [búsqueda estructurada](evaluation/historico/VERIFICACION_BUSQUEDA_ESTRUCTURADA.md) y de [Semana 1](evaluation/historico/EVIDENCIA_SEMANA1.md) corresponden a versiones anteriores del agente.
 
 La [evidencia S3](evaluation/S3_EVIDENCIA.md) mide el set propio de **43 casos (48 turnos)** en cinco suites (S2, catálogo, tienda, seguridad y conversación) con costo por tarea. Con `s3-conversacion-v1` pasaron 33/43; corregidos los fallos, `s3-conversacion-v2` dio **42/43 y 3/3 fallos controlados sobre `76f86c4`**, con USD 0.0036 por tarea y 2,95 llamadas a Grok por tarea. El caso restante (C-08) se corrigió en `8a4ac95` y no se ha vuelto a medir. La comparación entre modelos Grok quedó interrumpida y sigue pendiente.
 
@@ -330,25 +359,25 @@ El paquete se organiza por lo que hace cada parte del sistema; el detalle y el p
 | `src/asistendero/datos/` | `catalog_data.py` y `catalog_ampliacion.py` (ferretería), `catalog_mercado.py` (tienda de mercado del evaluador) y `seed.py`: catálogos ficticios y base. `hoja_xlsx.py`, `carluz.py`, `carluz_vocabulario.py` e `importar_carluz.py`: importación del inventario real. `fotos/` guarda una foto libre de Wikimedia Commons por familia (208 de 246, revisadas a ojo), con `fotos.json` y `CREDITOS.md`. |
 | `src/asistendero/observabilidad/` | `tracing.py` y `pricing.py` (trazas, tokens y costo) y `harness_info.py`, `harness_flow.py` (mapa del harness atado al grafo real) y `photo_flow.py` (recorrido de una foto atado a sus funciones). |
 | `src/asistendero/evaluacion/` | `evaluate.py`, `eval_checks.py`, `eval_costs.py` (costo por tarea, por mensaje, por llamada a Grok y por herramienta), `eval_oracle.py` (precios y códigos sin respaldo, análisis de Grok y paráfrasis), `eval_sessions.py` y `eval_report.py`: casos de uno o varios turnos y de los dos negocios, pedidos, clientes a la vez, fallos controlados y costo por tarea. |
-| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`) y `estaticos.py`. |
+| `src/asistendero/entregas/` | Puntos de entrada: `cli.py` y `launcher.py` (comando único), `visor/` (puerto 8765), `panel/` (panel y `/inicio`, puerto 8766; `bandeja.py` ordena lo que hay que hacer hoy), `demo.py` (tienda de demostración, `--demo`), `estaticos.py` y `harness.py` con `harness_casos.py` (casos ajenos para el harness del reto). |
 | `entregas/web/` | Archivos de las pantallas: `comun/` (tema, fuentes y logo), `visor/`, `panel/` y `pagina/` (la página pública). |
 | `tools/castillo/` | Generador del castillo del harness (`node tools/castillo/build.mjs`, Node 18 o más); incluye el kit isométrico de anatomy con su licencia MIT. |
 | `tools/mostrador/` | Generador de la tienda isométrica de «Cómo funciona» en `/inicio` (`node tools/mostrador/build.mjs`); usa el mismo kit de anatomy. |
 | `tools/fotos/` | `descargar_fotos.py`: arma la biblioteca de fotos desde Wikimedia Commons, solo con licencia libre (`--todas` para rehacerla, `--hoja` para revisarla a ojo, `--candidatos` para elegir una foto; las elegidas y las familias sin foto quedan en `ELEGIDAS` y `SIN_FOTO`). |
 | `tests/` | Pruebas automatizadas. |
-| `evaluation/` | Casos y evidencia de verificaciones. |
-| `docs/` | Notas técnicas del prototipo. |
+| `evaluation/` | Casos y evidencia de verificaciones; `historico/` guarda las mediciones de la primera semana, que ya no miden el flujo actual. |
+| `docs/` | Notas técnicas del prototipo; `definiciones/` guarda los borradores de definición funcional (PT-001 a PT-004). |
 | `PLANIFICACION.md` y `DESIGN.md` | Backlog e identidad visual. |
 
 ## Estado y próximos pasos
 
-El agente ya atiende sobre el **inventario real de Ferretería Carluz** en local, pero **aún no ha corrido con Grok sobre él** ni está en operación con clientes de la tienda; sus valores están por confirmar como precios de venta (ver [docs/HARNESS.md](docs/HARNESS.md)). Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; gestiona pedidos para recoger, pero no pagos, fiados, domicilios ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
+El agente atiende sobre el **inventario real de Ferretería Carluz** en local. Con Grok real corrió 12 horas desatendido sobre él (1.300 consultas simuladas, 94,4 % exitosas, 2,99 USD; [evidencia S4](evaluation/S4_EVIDENCIA.md)), pero **no está en operación con clientes de la tienda**, y la columna de valor del Excel está por confirmar como precio de venta (ver [docs/HARNESS.md](docs/HARNESS.md)). Aún no integra WhatsApp, Supabase, Wompi, DIAN ni Platica.mx; gestiona pedidos para recoger, pero no pagos, fiados, domicilios ni compras a proveedores. La memoria de conversación es local, dura 12 horas y no guarda datos personales; ver [docs/CONVERSACION_Y_SEGURIDAD.md](docs/CONVERSACION_Y_SEGURIDAD.md). El panel comercial, el aislamiento entre negocios y las aprobaciones por rol pertenecen al desarrollo posterior. La ferretería piloto y las reglas operativas deben definirse con sus responsables.
 
 La visión y las tareas están organizadas en [PLANIFICACION.md](PLANIFICACION.md) y en el [tablero de PulsoTienda](https://github.com/users/JulianCVM/projects/9). El diseño aplicado al visor se documenta en [DESIGN.md](DESIGN.md). Las decisiones de dinero o crédito deberán quedar bajo autorización del dueño o de un rol delegado, y una confirmación de pago requerirá una fuente verificable.
 
 ## Relación con el Agent Challenge
 
-AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el recorrido **mensaje → Grok → procesamiento → respuesta**. El corte S2 agrega tres herramientas reales del servidor, el manejo de errores y las corridas registradas en la evidencia, con una clave de API real y un catálogo de prueba. El corte S3 agrega un set propio de 43 casos, el reporte de costo por tarea, la comparación entre los modelos Grok permitidos, sesiones de chat, dos herramientas de tienda y las barreras ante preguntas trampa. El corte S4 agrega pedidos para recoger con avisos de vencimiento, el panel del tendero, la lectura de mensajes mal escritos, pruebas de caos y la evaluación de conversaciones largas con varios clientes y modelos a la vez. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
+AsisTendero nació como proyecto del Agent Challenge. El corte S1 demostró el recorrido **mensaje → Grok → procesamiento → respuesta**. El corte S2 agrega tres herramientas reales del servidor, el manejo de errores y las corridas registradas en la evidencia, con una clave de API real y un catálogo de prueba. El corte S3 agrega un set propio de 43 casos, el reporte de costo por tarea, la comparación entre los modelos Grok permitidos, sesiones de chat, dos herramientas de tienda y las barreras ante preguntas trampa. El corte S4 agrega pedidos para recoger con avisos de vencimiento, el panel del tendero, la lectura de mensajes mal escritos, pruebas de caos y la evaluación de conversaciones largas con varios clientes y modelos a la vez; sobre el inventario real de Ferretería Carluz, la semana de carga corrió 1.300 unidades de trabajo en 12 horas sin intervención, con bitácora por tarea en `evaluation/s4_carga/`. El [repositorio público](https://github.com/JulianCVM/AsisTendero) y la documentación permiten seguir su evolución; las funciones descritas como próximas no se presentan como parte del flujo ya implementado.
 
 ## Licencia
 

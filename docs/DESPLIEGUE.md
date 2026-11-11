@@ -1,6 +1,6 @@
-# Despliegue: contenedor y modo desatendido (plan)
+# Despliegue: contenedor y modo desatendido
 
-**Estado:** el contenedor sigue siendo un plan. El **modo desatendido ya existe** (07-11-2026): `evaluacion/desatendido.py`, con la cola de `carga_carluz.py` y la bitácora de `bitacora_carga.py`; ver «Modo desatendido» abajo. Lo pidió Julian el 07-11-2026
+**Estado (09-11-2026):** el **contenedor ya existe**. El `Dockerfile` corre el harness del reto (`asistendero-harness`) con un usuario sin privilegios y sin datos en la imagen; ver «Qué cambia respecto al `Dockerfile` anterior». Se construyó y se probó sin Grok: la siembra crea el catálogo ficticio en el volumen y, sin llave, el proceso termina con código 2 antes de llamar a la pasarela. El 10-11-2026 corrió con Grok real dentro del contenedor, sobre la ferretería y con la base de Carluz montada (evidencia S4, «Prueba de humo del harness del reto»). El **modo desatendido ya existe** (07-11-2026): `evaluacion/desatendido.py`, con la cola de `carga_carluz.py` y la bitácora de `bitacora_carga.py`; ver «Modo desatendido» abajo. Lo pidió Julian el 07-11-2026
 para ir diseñando el despliegue con el inventario real de Ferretería Carluz y para el hito S4 (mil unidades de trabajo,
 doce horas desatendido y bitácora completa).
 
@@ -39,14 +39,18 @@ Se revisa si llegan varias sedes o varios procesos escribiendo a la vez.
                          tienda.sqlite3 · sesiones · bitácora
 ```
 
-### Qué cambia respecto al `Dockerfile` actual
+### Qué cambia respecto al `Dockerfile` anterior
 
-- Hoy corre `python -m asistendero.datos`, que **siembra el catálogo ficticio dentro de la imagen**. Para la tienda real
-  no debe haber datos en la imagen: la base entra por el volumen.
+- Antes corría `python -m asistendero.datos`, que **sembraba el catálogo ficticio dentro de la imagen**. Desde el
+  09-11-2026 no hay datos en la imagen: el catálogo ficticio se crea en el volumen `/app/.local` en el primer uso, y la
+  base real entra montando su carpeta (`.local/carluz/tienda.sqlite3`).
+- El punto de entrada es `asistendero-harness` (casos ajenos, salida JSON y bitácora de consumo en el volumen). Antes era
+  `asistendero`, que sin mensaje arrancaba el visor y el panel en `127.0.0.1` dentro del contenedor, donde nadie podía
+  abrirlos.
 - `.dockerignore` ya excluye `.env` y `.local`, y `*.xlsx` queda fuera de git. `*.xlsx` y `*.xls` también quedan
   fuera de la imagen por `.dockerignore`, para que un Excel suelto en la carpeta no termine en ella.
 - La llave entra por variable de entorno al arrancar (`--env-file`), nunca en la imagen.
-- Usuario sin privilegios, y `mem_limit`: la corrida 44 se cortó a los 207 casos porque la máquina se quedó sin memoria.
+- Usuario sin privilegios (`asistendero`, uid 10001, hecho) y `mem_limit` al correrlo: la corrida 44 se cortó a los 207 casos porque la máquina se quedó sin memoria.
   Con un límite y `restart: on-failure`, ese fallo queda acotado y el proceso continúa donde iba.
 
 ### Lo que el contenedor no expone todavía
@@ -99,4 +103,5 @@ si el costo real sobre el catálogo de Carluz resulta mayor que el medido.
 1. [Hecho] Permiso del tendero (confirmado por Julian el 07-11-2026) y datos de la tienda.
 2. [Hecho] Cola, bitácora, ritmo, reanudación y tope del modo desatendido, con pruebas y sin Grok.
 3. Corrida real corta de `cases_carluz.json` y luego la de doce horas, desde el commit de esta rama.
-4. Imagen sin datos, con volumen, y una corrida corta dentro del contenedor (pendiente).
+4. [Hecho] Imagen sin datos, con volumen y usuario sin privilegios, probada sin Grok (09-11-2026) y con Grok real
+   (10-11-2026).

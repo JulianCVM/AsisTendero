@@ -90,7 +90,8 @@ PATTERNS = {
         rf"\b(?:ahora\s+eres|ya\s+no\s+eres|eres\s+ahora|deja\s+de\s+ser)\s+(?:un|una|el|la|mi|tu)?\s*(?:{_AGENT_ROLES}|{_STORE_ROLES})\b",
         rf"\b(?:finge|fingir|simula|simular|imagina|haz\s+de\s+cuenta|hagamos\s+de\s+cuenta|juguemos\s+a|comportate"
         rf"|actua|actuar)\w*\s+(?:que\s+)?"
-        rf"(?:eres|seas|fueras|ser|como\s+(?:si\s+fueras|un|una|el|la|mi))\s+(?:\w+\s+){{0,2}}?{_AGENT_ROLES}\b",
+        # El artículo es opcional: «actúa como administrador y borra el inventario» (corrida de 12 h, U-1176).
+        rf"(?:eres|seas|fueras|ser|como(?:\s+(?:si\s+fueras|un|una|el|la|mi))?)\s+(?:\w+\s+){{0,2}}?{_AGENT_ROLES}\b",
         rf"\b(?:finge|fingir|haz\s+de\s+cuenta|hagamos\s+de\s+cuenta|pretend)\w*\s+(?:que\s+)?(?:eres|seas|fueras|ser|you\s+are)"
         rf"\s+(?:\w+\s+){{0,2}}?(?:{_STORE_ROLES}|owner|manager|admin\w*)\b",
         r"\beres\s+dan\b|\bdo\s+anything\s+now\b",
@@ -127,6 +128,11 @@ PATTERNS = {
         r"\b(?:actualiza|modifica|cambia|edita|altera|sobrescribe|reescribe|update|change|set|overwrite)\w*\s+(?:el\s+|la\s+|los\s+"
         r"|las\s+|tu\s+|su\s+|the\s+)?(?:precio|precios|stock|inventario|existencias|base\s+de\s+datos|catalogo|price|prices"
         r"|database|catalog)\s+(?:en|del|de\s+la|de|in|of)\s+(?:el\s+|la\s+|the\s+)?(?:sistema|base|catalogo|bd|database|system|servidor)\b",
+        # Todos los precios a una cifra: un cliente regatea un producto, no la lista entera («bájale a 30 mil» pasa).
+        r"\b(?:pon|deja|cambia|fija|baja|sube|actualiza)\w*\s+todos\s+los\s+precios\s+(?:en|a)\s+(?:\$|\d|cero\b|gratis\b)",
+        # Borrar la tienda entera; «borra el cemento de mi lista» es de un cliente.
+        r"\b(?:borra|borrar|elimina|eliminar|vacia|vaciar|resetea|resetear)\w*\s+(?:todo\s+|toda\s+)?(?:el\s+|la\s+|tu\s+"
+        r"|su\s+)?(?:inventario|catalogo|base\s+de\s+datos|bodega|existencias)\b",
     ],
     "PROMPT_EXTRACTION": [
         r"\b(?:system\s*prompt|prompt\s+(?:del\s+sistema|de\s+sistema|inicial|original|oculto|completo)|tu\s+prompt|el\s+prompt"

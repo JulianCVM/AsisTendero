@@ -11,8 +11,9 @@ El prototipo de AsisTendero para el Agent Challenge de Platica: un agente para f
 mensaje de un cliente, deja que **Grok** decida qué herramienta del servidor necesita y responde con precio y
 existencias leídos de un catálogo. Python 3.11+, **LangGraph** para el flujo, el SDK `openai` contra la pasarela del
 reto (`https://api.reto.pltk.mx/v1`) y un **catálogo SQLite 100 % ficticio** (`.local/mock_catalog_s3.sqlite3`, creado
-por `seed.py`). Hay tres puntos de entrada sobre el mismo grafo: terminal (`asistendero` con un mensaje o `--chat`),
-visor local (`asistendero-visual`) y evaluador (`python -m asistendero.evaluacion`); el panel del tendero
+por `seed.py`). Hay cuatro puntos de entrada sobre el mismo grafo: terminal (`asistendero` con un mensaje o `--chat`),
+visor local (`asistendero-visual`), evaluador (`python -m asistendero.evaluacion`) y harness del reto
+(`asistendero-harness`, casos ajenos con salida JSON); el panel del tendero
 (`asistendero-tendero`) administra inventario y pedidos sobre la misma base. `python -m asistendero` sin mensaje
 arranca el visor y el panel juntos sobre la misma tienda (`launcher.py`). Código, comentarios, documentación, commits
 y PR en **español**.
@@ -79,7 +80,7 @@ propio.
    El alcance del corte vigente está en el plan del corte del vault PulsoTienda, fuera del repositorio (S3: nota
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
-   - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
+   - `tokens`, `category_stems`, `destination_only` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
    - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
      (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
    - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
@@ -113,7 +114,7 @@ propio.
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
-   - `asks_assortment` y `full_category_listing` (`store_replies.py`).
+   - `asks_assortment`, `full_category_listing` y `explored_unnamed_category` (`store_replies.py`).
    - `Payments` y `check_payment` (`payments.py`); `sales_history` y `sales_summary` (`sales_history.py`);
      `review_reasons` (`sales.py`).
    - `Purchasing` (`purchasing.py`); `receive_stock` y `set_restock` (`inventory.py`); `CatalogAdmin`
@@ -131,7 +132,8 @@ propio.
      `comparison_markdown` (`cobertura_reporte.py`),
      `write_summary` (`bitacora_carga.py`).
    - `work_queue` (`bandeja.py`, la bandeja «Por hacer» de Hoy);
-     `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `PanelViews`
+     `product_svg` y `category_color` (`product_art.py`); `build_demo` (`demo.py`); `read_cases` (`harness_casos.py`), `run_cases`, `turn_output` y `ConsumptionLog`
+     (`harness.py`); `PanelViews`
      (`tendero_views.py`) y `PanelActions` (`tendero_actions.py`); `open_store`, `make_servers` y `run`
      (`launcher.py`).
 
@@ -215,7 +217,8 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
 | Cómo se atiende o se rotula la tienda real | `_CARLUZ_CHANGES` de `prompt.py` subiendo `CARLUZ_PROMPT_VERSION`; `store_identity` de `seed.py`; casos en `evaluation/cases_carluz.json`, sin precios ni existencias |
 | El modo desatendido de S4 (cola, ritmo, reanudación, bitácora) | `desatendido.py`, `carga_carluz.py` y `bitacora_carga.py` de `evaluacion/`, con su prueba en `tests/test_carluz.py`; la bitácora, en `evaluation/s4_carga/` |
 | Las colas de cobertura (conversaciones completas, asistente de bodega) y su matriz de capacidades | `cobertura_carluz.py`, `bodega_carluz.py` y `cobertura_reporte.py` de `evaluacion/`, con su prueba en `tests/test_carluz.py`; las bitácoras, en `evaluation/s4_cobertura/` y `evaluation/s4_bodega/` |
-| El contenedor | Plan en `docs/DESPLIEGUE.md` (aún sin construir) |
+| El punto de entrada del harness del reto (formatos de entrada, salida JSON, aislamiento, bitácora de consumo) | `harness_casos.py` (lectura y límites) y `harness.py` (ejecución y CLI) de `entregas/`, con su prueba en `tests/test_harness.py` |
+| El contenedor | `Dockerfile` (harness, usuario sin privilegios, datos en el volumen `/app/.local`); el plan, en `docs/DESPLIEGUE.md` |
 | Un producto ficticio | Una familia o variante en `FAMILIES` de `catalog_data.py` o en `EXTRA_FAMILIES` de `catalog_ampliacion.py` (nunca datos reales, ni un prefijo repetido); `seed.py` arma `PRODUCTS` |
 | La tienda de mercado del evaluador (productos, información, surtido) | `catalog_mercado.py`; su prompt, en `_MARKET_CHANGES` de `prompt.py` subiendo `MARKET_PROMPT_VERSION`; su prueba en `tests/test_mercado.py` |
 | Una comprobación de la evaluación que no dependa de `answers.py` | `eval_oracle.py`, con su prueba en `tests/test_eval_oracle.py` |
@@ -233,7 +236,8 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
   `search_findings` y `latest_quote` de `observations.py` y su docstring.
 - **Negocio y sede los fija el servidor.** Ni el mensaje ni Grok pueden elegirlos.
 - **Precio y existencias salen solo del catálogo**: nunca del mensaje del cliente ni de una cifra propuesta por Grok.
-  La redacción de Grok se usa solo si cada `$`, SKU y cantidad coincide con las observaciones de esa ejecución; si no,
+  La redacción de Grok se usa solo si cada `$` y cantidad coincide con las observaciones de esa ejecución y no muestra
+  ningún SKU (el código interno no es para el cliente; decisión de Julian del 08-11-2026); si no,
   se responde con la salida determinista.
 - **La cotización es informativa**: no crea pedido, reserva, pago ni factura (`reservation_created=false`).
 - **Un pedido solo existe si el cliente lo pidió** y `registrar_pedido` lo creó en su conversación. Confirmar exige su

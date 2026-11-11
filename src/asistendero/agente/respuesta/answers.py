@@ -116,6 +116,22 @@ def _join(parts: list[str]) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+def _plain_words(text: str) -> str:
+    return " ".join(re.findall(r"[\w/.]+", normalize_text(text)))
+
+
+def _part_of_found(query: str, found: list[Product], asked: str) -> bool:
+    """La búsqueda es un pedazo del nombre de un producto ya encontrado y el cliente lo dijo una sola vez.
+
+    Reintento de las fallas de la carga (U-0915, U-1288): los nombres reales llevan comas («Destornillador de golpe,
+    pala de 3/16») y Grok los partía en dos búsquedas; la segunda salía como otra lista de opciones. Dicho dos veces
+    («cemento blanco y cemento gris») son dos productos y no se omite.
+    """
+    part = _plain_words(query)
+    return bool(part) and _plain_words(asked).count(part) == 1 and any(
+        f" {part} " in f" {_plain_words(f'{item.name} {item.variant}')} " for item in found)
+
+
 def _option_to_product(item: dict) -> Product:
     return Product(
         sku=item.get("sku") or "",
@@ -211,15 +227,18 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         codes = [(call["response"].get("error") or {}).get("code") for call in calls if call["response"]["status"] == "error"]
         # «¿tienen tabla?» con explorar_categoria → NOT_FOUND contestaba «No pude consultar el catálogo» (cobertura,
         # C-059): el catálogo sí respondió, solo que no hay esa categoría.
-        if codes and all(code == "NOT_FOUND" for code in codes):
-            missing = {call["requested_tool"] for call in calls if call["response"]["status"] == "error"}
+        # Un argumento inválido es un pedido mal armado de Grok, no una caída: con él, el catálogo también respondió
+        # (corrida de 12 h, U-0744: «¿tienen sofá?» decía «No pude consultar el catálogo en este momento»).
+        if codes and "NOT_FOUND" in codes and set(codes) <= {"NOT_FOUND", "INVALID_ARGUMENT"}:
+            missing = {call["requested_tool"] for call in calls
+                       if (call["response"].get("error") or {}).get("code") == "NOT_FOUND"}
             if missing == {"consultar_info_tienda"}:
                 # Un tema que la tienda no ha dado («¿hacen domicilios?» en Carluz): no es un producto que buscar.
                 return "answered", _join(["Ese dato de la tienda no lo tengo; confírmalo directamente en el mostrador.",
                                           *demo])
             return "clarify", _join(["No lo encontré con ese nombre en el catálogo. ¿Me dices qué producto buscas y, "
                                      "si la sabes, la medida o referencia?", *demo])
-        if codes:
+        if codes and set(codes) != {"INVALID_ARGUMENT"}:
             return "tool_error", ("No pude consultar el catálogo en este momento, así que no tengo precios ni "
                                   "existencias verificados. Intenta de nuevo en unos minutos.")
         return "not_verified", ("No pude verificar ese producto en el catálogo. ¿Me dices qué producto y qué "
@@ -243,6 +262,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
     suitability = asks_suitability(asked)
     sentences, questions, statuses, products = [], [], [], {}
     last_selected: Product | None = None
+    chosen_before: list[Product] = []
     seen = set()
     for index, finding in enumerate(findings):
         finding = without_negated(asked, finding)
@@ -254,7 +274,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
         # dos veces; Z-33: «tubo PVC de 1/2» y «tubo PVC de 1/2 para agua» repetían las mismas opciones).
         same = (tuple(item.sku for item in matches), tuple(item.sku for item in nearby)) if matches or nearby else (
             finding["query"],)
-        if same in seen:
+        if same in seen or _part_of_found(finding["query"], chosen_before, asked):
             continue
         seen.add(same)
         for product in matches + nearby:
@@ -284,6 +304,7 @@ def render_answer(message: str, calls: list[ToolCall], context: dict | None = No
             statuses.append("not_found")
         elif selected:
             last_selected = selected
+            chosen_before.append(selected)
             stock = availability.get(selected.sku, {}).get("stock", selected.stock)
             first = not any(status == "found" for status in statuses)
             restock = restock_sentence(in_sentence(label(selected.name, selected.variant)),
@@ -476,7 +497,9 @@ def reply_is_grounded(reply: str, message: str, calls: list[ToolCall], context: 
     if not quote and any(foreign_unit(asked_now, quantity, sold_as(product.unit, product.variant, product.name))
                          for product in selected.values() for quantity in quantities_in_message(asked_now)):
         return False
-    if not set(re.findall(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply)) <= allowed_skus:
+    # El código interno no es para el cliente: ni uno observado (C-108, cobertura sobre Carluz: «(CLZ-1574)»). Decisión
+    # de Julian del 08-11-2026; las respuestas deterministas tampoco lo muestran.
+    if re.search(r"\b[A-Z]{2,5}-[A-Z0-9-]+\b", reply) or any(sku in reply for sku in allowed_skus):
         return False
     counts = re.findall(r"\b(\d+)\s+(?:metros?|bultos?|unidad(?:es)?|galon(?:es)?|libras?|rollos?|par(?:es)?|pliegos?|bolsas?|cajas?)\b", normalized)
     if any(int(count) not in allowed_counts for count in counts):
