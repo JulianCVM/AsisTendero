@@ -249,13 +249,13 @@
     "query": "¿venden neveras?",
     "expected_status": [
       "not_found",
-      "nearby",
-      "clarify"
+      "nearby"
     ],
     "must_not_include": [
       "demostración",
       "ficticio",
-      "simulado"
+      "simulado",
+      "De nevera tengo"
     ]
   },
   {

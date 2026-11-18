@@ -363,7 +363,27 @@ Desde S4 hubo 257 casos en diecisiete suites. La última es `fallas` (38: casos 
 
 El reporte guarda en `.local/` los eventos completos, `run_id`, versión del prompt, modelo, **commit evaluado y si `src/` tenía cambios sin commit** (`commit`, `src_dirty`), herramientas solicitadas y ejecutadas, resultados, tokens, costo y latencia. Un caso pasa si el estado coincide y cada SKU esperado aparece en lo que el servidor consultó, cotizó **o respaldó en la búsqueda** (`grounded_products`): un caso `found` no necesita llamar a `consultar_disponibilidad`, porque el SKU ya lo respalda el servidor. Además de ese reporte final, cada caso agrega un renglón a `.local/eval-*.partial.jsonl` apenas termina (modelo, prompt, commit, llamadas, tokens y costo): en S3 cinco corridas se cortaron por falta de memoria del equipo sin dejar reporte. Los resultados reales verificados están en `evaluation/S2_EVIDENCIA.md` y `evaluation/S3_EVIDENCIA.md`.
 
-Las mediciones de `evaluation/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
+Las mediciones de `evaluation/historico/RESULTADO_INICIAL.md` corresponden a `catalog-select-v1`; las verificaciones `agent-first-v1`, `agent-first-v2` y la búsqueda estructurada (`structured-search-v1`) preceden al prompt actual y no miden este flujo.
+
+## Punto de entrada del harness del reto
+
+El reto evalúa la autonomía con un harness propio que corre sus casos contra el agente. `entregas/harness.py` (`asistendero-harness`) es ese punto de entrada. No es un camino aparte: cada turno pasa por `run_turn`, igual que un cliente del visor, con barreras, Grok, herramientas validadas, respuesta verificada, pedidos y baneo. Comandos y formatos, en el README («Harness del reto»).
+
+- **Entrada** (`harness_casos.read_cases`):
+  - JSONL, un arreglo JSON o un `.txt`;
+  - casos de un mensaje o de varios turnos, con foto opcional;
+  - nombres en español o en inglés, y turnos al estilo Chat Completions. Los turnos que no son del cliente (`role` distinto de `user`) se ignoran: el agente da sus propias respuestas.
+
+  Como el reto no publicó el formato de su harness, la entrada es flexible. Los límites están en constantes (`MAX_CASES`, `MAX_INPUT_BYTES`, `MAX_ID_CHARS`; turnos con `MAX_TURNS_PER_SESSION`; fotos con `MAX_PHOTO_BYTES`). Pasado uno, el caso o el archivo se rechaza con su motivo; nada se recorta. El largo del mensaje lo valida el agente, como con cualquier cliente.
+- **Aislamiento:** cada caso es una sesión nueva sobre una copia de la tienda en una carpeta temporal. Ningún caso hereda pedidos, memoria ni existencias apartadas de otro. La tienda real nunca se crea desde la siembra.
+- **Salida** (`turn_output`):
+  - una línea JSON por caso, escrita apenas termina;
+  - por turno: estado, respuesta, herramientas pedidas (con las rechazadas y su código), barreras, llamadas a Grok, tokens, costo, latencia, `run_id` y `prompt_version`.
+
+  Una sesión baneada responde `SESSION_BANNED` sin Grok. Un fallo inesperado termina el caso con `HARNESS_FAILURE` y solo el tipo de excepción: el mensaje del SDK puede traer datos de la solicitud.
+- **Consumo:** cada turno con costo deja una línea en `.local/harness/bitacora.jsonl` (`ConsumptionLog`), sin el texto del cliente, para que el gasto quede ligado a una tarea. `--budget-usd` deja de empezar casos al llegar al tope, y el modelo se valida contra las familias del reglamento antes de llamar a la pasarela.
+- **Contenedor:** el `Dockerfile` usa este punto de entrada, corre como un usuario sin privilegios y guarda bases y bitácora en el volumen `/app/.local` (`docs/DESPLIEGUE.md`).
+- **Probado con Grok real** el 10-11-2026, en local y en el contenedor (evidencia S4, «Prueba de humo del harness del reto»). Esa prueba destapó que la búsqueda tomaba como opciones de lo pedido productos que solo sirven *para* eso («Bombillo para nevera» ante «¿venden neveras?»). Desde `6558d8a`, `destination_only` (`catalog.py`) los deja como lo más parecido, salvo que el cliente nombre el producto o Grok pida por uso.
 
 ## Límite siguiente
 

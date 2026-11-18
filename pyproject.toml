@@ -22,6 +22,7 @@ dev = ["pytest>=8,<10"]
 asistendero = "asistendero.entregas.cli:main"
 asistendero-visual = "asistendero.entregas.visor.visual:main"
 asistendero-tendero = "asistendero.entregas.panel.tendero:main"
+asistendero-harness = "asistendero.entregas.harness:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -4,6 +4,49 @@
 corrida real se lanzó con `python -m asistendero.evaluate --live` y su costo es el informado por la API
 (`api_reported`). Los reportes completos quedan en `.local/` (ignorado por git).
 
+## Prueba de humo del harness del reto (10-11-2026)
+
+Antes de entregar `asistendero-harness` (el punto de entrada para que el harness del reto corra sus propios casos),
+se corrió con Grok real una vez cada tanda: en local y dentro del contenedor, sobre la ferretería ficticia y sobre el
+inventario real de Carluz. El modelo fue `grok-4.20-0309-non-reasoning`, con los prompts `s4-conversacion-v12` y
+`carluz-v1`, y un tope `--budget-usd` en cada tanda. Los casos cubren lo que el harness tiene que atravesar:
+
+- conversación de varios turnos;
+- turno al estilo Chat Completions con un mensaje de sistema, que se ignora;
+- inyección;
+- foto de catálogo;
+- pedido con confirmación;
+- caso inválido;
+- producto que la tienda no maneja.
+
+La bitácora de consumo (una línea por turno, sin el texto del cliente) y los resultados quedan en `.local/harness/`,
+que no se sube. Ninguna cifra de Carluz se publica aquí.
+
+| Tanda | Commit | Casos | Turnos | Llamadas a Grok | USD |
+|---|---|---|---|---|---|
+| Ferretería, local (H-01 a H-08) | `0f37572` | 8 | 11 | 19 | 0.042009 |
+| Carluz, local (HC-01 a HC-04) | `0f37572` | 4 | 5 | 12 | 0.024776 |
+| Carluz, HC-02 tras el arreglo | `6558d8a` | 1 | 1 | 5 | 0.009673 |
+| Ferretería, contenedor (H-01 y H-02) | `6558d8a` | 2 | 3 | 7 | 0.011999 |
+| Carluz, contenedor (HC-02, base montada) | `6558d8a` | 1 | 1 | 4 | 0.006676 |
+| **Total** | | **16** | **21** | **47** | **0.095133** |
+
+- **Lo que pasó como se esperaba:**
+  - **Cotización** de dos artículos (`quoted`).
+  - **Memoria:** «dame 3 metros de ese» cotizó el tubo del turno anterior.
+  - **Horario:** se consultó con `consultar_info_tienda`.
+  - **Inyección:** bloqueada sin Grok; el turno siguiente respondió `SESSION_BANNED`.
+  - **Foto del martillo:** reconocida por su huella sin llamar a Grok. Preguntó la medida, y luego se negó a cotizar una cantidad que el cliente no dijo (`QUANTITY_NOT_GROUNDED`).
+  - **Pedido:** se registró y luego se confirmó con el «sí».
+  - **Caso con turnos mal formados:** quedó con `CASE_INVALID` sin ejecutarse.
+  - **Carluz:** la varilla en dos turnos y el horario dado en texto.
+- **Defecto encontrado y arreglado:**
+  - **Antes** (`0f37572`): «¿venden neveras?» respondía «De nevera tengo estas opciones» con bombillos para nevera. La búsqueda tomaba como coincidencia exacta lo que solo sirve *para* lo pedido.
+  - **Arreglo:** `6558d8a`, con su prueba. El caso CL-19 aceptaba esa respuesta (`clarify`) y se endureció.
+  - **Después:** con Grok real, en local y en el contenedor, la respuesta es «así como lo pides no lo manejo» y los bombillos aparecen como lo más parecido (`nearby`).
+- **Contenedor:** corrió como el usuario `asistendero`. Creó el catálogo ficticio en el volumen y escribió ahí su bitácora; con la base real montada, atendió con `carluz-v1`.
+- **Alcance:** es una prueba de humo del punto de entrada, no una medida de precisión. Los casos los escribimos nosotros, y el formato del harness oficial no se ha publicado.
+
 ## Corrida desatendida de 12 horas sobre el inventario real de Carluz (07 y 08-11-2026)
 
 Esta sección, a diferencia del resto del documento, usa el inventario real de Ferretería Carluz, importado con permiso

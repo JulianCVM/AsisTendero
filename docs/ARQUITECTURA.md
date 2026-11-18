@@ -141,7 +141,8 @@ src/asistendero/
   datos/                  catálogo ficticio, semilla y esquema
   observabilidad/         C · traza, costo, mapa del harness
   evaluacion/             C · evaluador, sesiones y reporte
-  entregas/               D · cli, lanzador, visor/ y panel/ (cada uno con su servidor), demo.py, estaticos.py
+  entregas/               D · cli, lanzador, visor/ y panel/ (cada uno con su servidor), demo.py, estaticos.py,
+                          harness.py y harness_casos.py (casos ajenos para el harness del reto)
     web/                  archivos de las pantallas: comun/, visor/, panel/ y pagina/
 ```
 
