@@ -341,8 +341,14 @@ def validate_request(
         clean = []
         for item in items:
             # quantity se tolera porque Grok la extrae con el artículo, pero la búsqueda no la usa.
-            if not isinstance(item, dict) or not set(item) <= {"text", "quantity", *QUERY_FIELDS}:
+            if not isinstance(item, dict):
                 raise Rejected("INVALID_ARGUMENT", "Artículo con campos no permitidos.")
+            if extra := set(item) - {"text", "quantity", *QUERY_FIELDS}:
+                # U-0050: sin el nombre del campo, Grok no sabía qué corregir y respondió sin buscar. Solo se repite
+                # un nombre corto de letras: lo demás llega del modelo y no se le devuelve tal cual.
+                named = sorted(field for field in extra if isinstance(field, str) and re.fullmatch(r"[a-z_]{1,20}", field))
+                raise Rejected("INVALID_ARGUMENT", f"Campo no permitido: {', '.join(named) or 'desconocido'}. "
+                                                   f"Usa solo text, quantity, {', '.join(QUERY_FIELDS)}.")
             text = item.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 180:
                 raise Rejected("INVALID_ARGUMENT", "Cada artículo necesita un texto breve.")
@@ -369,8 +375,12 @@ def validate_request(
             fields = {}
             for field in QUERY_FIELDS:
                 value = item.get(field)
+                # Grok manda vacíos los campos que no usa ("brand": ""); vacío no dice nada y se toma como no dado.
+                # Antes rechazaba la búsqueda entera (cobertura y corrida de 12 h sobre Carluz).
+                if isinstance(value, str) and not value.strip():
+                    continue
                 if value is not None:
-                    if not isinstance(value, str) or not value.strip() or len(value) > 80:
+                    if not isinstance(value, str) or len(value) > 80:
                         raise Rejected("INVALID_ARGUMENT", f"Atributo {field} inválido.")
                     fields[field] = value.strip()
             # En la primera corrida S3 Grok puso use="galones" y la búsqueda solo dejó el cuñete de 5 galones.

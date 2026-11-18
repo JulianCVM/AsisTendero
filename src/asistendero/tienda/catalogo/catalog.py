@@ -114,6 +114,11 @@ def tokens(value: str, synonyms: bool = True) -> set[str]:
     return set(_cached_tokens(value, synonyms))
 
 
+def category_stems(text: str) -> set[str]:
+    """Primeras seis letras de cada palabra: «tornillos» encuentra «Tornillería y fijación»."""
+    return {word[:6] for word in tokens(text) if len(word) >= 4}
+
+
 def covers(value: str, words: set[str]) -> bool:
     """Cada palabra de ``value`` está en ``words`` en alguna de sus formas: «galones» cubre «galón»."""
     return all(_forms(word) & words for word in _raw_words(value))

@@ -9,7 +9,7 @@ from asistendero.agente.herramientas.observations import error_envelope
 from asistendero.agente.modelo.grok import MAX_ARGUMENT_CHARS, MAX_ITEMS, ORDER_TOOLS, STORE_TOPICS, TOOL_NAMES
 from asistendero.agente.reglas.validation import MAX_QUANTITY, QUERY_FIELDS
 from asistendero.tienda import reloj
-from asistendero.tienda.catalogo.catalog import MockCatalog, tokens
+from asistendero.tienda.catalogo.catalog import MockCatalog, category_stems
 from asistendero.tienda.catalogo.search import ProductQuery
 from asistendero.tienda.reloj import WEEKDAYS
 from asistendero.tienda.vocabulario import SKU_PATTERN
@@ -175,11 +175,6 @@ def _store_info(arguments: dict, catalog: MockCatalog) -> dict:
     return _ok(data)
 
 
-def _stems(text: str) -> set[str]:
-    # «tornillos» debe encontrar «Tornillería y fijación»: se comparan las primeras seis letras.
-    return {word[:6] for word in tokens(text) if len(word) >= 4}
-
-
 def _explore_category(arguments: dict, catalog: MockCatalog) -> dict:
     if not set(arguments) <= {"categoria"}:
         raise _ToolError("INVALID_ARGUMENT", "explorar_categoria solo acepta el campo categoria.")
@@ -189,8 +184,8 @@ def _explore_category(arguments: dict, catalog: MockCatalog) -> dict:
         return _ok({"categorias": available})
     if not isinstance(requested, str) or not requested.strip() or len(requested) > MAX_CATEGORY_CHARS:
         raise _ToolError("INVALID_ARGUMENT", "categoria debe ser un texto breve.")
-    wanted = _stems(requested)
-    scores = {item["categoria"]: len(wanted & _stems(item["categoria"])) for item in available}
+    wanted = category_stems(requested)
+    scores = {item["categoria"]: len(wanted & category_stems(item["categoria"])) for item in available}
     best = max(scores.values(), default=0)
     chosen = [name for name, score in scores.items() if score == best]
     if best == 0 or len(chosen) != 1:

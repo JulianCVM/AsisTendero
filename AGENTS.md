@@ -79,7 +79,7 @@ propio.
    El alcance del corte vigente está en el plan del corte del vault PulsoTienda, fuera del repositorio (S3: nota
    «S3 - Plan»).
 2. **Busca si ya existe.** Hay ayudas para casi todo:
-   - `tokens` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
+   - `tokens`, `category_stems` y `MockCatalog` (`catalog.py`); `ProductQuery.grounded` (`search.py`).
    - `SKU_PATTERN`, `normalize_text` y `format_cop` (`vocabulario.py`); `BOGOTA`, `WEEKDAYS` y `local_now`
      (`reloj.py`, las pruebas fijan la hora con `monkeypatch.setattr(reloj, "local_now", ...)`).
    - `grounded_products`, `quantities_in_message` y `foreign_unit` (`validation.py`); `closest_named` e
@@ -113,7 +113,7 @@ propio.
      `ban_session` (`chat.py`); `measures` y `contradicts` (`measures.py`).
    - `store_lines` y `store_reply_is_consistent` (`store_replies.py`); `summarize` y `comparison_markdown`
      (`eval_report.py`).
-   - `asks_assortment` y `full_category_listing` (`store_replies.py`).
+   - `asks_assortment`, `full_category_listing` y `explored_unnamed_category` (`store_replies.py`).
    - `Payments` y `check_payment` (`payments.py`); `sales_history` y `sales_summary` (`sales_history.py`);
      `review_reasons` (`sales.py`).
    - `Purchasing` (`purchasing.py`); `receive_stock` y `set_restock` (`inventory.py`); `CatalogAdmin`
@@ -233,7 +233,8 @@ datos`); lo comprueba `tests/test_arquitectura.py`, y un cruce que no se pueda e
   `search_findings` y `latest_quote` de `observations.py` y su docstring.
 - **Negocio y sede los fija el servidor.** Ni el mensaje ni Grok pueden elegirlos.
 - **Precio y existencias salen solo del catálogo**: nunca del mensaje del cliente ni de una cifra propuesta por Grok.
-  La redacción de Grok se usa solo si cada `$`, SKU y cantidad coincide con las observaciones de esa ejecución; si no,
+  La redacción de Grok se usa solo si cada `$` y cantidad coincide con las observaciones de esa ejecución y no muestra
+  ningún SKU (el código interno no es para el cliente; decisión de Julian del 08-11-2026); si no,
   se responde con la salida determinista.
 - **La cotización es informativa**: no crea pedido, reserva, pago ni factura (`reservation_created=false`).
 - **Un pedido solo existe si el cliente lo pidió** y `registrar_pedido` lo creó en su conversación. Confirmar exige su

@@ -260,6 +260,9 @@ En la corrida final fallan dos casos:
 | Ronda de pulido: asistente de bodega, corrida 4 | 0.0762 |
 | **Total de la cobertura** | **14.7302** |
 
+Después, las dos rondas sobre las fallas de la carga (`S4_EVIDENCIA.md`) costaron 3.4129 USD más. Entre ellas
+están la corrida 7 de conversaciones (1.3447 USD), la 5 de bodega (0.0828 USD) y un humo (0.0626 USD).
+
 Por unidad, en las corridas finales:
 
 - **Conversación completa:** 0.0066 USD, con 3 turnos de promedio.

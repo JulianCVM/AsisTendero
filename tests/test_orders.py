@@ -1054,6 +1054,24 @@ def test_a_store_topic_the_store_never_gave_is_not_a_catalog_search():
     assert "catálogo" not in text and "producto" not in text and "$" not in text
 
 
+@pytest.mark.parametrize("codes", [("INVALID_ARGUMENT", "NOT_FOUND"), ("INVALID_ARGUMENT",)])
+def test_a_rejected_argument_is_not_a_catalog_outage(codes):
+    # Corrida de 12 h (U-0744, U-0855, U-1074): «¿tienen sofá?» con un argumento inválido de Grok y un NOT_FOUND
+    # respondía «No pude consultar el catálogo en este momento»: el catálogo sí respondió.
+    from asistendero.agente.herramientas.observations import error_envelope
+    from asistendero.agente.respuesta.answers import render_answer
+
+    tools = {"INVALID_ARGUMENT": "buscar_productos", "NOT_FOUND": "explorar_categoria"}
+    calls = [{"step": step, "requested_tool": tools[code], "requested_arguments": {}, "executed": True,
+              "arguments": {}, "duration_ms": 1, "response": error_envelope("error", code, "No.", "catalog")}
+             for step, code in enumerate(codes, start=1)]
+    status, text = render_answer("¿tienen sofá?", calls, context={"turnos": []})
+    assert status != "tool_error" and "en este momento" not in text and "Intenta de nuevo" not in text
+    assert "$" not in text
+    outage = [{**calls[0], "response": error_envelope("error", "TOOL_FAILURE", "Falló.", "catalog")}]
+    assert render_answer("¿tienen sofá?", outage, context={"turnos": []})[0] == "tool_error"
+
+
 def test_a_product_named_like_a_sale_unit_takes_the_quantity_said(tmp_path):
     # C-009 y C-072 (cobertura sobre Carluz, corrida 3): «apárteme 2 caja octagonal» o «me llevo 1 rollo zuncho»
     # nombran el producto, no una unidad de venta; el servidor rechazaba la cantidad y Grok la volvía a preguntar.
